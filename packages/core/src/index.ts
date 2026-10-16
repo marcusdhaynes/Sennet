@@ -149,6 +149,21 @@ export function tcgMatWorld(x:number,y:number,seat:number):{x:number;y:number} {
 }
 /** Hit-test seats and whole mats independently of cards or other objects.
  * This is used when the eye tool is waiting for an opponent selection. */
+export interface OpposingMatLayout {
+  player:{x:number;y:number;rotation:number};
+  opponent:{x:number;y:number;rotation:number};
+}
+/** Visual-only framing. Source table seats, card coordinates and replay remain unchanged. */
+export function opposingMatLayout(viewerSeat:number,opponentSeat:number):OpposingMatLayout {
+  const radial=-Math.PI/2+viewerSeat*Math.PI/6;
+  const dx=Math.cos(radial),dy=Math.sin(radial);
+  const distance=(TCG_MAT_HEIGHT+116)/2;
+  return {
+    player:{x:BOARD_CENTER+dx*distance,y:BOARD_CENTER+dy*distance,rotation:0},
+    opponent:{x:BOARD_CENTER-dx*distance,y:BOARD_CENTER-dy*distance,
+      rotation:(viewerSeat+6-opponentSeat)*Math.PI/6}
+  };
+}
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   for(let seat=0;seat<SEATS;seat++){
