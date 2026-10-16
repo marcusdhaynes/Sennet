@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,TCG_MAT} from '../src/index.ts';
+import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -51,64 +51,101 @@ test('the viewer is always at the bottom and all other players have relative fac
   }
 });
 
-test('TCG mat has exactly four rows and three columns with narrow outer slots',()=>{
-  const cells=tcgMatCells();
-  assert.equal(cells.length,12);
-  assert.deepEqual([...new Set(cells.map(c=>c.row))],[0,1,2,3]);
-  assert.deepEqual([...new Set(cells.map(c=>c.column))],[0,1,2]);
-  for(const row of [0,1,2,3]){
-    assert.equal(cells.find(c=>c.row===row&&c.column===0)?.width,TCG_MAT.outerWidth);
-    assert.equal(cells.find(c=>c.row===row&&c.column===2)?.width,TCG_MAT.outerWidth);
-    assert.equal(cells.find(c=>c.row===row&&c.column===1)?.width,TCG_MAT.centerWidth);
-    assert.equal(cells.find(c=>c.row===row)?.height,TCG_MAT.rowHeight);
-  }
-  for(let col=0;col<3;col++){
-    const column=cells.filter(c=>c.column===col);
-    for(let r=1;r<4;r++){
-      assert.equal(column[r].y-column[r-1].y-column[r].height,TCG_MAT.gap);
+
+test('Each of the twelve players has an independent four-row, three-column mat',()=>{
+  const corners=[];
+  for(let seat=0;seat<12;seat++){
+    const cells=tcgMatCells(seat);
+    assert.equal(cells.length,12);
+    assert.deepEqual([...new Set(cells.map(c=>c.row))],[0,1,2,3]);
+    assert.deepEqual([...new Set(cells.map(c=>c.column))],[0,1,2]);
+    assert.ok(cells.every(cell=>cell.seat===seat));
+    for(const row of [0,1,2,3]){
+      for(const column of [0,1,2]){
+        const cell=cells.find(c=>c.row===row&&c.column===column);
+        assert.ok(cell);
+        assert.equal(cell.width,column===1?TCG_MAT.centerWidth:TCG_MAT.outerWidth);
+        assert.equal(cell.height,TCG_MAT.rowHeight);
+      }
     }
+    assert.equal(TCG_MAT.centerCards,7);
+    assert.equal(TCG_MAT.centerWidth,7*TCG_MAT.cardWidth+6*2);
+    const o=tcgMatOrigin(seat);
+    assert.ok(Math.hypot(o.x-BOARD_CENTER,o.y-BOARD_CENTER)>1000);
+    for(const localX of [-TCG_MAT_WIDTH/2,TCG_MAT_WIDTH/2])
+      for(const localY of [-TCG_MAT_HEIGHT/2,TCG_MAT_HEIGHT/2]){
+        const p=tcgMatWorld(localX,localY,seat);
+        const angle=Math.atan2(p.y-BOARD_CENTER,p.x-BOARD_CENTER);
+        const radial=-Math.PI/2+seat*Math.PI/6;
+        const relative=Math.atan2(Math.sin(angle-radial),Math.cos(angle-radial));
+        // Not even the innermost corners enter another player's sector.
+        assert.ok(Math.abs(relative)<Math.PI/12, 'mat '+seat+' never overlaps an adjacent sector');
+        corners.push(p);
+      }
   }
+  assert.equal(corners.length,48);
+  assert.ok(TCG_MAT.outerRadius<TABLE_APOTHEM);
 });
 
-test('TCG card drops snap inside, across narrow gutters, and when slightly outside the mat',()=>{
-  const cells=tcgMatCells();
-  const left=cells.find(c=>c.row===2&&c.column===0);
-  const center=cells.find(c=>c.row===2&&c.column===1);
-  assert.ok(left&&center);
+test('Wide middle column supports seven distinct card positions per row',()=>{
+  const zone=tcgMatCells(0).find(cell=>cell.row===2&&cell.column===1);
+  assert.ok(zone);
+  const spots=[];
+  for(let j=0;j<7;j++){
+    const local=tcgMatLocal(zone.x,zone.y,0);
+    const x=local.x+(j-3)*zone.width/7;
+    const drop=tcgMatWorld(x,local.y,0);
+    const snap=tcgSnapPoint(drop.x,drop.y);
+    assert.ok(snap);
+    assert.equal(snap.column,1);
+    assert.equal(snap.seat,0);
+    assert.equal(snap.row,2);
+    assert.equal(snap.slot,j);
+    spots.push([snap.x,snap.y]);
+  }
+  assert.equal(new Set(spots.map(([x,y])=>x.toFixed(4)+','+y.toFixed(4))).size,7);
+});
+
+test('Cards snap inside mats and just outside but stay free when far away',()=>{
+  const zone=tcgMatCells(5).find(cell=>cell.row===1&&cell.column===0);
+  assert.ok(zone);
   const state=createGame('tcg');
   const id='hero-a';
   const drop=(x,y)=>applyCommand(state,c('MOVE',{id,x,y})).objects.find(o=>o.id===id);
-  assert.deepEqual([drop(left.x,left.y)?.x,drop(left.x,left.y)?.y],[left.x,left.y]);
-  // A drop anywhere within the wide center is one center-section placement.
-  const wideDrop=drop(center.x+center.width/2-2,center.y);
-  assert.deepEqual([wideDrop.x,wideDrop.y],[center.x,center.y]);
-  const matLeft=Math.min(...cells.map(v=>v.x-v.width/2));
-  const outside=drop(matLeft-TCG_MAT.snapOutside+1,left.y);
-  assert.equal(outside.x,left.x);
-  assert.equal(outside.y,left.y);
-  const tooFar=drop(matLeft-TCG_MAT.snapOutside-3,left.y);
-  assert.ok(tooFar.x!==left.x);
-  // Card movement must be reproducible through the serialized command alone.
-  const action=c('MOVE',{id,x:matLeft-5,y:left.y});
-  assert.deepEqual(replay(state,[action]),applyCommand(state,action));
+  const exactly=drop(zone.x,zone.y);
+  assert.deepEqual([exactly.x,exactly.y],[zone.x,zone.y]);
+  assert.equal(exactly.matSeat,5);
+  const local=tcgMatLocal(zone.x,zone.y,5);
+  const near=tcgMatWorld(local.x-zone.width/2-TCG_MAT.snapOutside+1,local.y,5);
+  const nearby=drop(near.x,near.y);
+  assert.deepEqual([nearby.x,nearby.y],[zone.x,zone.y]);
+  const far=tcgMatWorld(local.x-zone.width/2-TCG_MAT.snapOutside-10,local.y,5);
+  const unsnapped=drop(far.x,far.y);
+  assert.notDeepEqual([unsnapped.x,unsnapped.y],[zone.x,zone.y]);
+  assert.equal(unsnapped.matSeat,undefined);
+  const command=c('MOVE',{id,x:near.x,y:near.y});
+  assert.deepEqual(replay(state,[command]),applyCommand(state,command));
 });
 
-test('Only TCG cards snap: tokens and other game types retain free tabletop movement',()=>{
+test('TCG mats move independently and sandbox cards retain free movement',()=>{
+  const centers=Array.from({length:12},(_,seat)=>tcgMatCells(seat).find(cell=>cell.row===2&&cell.column===2));
+  const ids=new Set(centers.map(cell=>cell.x.toFixed(3)+','+cell.y.toFixed(3)));
+  assert.equal(ids.size,12);
   const state=createGame('tcg');
-  const tokenCommand=c('ADD',{object:{id:'free-token',kind:'token',x:200,y:200}});
-  const withToken=applyCommand(state,tokenCommand);
-  const moved=applyCommand(withToken,c('MOVE',{id:'free-token',x:500,y:330}));
-  assert.deepEqual([moved.objects.find(o=>o.id==='free-token')?.x,moved.objects.find(o=>o.id==='free-token')?.y],[500,330]);
-  const free=applyCommand(createGame('sandbox'),c('MOVE',{id:'card-demo',x:501,y:329}));
-  assert.deepEqual([free.objects.find(o=>o.id==='card-demo')?.x,free.objects.find(o=>o.id==='card-demo')?.y],[501,329]);
+  for(let seat=0;seat<12;seat++){
+    const cell=centers[seat];
+    const moved=applyCommand(state,c('MOVE',{id:'hero-a',x:cell.x,y:cell.y}));
+    assert.equal(moved.objects.find(o=>o.id==='hero-a').matSeat,seat);
+  }
+  const free=applyCommand(createGame('sandbox'),c('MOVE',{id:'card-demo',x:2011,y:2007}));
+  assert.deepEqual([free.objects.find(o=>o.id==='card-demo').x,free.objects.find(o=>o.id==='card-demo').y],[2011,2007]);
 });
 
-test('Dragging TCG cards from a deck onto a mat section makes them table cards',()=>{
-  const start=createGame('tcg');
-  const slot=tcgMatCells().find(c=>c.row===0&&c.column===1);
-  assert.ok(slot);
-  const next=applyCommand(start,c('MOVE',{id:'alpha-1',x:slot.x,y:slot.y}));
+test('Dragging a deck card into a seat mat turns it into a table card',()=>{
+  const state=createGame('tcg');
+  const zone=tcgMatCells(0).find(cell=>cell.row===1&&cell.column===1);
+  const next=applyCommand(state,c('MOVE',{id:'alpha-1',x:zone.x,y:zone.y}));
   const card=next.objects.find(o=>o.id==='alpha-1');
-  assert.equal(card?.zone,'TABLE');
-  assert.deepEqual([card?.x,card?.y],[slot.x,slot.y]);
+  assert.equal(card.zone,'TABLE');
+  assert.equal(card.matSeat,0);
 });
