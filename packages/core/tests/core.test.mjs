@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -148,4 +148,15 @@ test('Dragging a deck card into a seat mat turns it into a table card',()=>{
   const card=next.objects.find(o=>o.id==='alpha-1');
   assert.equal(card.zone,'TABLE');
   assert.equal(card.matSeat,0);
+});
+
+test('Initial fit-to-table zoom is the maximum zoom-out limit',()=>{
+  assert.equal(MIN_TABLE_ZOOM,1);
+  assert.equal(clampTableZoom(MIN_TABLE_ZOOM),MIN_TABLE_ZOOM);
+  assert.equal(clampTableZoom(.65),MIN_TABLE_ZOOM);
+  assert.equal(clampTableZoom(0),MIN_TABLE_ZOOM);
+  assert.equal(clampTableZoom(-10),MIN_TABLE_ZOOM);
+  assert.equal(clampTableZoom(NaN),MIN_TABLE_ZOOM);
+  assert.equal(clampTableZoom(1.5),1.5);
+  assert.equal(clampTableZoom(999),MAX_TABLE_ZOOM);
 });
