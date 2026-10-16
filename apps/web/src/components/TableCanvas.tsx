@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,type GameState,type Player,type TableObject} from '@sennet/core';
+import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,TCG_MAT,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -8,7 +8,45 @@ const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
-function drawBackground(board:Container,seat:number,players:Player[],playerName:string){
+/** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
+ * cell coordinates on every client; drag release is snapped in core. */
+function drawTcgMat(board:Container){
+  const cells=tcgMatCells();
+  const totalWidth=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
+  const totalHeight=TCG_MAT.rowHeight*TCG_MAT.rows+TCG_MAT.gap*(TCG_MAT.rows-1);
+  // A dark backing follows the twelve pockets without introducing another
+  // zone outline. The tiny gaps reveal the backing underneath.
+  board.addChild(new Graphics()
+    .roundRect(TCG_MAT.x-totalWidth/2-4,TCG_MAT.y-totalHeight/2-4,totalWidth+8,totalHeight+8,12)
+    .fill({color:0x111e1a,alpha:.75})
+    .stroke({color:0x8d7855,width:1,alpha:.46}));
+  for(const cell of cells){
+    const left=cell.x-cell.width/2,top=cell.y-cell.height/2;
+    const width=cell.width,height=cell.height;
+    const pocket=new Graphics();
+    // Thin warm outside rim, dark interior, and an inset highlight/shadow
+    // create a tactile bevel without any runtime 3D or image assets.
+    pocket.roundRect(left,top,width,height,8)
+      .fill({color:0x0d2725,alpha:.95})
+      .stroke({color:0x8f8a6c,width:1.4,alpha:.7});
+    pocket.roundRect(left+2,top+2,width-4,height-4,6)
+      .fill({color:0x1b3935,alpha:.86})
+      .stroke({color:0x071915,width:1.7,alpha:.85});
+    pocket.roundRect(left+5,top+5,width-10,height-10,5)
+      .stroke({color:0x9bb5a2,width:1,alpha:.17});
+    // Directional etched edges simulate an inward shadow around the slot.
+    pocket.moveTo(left+8,top+4).lineTo(left+width-8,top+4)
+      .stroke({color:0x020c0a,alpha:.52,width:2});
+    pocket.moveTo(left+4,top+8).lineTo(left+4,top+height-8)
+      .stroke({color:0x06140f,alpha:.46,width:2});
+    pocket.moveTo(left+8,top+height-4).lineTo(left+width-8,top+height-4)
+      .stroke({color:0xd4c9a5,alpha:.20,width:1.5});
+    pocket.moveTo(left+width-4,top+8).lineTo(left+width-4,top+height-8)
+      .stroke({color:0xb7ba94,alpha:.14,width:1.3});
+    board.addChild(pocket);
+  }
+}
+function drawBackground(board:Container,seat:number,players:Player[],playerName:string,gameKind:GameState['kind']){
   const backdrop=new Graphics().rect(-200,-200,1400,1100).fill(0x142723);
   board.addChild(backdrop);
   const points=Array.from({length:12},(_,i)=>{const a=(i*Math.PI/6)-Math.PI/12;return {x:500+292*Math.cos(a),y:330+281*Math.sin(a)};});
@@ -16,6 +54,7 @@ function drawBackground(board:Container,seat:number,players:Player[],playerName:
   board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark).stroke({color:0x110f0c,width:18}));
   board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.975,330+(p.y-330)*.975]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
   board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.918,330+(p.y-330)*.918]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
+  if(gameKind==='tcg')drawTcgMat(board);
   // Each chair is attached to the shared tabletop, then the whole board is rotated
   // so the viewer's seat is always on the near (bottom) edge.
   for(let i=0;i<12;i++){
@@ -106,7 +145,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     board.rotation=viewerTableRotation(seat);
-    drawBackground(board,seat,state.players,playerName);
+    drawBackground(board,seat,state.players,playerName,state.kind);
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
     const visible=state.objects.filter(o=>o.zone!=='DECK'||deckTop.has(o.id.split('-')[0])&&deckTop.get(o.id.split('-')[0])?.id===o.id);
