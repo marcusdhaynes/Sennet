@@ -137,13 +137,12 @@ function drawTcgMats(
         },eyeHoldMs);
         hoverTimers.add(pending);
       });
-      const move=e=>{
+      eye.on('globalpointermove',e=>{
         if(pressedPointer!==e.pointerId||pending===null)return;
         if(Math.hypot(e.clientX-firstX,e.clientY-firstY)>7){
           pressedPointer=null;clear();
         }
-      };
-      eye.on('globalpointermove',move);
+      });
       eye.on('pointerup',e=>{
         if(pressedPointer!==e.pointerId)return;
         const wasHeld=held;
@@ -485,7 +484,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         (event.clientY-rect.top)*current.app.renderer.height/rect.height);
       // The opponent mat may be temporarily re-framed. Its own presentation
       // transform maps pointer movement back to canonical table coordinates.
-      const local=d.visual.parent.toLocal(point,current.app.stage);
+      const parent=d.visual.parent??current.board;
+      const local=parent.toLocal(point,current.app.stage);
       d.x=Math.max(0,Math.min(BOARD_W,local.x));
       d.y=Math.max(0,Math.min(BOARD_W,local.y));
       const dx=d.x-d.startX,dy=d.y-d.startY;
@@ -499,7 +499,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
-        if(hint.parent!==d.visual.parent)d.visual.parent.addChild(hint);
+        if(hint.parent!==parent)parent.addChild(hint);
         hint.clear();
         const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges):null;
         if(cell){
