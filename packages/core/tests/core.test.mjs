@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -339,4 +339,48 @@ test('exported TCG packs retain center merges while rejecting invalid imported b
   const loaded=gameFromPack(pack);
   assert.deepEqual(loaded.centerMerges,[centerMergeKey(4,1)]);
   assert.equal(tcgMatRegions(4,loaded.centerMerges).filter(region=>region.column===1).length,3);
+});
+
+test('opponent picker recognizes any seat number or mat through overlying cards',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    assert.equal(opponentAtTablePoint(tcgMatOrigin(viewer).x,tcgMatOrigin(viewer).y,viewer),null);
+    for(let other=0;other<12;other++){
+      if(other===viewer)continue;
+      const mat=tcgMatOrigin(other);
+      assert.equal(opponentAtTablePoint(mat.x,mat.y,viewer),other);
+      const top=tcgMatCells(other).find(c=>c.row===0&&c.column===1);
+      const bottom=tcgMatCells(other).find(c=>c.row===3&&c.column===2);
+      assert.equal(opponentAtTablePoint(top.x,top.y,viewer),other);
+      assert.equal(opponentAtTablePoint(bottom.x,bottom.y,viewer),other);
+      const theta=other*Math.PI/6-Math.PI/2;
+      const chairX=BOARD_CENTER+1730*Math.cos(theta);
+      const chairY=BOARD_CENTER+1730*Math.sin(theta);
+      assert.equal(opponentAtTablePoint(chairX,chairY,viewer),other);
+    }
+  }
+  assert.equal(opponentAtTablePoint(NaN,2000,0),null);
+});
+
+test('any opponent can be presented directly opposite the local player without moving game objects',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const rot=viewerTableRotation(viewer);
+    for(let target=0;target<12;target++){
+      if(viewer===target)continue;
+      const layout=opposingMatLayout(viewer,target);
+      const localX=layout.player.x-BOARD_CENTER;
+      const localY=layout.player.y-BOARD_CENTER;
+      const remoteX=layout.opponent.x-BOARD_CENTER;
+      const remoteY=layout.opponent.y-BOARD_CENTER;
+      const screenLocalY=localX*Math.sin(rot)+localY*Math.cos(rot);
+      const screenRemoteY=remoteX*Math.sin(rot)+remoteY*Math.cos(rot);
+      assert.ok(screenLocalY>0,'own mat must be below center');
+      assert.ok(screenRemoteY<0,'opponent mat must be above center');
+      const ownFacing=playerSeatRotation(viewer)+layout.player.rotation+rot;
+      const otherFacing=playerSeatRotation(target)+layout.opponent.rotation+rot;
+      assert.ok(Math.abs(Math.sin(ownFacing))<1e-9);
+      assert.ok(Math.abs(Math.sin(otherFacing))<1e-9);
+      assert.ok(Math.abs(Math.cos(ownFacing)-1)<1e-9);
+      assert.ok(Math.abs(Math.cos(otherFacing)+1)<1e-9);
+    }
+  }
 });
