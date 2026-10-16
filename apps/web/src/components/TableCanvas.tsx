@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -14,17 +14,19 @@ function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onCenter:()=>void,onControlDown:(pointerId:number)=>void,
-  hoverTimers:Set<number>
+  onEyeTap:()=>void,onEyeHold:()=>void,onControlDown:(pointerId:number)=>void,
+  hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
 ){
   for(let seat=0;seat<12;seat++){
+    if(seatLayers&&!seatLayers.has(seat))continue;
+    const parent=seatLayers?.get(seat)??board;
     const cells=tcgMatCells(seat);
     const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
     const bottomRight=cells.find(c=>c.column===2&&c.row===3)!;
     const mat=new Container();
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
-    board.addChild(mat);
+    parent.addChild(mat);
     mat.addChild(new Graphics()
       .roundRect(-TCG_MAT_WIDTH/2-4,-TCG_MAT_HEIGHT/2-4,TCG_MAT_WIDTH+8,TCG_MAT_HEIGHT+8,12)
       .fill({color:0x101e1a,alpha:.82})
@@ -102,42 +104,112 @@ function drawTcgMats(
       mat.addChild(marker);
     }
 
-    // Only the local player's mat gets a camera shortcut.
+    // Circular eye tool lives at the TOP of the local mat.
     if(seat===viewerSeat){
-      const center=new Container();
-      center.position.set(0,TCG_MAT_HEIGHT/2+66);
-      center.eventMode='static';
-      center.hitArea=new Rectangle(-103,-29,206,58);
-      center.cursor='pointer';
-      center.addChild(new Graphics().roundRect(-103,-29,206,58,24)
-        .fill({color:0x1b3b34,alpha:.95})
-        .stroke({color:0xddc394,alpha:.95,width:2}));
-      const caption=label('◎  CENTER MAT',23,0xf9e6c4,'bold');
-      caption.eventMode='none';center.addChild(caption);
-      center.on('pointerdown',e=>{e.stopPropagation();onControlDown(e.pointerId);});
-      center.on('pointertap',e=>{e.stopPropagation();onCenter();});
-      mat.addChild(center);
+      const eye=new Container();
+      eye.position.set(0,-TCG_MAT_HEIGHT/2-64);
+      eye.eventMode='static';
+      eye.hitArea=new Circle(0,0,38);
+      eye.cursor='pointer';
+      eye.addChild(new Graphics()
+        .circle(0,0,32).fill({color:0x183a33,alpha:.96})
+        .stroke({color:0xe4cf9d,alpha:1,width:2.5})
+        .ellipse(0,0,18,11).stroke({color:0xf4e4bd,width:2.8})
+        .circle(0,0,6).fill({color:0xf6e4c1})
+        .circle(2,-2,2).fill({color:0x3f5e53}));
+      // The pointer must remain almost motionless for the 250 ms hold.
+      let pending:number|null=null;
+      let pressedPointer:number|null=null;
+      let held=false;
+      let firstX=0,firstY=0;
+      const clear=()=>{
+        if(pending!==null){window.clearTimeout(pending);hoverTimers.delete(pending);pending=null;}
+      };
+      eye.on('pointerdown',e=>{
+        if(e.button!==0)return;
+        e.stopPropagation();onControlDown(e.pointerId);
+        clear();pressedPointer=e.pointerId;held=false;
+        firstX=e.clientX;firstY=e.clientY;
+        pending=window.setTimeout(()=>{
+          if(pressedPointer===null||eye.destroyed)return;
+          hoverTimers.delete(pending!);pending=null;
+          held=true;onEyeHold();
+        },eyeHoldMs);
+        hoverTimers.add(pending);
+      });
+      const move=e=>{
+        if(pressedPointer!==e.pointerId||pending===null)return;
+        if(Math.hypot(e.clientX-firstX,e.clientY-firstY)>7){
+          pressedPointer=null;clear();
+        }
+      };
+      eye.on('globalpointermove',move);
+      eye.on('pointerup',e=>{
+        if(pressedPointer!==e.pointerId)return;
+        const wasHeld=held;
+        pressedPointer=null;clear();
+        e.stopPropagation();
+        if(!wasHeld)onEyeTap();
+      });
+      eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
+      eye.on('pointercancel',()=>{pressedPointer=null;clear();});
+      mat.addChild(eye);
     }
   }
 }
+/** Reframe arbitrary opponent into the opposing (top) position without
+ * changing a single game coordinate. Pieces remain logically at their seats.
+ */
+function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number){
+  const layers=new Map<number,Container>();
+  const outward=-Math.PI/2+viewerSeat*Math.PI/6;
+  const dx=Math.cos(outward),dy=Math.sin(outward);
+  const separation=TCG_MAT_HEIGHT+116;
+  for(const which of [viewerSeat,opponentSeat]){
+    const origin=tcgMatOrigin(which);
+    const side=which===viewerSeat?1:-1;
+    const group=new Container();
+    group.pivot.set(origin.x,origin.y);
+    group.position.set(BOARD_CENTER+dx*separation/2*side,
+      BOARD_CENTER+dy*separation/2*side);
+    group.rotation=which===viewerSeat?0:(viewerSeat+6-which)*Math.PI/6;
+    board.addChild(group);layers.set(which,group);
+  }
+  return layers;
+}
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onCenter:()=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>){
+  onEyeTap:()=>void,onEyeHold:()=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,
+  duelOpponent:number|null,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
-  const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
-  const points=Array.from({length:12},(_,i)=>{const a=(i*Math.PI/6)-Math.PI/2-Math.PI/12;return {x:BOARD_CENTER+radius*Math.cos(a),y:BOARD_CENTER+radius*Math.sin(a)};});
-  const pts=points.flatMap(p=>[p.x,p.y]);
-  board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark).stroke({color:0x110f0c,width:18}));
-  board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.991,BOARD_CENTER+(p.y-BOARD_CENTER)*.991]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
-  board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.972,BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
-  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,onCenter,onControlDown,hoverTimers);
-  // Each chair is attached to the shared tabletop, then the whole board is rotated
-  // so the viewer's seat is always on the near (bottom) edge.
+  if(duelOpponent===null){
+    const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
+    const points=Array.from({length:12},(_,i)=>{
+      const a=(i*Math.PI/6)-Math.PI/2-Math.PI/12;
+      return {x:BOARD_CENTER+radius*Math.cos(a),y:BOARD_CENTER+radius*Math.sin(a)};
+    });
+    const pts=points.flatMap(p=>[p.x,p.y]);
+    board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark)
+      .stroke({color:0x110f0c,width:18}));
+    board.addChild(new Graphics().poly(points.map(p=>[
+      BOARD_CENTER+(p.x-BOARD_CENTER)*.991,
+      BOARD_CENTER+(p.y-BOARD_CENTER)*.991]).flat()).fill(COLORS.wood)
+      .stroke({color:COLORS.gold,width:3,alpha:.75}));
+    board.addChild(new Graphics().poly(points.map(p=>[
+      BOARD_CENTER+(p.x-BOARD_CENTER)*.972,
+      BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt)
+      .stroke({color:0x112d2b,width:4}));
+  }
+  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent);
+  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,
+    onEyeTap,onEyeHold,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
+    if(layers&&!layers.has(i))continue;
     const angle=i*Math.PI/6-Math.PI/2;
-    const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
+    const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle);
+    const y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
     const mine=i===seat;
     const player=players.find(p=>p.seat===i);
     const chair=new Container();
@@ -147,12 +219,13 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
       .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
     const nickname=mine?'YOU':player?.name||'';
-    const seatText=label(nickname?nickname.slice(0,10):String(i+1),nickname?37:41,mine?0x263a32:0xe7e0c9,'bold');
+    const seatText=label(nickname?nickname.slice(0,10):String(i+1),
+      nickname?37:41,mine?0x263a32:0xe7e0c9,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
-    board.addChild(chair);
+    (layers?.get(i)??board).addChild(chair);
   }
-
+  return layers;
 }
 function markHeldStack(piece:Container,count:number){
   const indicator=new Graphics().ellipse(0,0,44,58)
