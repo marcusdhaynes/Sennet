@@ -24,7 +24,7 @@ export interface EventRecord extends Command { seq: number; at: number }
 export type GamePack = {
   schema: 'sennet.pack/1'; id: string; name: string; author: string; kind: GameKind;
   description?: string; image?: string; objects: TableObject[];
-  lua?: string; assetBaseUrl?: string; license?: string;
+  lua?: string; assetBaseUrl?: string; license?: string; centerMerges?: number[];
 };
 export const SEATS = 12;
 export const BOARD_W = 4000;
@@ -412,6 +412,11 @@ export function parseGamePack(value:unknown):GamePack {
   if(pack.schema!=='sennet.pack/1'||typeof pack.id!=='string'||typeof pack.name!=='string'||!Array.isArray(pack.objects)||pack.objects.length>1000)throw new Error('Invalid Sennet pack schema');
   const validKinds:GameKind[]=['sandbox','boardgame','tcg','rpg','wargame','dice','party','custom'];
   const kind=validKinds.includes(pack.kind as GameKind)?pack.kind as GameKind:'custom';
-  return {schema:'sennet.pack/1',id:textValue(pack.id),name:textValue(pack.name),author:textValue(pack.author||'Community'),kind,description:textValue(pack.description,250),license:textValue(pack.license,80),objects:pack.objects.map((o:unknown)=>sanitizeObject(o as Record<string,unknown>)),...(typeof pack.lua==='string'&&pack.lua.length<=30000?{lua:pack.lua}:{})};
+  return {schema:'sennet.pack/1',id:textValue(pack.id),name:textValue(pack.name),author:textValue(pack.author||'Community'),kind,description:textValue(pack.description,250),license:textValue(pack.license,80),objects:pack.objects.map((o:unknown)=>sanitizeObject(o as Record<string,unknown>)),
+    ...(kind==='tcg'&&Array.isArray(pack.centerMerges)?{
+      centerMerges:[...new Set(pack.centerMerges.filter((n:unknown):n is number=>
+        typeof n==='number'&&Number.isInteger(n)&&n>=0&&n<SEATS*3))].sort((a,b)=>a-b)
+    }:{}) ,
+    ...(typeof pack.lua='string'&&pack.lua.length<=30000?{lua:pack.lua}:{})};
 }
-export function gameFromPack(pack:GamePack):GameState{return {...createGame(pack.kind),objects:pack.objects,message:`Loaded ${pack.name} by ${pack.author}`};}
+export function gameFromPack(pack:GamePack):GameState{return {...createGame(pack.kind),objects:pack.objects,centerMerges:pack.centerMerges??[],message:`Loaded ${pack.name} by ${pack.author}`};}
