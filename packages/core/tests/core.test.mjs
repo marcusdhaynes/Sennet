@@ -384,3 +384,20 @@ test('any opponent can be presented directly opposite the local player without m
     }
   }
 });
+
+test('opposing player mats meet precisely along the shared middle boundary',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    for(let opponent=0;opponent<12;opponent++){
+      if(viewer===opponent)continue;
+      const layout=opposingMatLayout(viewer,opponent);
+      const dx=layout.player.x-layout.opponent.x;
+      const dy=layout.player.y-layout.opponent.y;
+      assert.ok(Math.abs(Math.hypot(dx,dy)-TCG_MAT_HEIGHT)<1e-9);
+      assert.ok(Math.abs((layout.player.x+layout.opponent.x)/2-BOARD_CENTER)<1e-9);
+      assert.ok(Math.abs((layout.player.y+layout.opponent.y)/2-BOARD_CENTER)<1e-9);
+      // At unit scale, each player's play area occupies half the height.
+      const screenFit=1080/(2*TCG_MAT_HEIGHT);
+      assert.ok(Math.abs(2*TCG_MAT_HEIGHT*screenFit-1080)<1e-9);
+    }
+  }
+});
