@@ -14,9 +14,9 @@ export interface Player { id: string; seat: number; name: string; online: boolea
 export interface GameState {
   version: 1; roomId: string; kind: GameKind; mode: PlayMode;
   seq: number; turnSeat: number; round: number; objects: TableObject[];
-  players: Player[]; message: string;
+  players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -35,7 +35,7 @@ export const TABLE_SEAT_RADIUS = 1730;
 export const TABLE_VIEW_RADIUS = 1800;
 /** Zoom 1 is the opening fit-to-table view and the farthest permitted zoom-out. */
 export const MIN_TABLE_ZOOM = 1;
-export const MAX_TABLE_ZOOM = 18;
+export const MAX_TABLE_ZOOM = 48;
 export function clampTableZoom(value:number):number {
   return Number.isFinite(value) ? Math.min(MAX_TABLE_ZOOM,Math.max(MIN_TABLE_ZOOM,value)) : MIN_TABLE_ZOOM;
 }
@@ -113,6 +113,26 @@ export function tcgMatCells(seat=0):TcgMatCell[] {
   }
   return cells;
 }
+/** An enabled boundary is seat*3+row, with row 0,1,2. */
+export function centerMergeKey(seat:number,boundary:number):number {
+  return seat*3+boundary;
+}
+export interface TcgMatRegion extends TcgMatCell {lastRow:number}
+/** Render and snap to contiguous merged center-row groups. Side rows remain separate. */
+export function tcgMatRegions(seat:number,merged:readonly number[]=[]):TcgMatRegion[] {
+  const cells=tcgMatCells(seat);
+  const result:TcgMatRegion[]=cells.filter(c=>c.column!==1).map(c=>({...c,lastRow:c.row}));
+  for(let first=0;first<TCG_MAT.rows;){
+    let last=first;
+    while(last<TCG_MAT.rows-1&&merged.includes(centerMergeKey(seat,last)))last++;
+    const a=cells.find(c=>c.column===1&&c.row===first)!;
+    const b=cells.find(c=>c.column===1&&c.row===last)!;
+    result.push({...a,x:(a.x+b.x)/2,y:(a.y+b.y)/2,
+      height:(last-first+1)*TCG_MAT.rowHeight+(last-first)*TCG_MAT.gap,lastRow:last});
+    first=last+1;
+  }
+  return result;
+}
 export function allTcgMatCells():TcgMatCell[] {
   return Array.from({length:SEATS},(_,seat)=>tcgMatCells(seat)).flat();
 }
@@ -131,12 +151,12 @@ export function tcgMatWorld(x:number,y:number,seat:number):{x:number;y:number} {
  * Returns null when the card is beyond a small edge tolerance.
  * Logic is fully deterministic: the network transmits only drop coordinates.
  */
-export function tcgSnapPoint(x:number,y:number):TcgSnapLocation|null {
+export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[]):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   let best:TcgSnapLocation|null=null,dist=Infinity,centerDist=Infinity;
   for(let seat=0;seat<SEATS;seat++){
     const local=tcgMatLocal(x,y,seat);
-    for(const cell of tcgMatCells(seat)){
+    for(const cell of tcgMatRegions(seat,merged)){
       const anchor=tcgMatLocal(cell.x,cell.y,seat);
       const dx=Math.max(0,Math.abs(local.x-anchor.x)-cell.width/2);
       const dy=Math.max(0,Math.abs(local.y-anchor.y)-cell.height/2);
@@ -247,9 +267,9 @@ export function cardStackMembers(state:GameState,id:string):TableObject[] {
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE'];
   if (!types.includes(command.type)) return 'Unsupported action';
-  if (state.mode !== 'sandbox' && command.type !== 'SET_MODE') {
+  if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
     if (state.players.length && current?.id!==command.actor) return `Waiting for seat ${state.turnSeat+1}`;
   }
@@ -266,6 +286,15 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(stack.some(o=>o.locked))return 'Stack contains a locked card';
     if(state.kind==='tcg'&&stack.some(o=>o.owner && o.owner!==command.actor))
       return 'Stack contains another player\'s card';
+  }
+  if(command.type==='SET_CENTER_MERGE'){
+    const seat=command.payload.seat,boundary=command.payload.boundary;
+    if(state.kind!=='tcg')return 'Center merging is only supported on TCG mats';
+    if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS||
+       !Number.isInteger(boundary)||Number(boundary)<0||Number(boundary)>=3||
+       typeof command.payload.merged!=='boolean')return 'Invalid center mat merge';
+    if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
+      return 'You can only merge sections on your own mat';
   }
   if (command.type === 'ADD' && state.objects.length >= 1000) return 'Maximum objects reached';
   if (command.type === 'ADD' && (!command.payload.object || typeof command.payload.object !== 'object' || Array.isArray(command.payload.object))) return 'Invalid object';
@@ -285,13 +314,14 @@ export function applyCommand(state: GameState, command: Command): GameState {
   let objects=state.objects.map(o=>({...o}));
   let message=`${command.actor.slice(0,12)} · ${command.type.toLowerCase().replaceAll('_',' ')}`;
   let turnSeat=state.turnSeat,round=state.round,mode=state.mode;
+  let centerMerges=state.centerMerges??[];
   const obj=objects.find(o=>o.id===p.id);
   switch(command.type) {
     case 'ADD':objects.push(sanitizeObject(p.object as Record<string,unknown>)); message='New object placed';break;
     case 'MOVE': if(obj){
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y):null;
+      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y,state.centerMerges):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
@@ -312,7 +342,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const cards=cardStackMembers(state,obj.id);
       const requestedX=clamp(finite(p.x,obj.x),0,BOARD_W);
       const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY):null;
+      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges):null;
       const dx=(snapped?.x??requestedX)-obj.x;
       const dy=(snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
@@ -352,9 +382,16 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const next=seats.find(s=>s>state.turnSeat)??seats[0]??((state.turnSeat+1)%SEATS);
       if(next<=state.turnSeat)round++;turnSeat=next;message=`Seat ${next+1}'s turn`;break;
     }
+    case 'SET_CENTER_MERGE':{
+      const key=centerMergeKey(Number(p.seat),Number(p.boundary));
+      centerMerges=(p.merged?[...centerMerges.filter(v=>v!==key),key]:
+        centerMerges.filter(v=>v!==key)).sort((a,b)=>a-b);
+      message=(p.merged?'Merged':'Separated')+` seat ${Number(p.seat)+1} center rows ${Number(p.boundary)+1} and ${Number(p.boundary)+2}`;
+      break;
+    }
     case 'SET_MODE': mode=p.mode as PlayMode;message=`Mode: ${mode}`;break;
   }
-  return {...state,objects,turnSeat,round,mode,seq:state.seq+1,message};
+  return {...state,objects,turnSeat,round,mode,centerMerges,seq:state.seq+1,message};
 }
 export function replay(initial:GameState,commands:readonly Command[]):GameState{return commands.reduce((s,c)=>applyCommand(s,c),initial);}
 export function nearestFrameIndex(seat:number,rotationDegrees:number,frameCount:number):number {
