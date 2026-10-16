@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,type GameState,type Player,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
+import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,type GameState,type Player,type TableObject} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -10,56 +10,56 @@ function label(text:string,size:number,color:number,weight:'normal'|'bold'='norm
 }
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
-function drawTcgMat(board:Container){
-  const cells=tcgMatCells();
-  const totalWidth=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
-  const totalHeight=TCG_MAT.rowHeight*TCG_MAT.rows+TCG_MAT.gap*(TCG_MAT.rows-1);
-  // A dark backing follows the twelve pockets without introducing another
-  // zone outline. The tiny gaps reveal the backing underneath.
-  board.addChild(new Graphics()
-    .roundRect(TCG_MAT.x-totalWidth/2-4,TCG_MAT.y-totalHeight/2-4,totalWidth+8,totalHeight+8,12)
-    .fill({color:0x111e1a,alpha:.75})
-    .stroke({color:0x8d7855,width:1,alpha:.46}));
-  for(const cell of cells){
-    const left=cell.x-cell.width/2,top=cell.y-cell.height/2;
-    const width=cell.width,height=cell.height;
-    const pocket=new Graphics();
-    // Thin warm outside rim, dark interior, and an inset highlight/shadow
-    // create a tactile bevel without any runtime 3D or image assets.
-    pocket.roundRect(left,top,width,height,8)
-      .fill({color:0x0d2725,alpha:.95})
-      .stroke({color:0x8f8a6c,width:1.4,alpha:.7});
-    pocket.roundRect(left+2,top+2,width-4,height-4,6)
-      .fill({color:0x1b3935,alpha:.86})
-      .stroke({color:0x071915,width:1.7,alpha:.85});
-    pocket.roundRect(left+5,top+5,width-10,height-10,5)
-      .stroke({color:0x9bb5a2,width:1,alpha:.17});
-    // Directional etched edges simulate an inward shadow around the slot.
-    pocket.moveTo(left+8,top+4).lineTo(left+width-8,top+4)
-      .stroke({color:0x020c0a,alpha:.52,width:2});
-    pocket.moveTo(left+4,top+8).lineTo(left+4,top+height-8)
-      .stroke({color:0x06140f,alpha:.46,width:2});
-    pocket.moveTo(left+8,top+height-4).lineTo(left+width-8,top+height-4)
-      .stroke({color:0xd4c9a5,alpha:.20,width:1.5});
-    pocket.moveTo(left+width-4,top+8).lineTo(left+width-4,top+height-8)
-      .stroke({color:0xb7ba94,alpha:.14,width:1.3});
-    board.addChild(pocket);
+function drawTcgMats(board:Container){
+  for(let seat=0;seat<12;seat++){
+    const cells=tcgMatCells(seat);
+    const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
+    const bottomRight=cells.find(c=>c.column===2&&c.row===3)!;
+    const mat=new Container();
+    mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
+    mat.rotation=topLeft.angle;
+    board.addChild(mat);
+    mat.addChild(new Graphics()
+      .roundRect(-TCG_MAT_WIDTH/2-4,-TCG_MAT_HEIGHT/2-4,TCG_MAT_WIDTH+8,TCG_MAT_HEIGHT+8,12)
+      .fill({color:0x101e1a,alpha:.82})
+      .stroke({color:0x8d7855,width:1,alpha:.46}));
+    const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
+    for(const cell of cells){
+      const dx=cell.x-mat.x,dy=cell.y-mat.y;
+      const x=dx*cos+dy*sin-cell.width/2;
+      const y=-dx*sin+dy*cos-cell.height/2;
+      const w=cell.width,h=cell.height;
+      mat.addChild(new Graphics()
+        .roundRect(x,y,w,h,8).fill({color:0x0d2622,alpha:.98})
+          .stroke({color:0x988d72,width:1.5,alpha:.76})
+        .roundRect(x+2,y+2,w-4,h-4,6).fill({color:0x1b3935,alpha:.94})
+          .stroke({color:0x071915,width:1.8,alpha:.90})
+        .roundRect(x+5,y+5,w-10,h-10,5).stroke({color:0x9bb5a2,width:1,alpha:.14})
+        .moveTo(x+8,y+4).lineTo(x+w-8,y+4).stroke({color:0x020c0a,alpha:.55,width:2})
+        .moveTo(x+4,y+8).lineTo(x+4,y+h-8).stroke({color:0x06140f,alpha:.48,width:2})
+        .moveTo(x+8,y+h-4).lineTo(x+w-8,y+h-4).stroke({color:0xd4c9a5,alpha:.22,width:1.5}));
+    }
+    // Individual tangent-side boundary, exactly matching mat width.
+    mat.addChild(new Graphics().moveTo(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
+      .lineTo(TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
+      .stroke({color:0xbda47b,width:2,alpha:.83}));
   }
 }
 function drawBackground(board:Container,seat:number,players:Player[],playerName:string,gameKind:GameState['kind']){
-  const backdrop=new Graphics().rect(-200,-200,1400,1100).fill(0x142723);
+  const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
-  const points=Array.from({length:12},(_,i)=>{const a=(i*Math.PI/6)-Math.PI/12;return {x:500+292*Math.cos(a),y:330+281*Math.sin(a)};});
+  const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
+  const points=Array.from({length:12},(_,i)=>{const a=(i*Math.PI/6)-Math.PI/2-Math.PI/12;return {x:BOARD_CENTER+radius*Math.cos(a),y:BOARD_CENTER+radius*Math.sin(a)};});
   const pts=points.flatMap(p=>[p.x,p.y]);
   board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark).stroke({color:0x110f0c,width:18}));
-  board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.975,330+(p.y-330)*.975]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
-  board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.918,330+(p.y-330)*.918]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
-  if(gameKind==='tcg')drawTcgMat(board);
+  board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.991,BOARD_CENTER+(p.y-BOARD_CENTER)*.991]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
+  board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.972,BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
+  if(gameKind==='tcg')drawTcgMats(board);
   // Each chair is attached to the shared tabletop, then the whole board is rotated
   // so the viewer's seat is always on the near (bottom) edge.
   for(let i=0;i<12;i++){
     const angle=i*Math.PI/6-Math.PI/2;
-    const x=500+271*Math.cos(angle),y=330+259*Math.sin(angle);
+    const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
     const mine=i===seat;
     const player=players.find(p=>p.seat===i);
     const chair=new Container();
@@ -111,11 +111,17 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
-  const callbacks=useRef({onSelect,onMove});callbacks.current={onSelect,onMove};
+  const camera=useRef({zoom:1,panX:0,panY:0});
+  const updateView=useRef<()=>void>(()=>{});
+  const seatRef=useRef(seat);seatRef.current=seat;
+  const pointers=useRef(new Map<number,{x:number;y:number}>());
+  const mousePan=useRef<number|null>(null);
+  const lastView=useRef({x:NaN,y:NaN,scale:NaN});
+  const callbacks=useRef({onSelect,onMove,onViewChange});callbacks.current={onSelect,onMove,onViewChange};
   const drag=useRef<{id:string;visual:Container;x:number;y:number;card:boolean}|null>(null);
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
@@ -125,17 +131,31 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     let disposed=false;let resizeObserver:ResizeObserver|undefined;
     const app=new Application();
     (async()=>{
-      await app.init({width:1000,height:660,backgroundColor:0x101e1d,antialias:true,resolution:Math.min(window.devicePixelRatio||1,2),preference:'webgl',autoDensity:true});
+      await app.init({width:BOARD_W,height:BOARD_W,backgroundColor:0x101e1d,antialias:true,resolution:Math.min(window.devicePixelRatio||1,2),preference:'webgl',autoDensity:true});
       if(disposed){app.destroy(true);return;}
-      const scene=new Container(),board=new Container();board.position.set(500,330);board.pivot.set(500,330);
+      const scene=new Container(),board=new Container();board.position.set(BOARD_CENTER,BOARD_CENTER);board.pivot.set(BOARD_CENTER,BOARD_CENTER);
       scene.addChild(board);app.stage.addChild(scene);mount.current?.appendChild(app.canvas);
       session.current={app,scene,board};setReady(true);
       const rescale=()=>{
         if(!mount.current)return;
         const w=Math.max(100,mount.current.clientWidth),h=Math.max(100,mount.current.clientHeight);
-        app.renderer.resize(w,h);const s=Math.min(w/710,h/630);
-        scene.scale.set(s);scene.position.set(w/2-500*s,h/2-330*s);
+        app.renderer.resize(w,h);
+        const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
+        const c=camera.current,scale=fit*c.zoom;
+        scene.scale.set(scale);
+        scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
+        const angle=-Math.PI/2+seatRef.current*Math.PI/6;
+        const point=board.toGlobal(new Point(BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),
+          BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle)));
+        if(callbacks.current.onViewChange&&
+          (Math.abs(lastView.current.x-point.x)>.4||
+           Math.abs(lastView.current.y-point.y)>.4||
+           Math.abs(lastView.current.scale-scale)>1e-5)){
+          lastView.current={x:point.x,y:point.y,scale};
+          callbacks.current.onViewChange({x:point.x,y:point.y,scale});
+        }
       };
+      updateView.current=rescale;
       resizeObserver=new ResizeObserver(rescale);resizeObserver.observe(mount.current!);rescale();
     })().catch(err=>console.error('PixiJS initialization failed',err));
     return()=>{disposed=true;resizeObserver?.disconnect();session.current=null;drag.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
@@ -148,6 +168,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
+    updateView.current();
     drawBackground(board,seat,state.players,playerName,state.kind);
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
     const deckTop=new Map<string,TableObject>();
@@ -158,7 +179,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     for(const obj of visible){
       const piece=createPiece(obj,obj.id===selected);
       // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
-      const ownerSeat=obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat;
+      const ownerSeat=obj.matSeat??(obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat);
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       board.addChild(piece);
       if(drag.current?.id===obj.id) drag.current.visual=piece;
@@ -198,13 +219,15 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const rect=current.app.canvas.getBoundingClientRect();
       const p=new Point((event.clientX-rect.left)*current.app.renderer.width/rect.width,(event.clientY-rect.top)*current.app.renderer.height/rect.height);
       const local=current.board.toLocal(p,current.app.stage);
-      d.x=Math.max(175,Math.min(825,local.x));d.y=Math.max(80,Math.min(580,local.y));d.visual.position.set(d.x,d.y);
+      d.x=Math.max(0,Math.min(BOARD_W,local.x));d.y=Math.max(0,Math.min(BOARD_W,local.y));d.visual.position.set(d.x,d.y);
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
         hint.clear();
         const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y):null;
         if(cell){
-          hint.roundRect(cell.x-cell.width/2+3,cell.y-cell.height/2+3,cell.width-6,cell.height-6,5)
+          const zone=tcgMatCells(cell.seat).find(c=>c.row===cell.row&&c.column===cell.column)!;
+          hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
+          hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
             .fill({color:0xc7d8ac,alpha:.18})
             .stroke({color:0xf6daa2,width:2.4,alpha:.9});
         }
