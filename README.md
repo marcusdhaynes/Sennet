@@ -38,22 +38,13 @@ npm run preview
 
 `npm run build` generates the static web app at `apps/web/dist/`. GitHub Pages can host this output, but **GitHub Pages cannot host the multiplayer WebSocket service**. The first `npm install` generates `package-lock.json`; commit the lockfile for repeatable deployment.
 
-## Publishing as `Sennet` on GitHub
+## Open Sennet on the web
 
-1. In your GitHub account create a new repository named **sennet**. Do not initialize it with a README, since this project has one.
-2. Extract this project, open a terminal inside `Sennet`, and run:
+Your project is hosted at [marcusdhaynes/sennet](https://github.com/marcusdhaynes/sennet). The playable URL is **https://marcusdhaynes.github.io/sennet/**.
 
-```bash
-git init
-git add .
-git commit -m "Initial Sennet tabletop alpha"
-git branch -M main
-git remote add origin https://github.com/marcusdhaynes/sennet.git
-git push -u origin main
-```
+**One-time setup:** Open [Settings → Pages](https://github.com/marcusdhaynes/sennet/settings/pages). Under **Build and deployment**, select **GitHub Actions** as the Source. Then open [Deploy Sennet Web](https://github.com/marcusdhaynes/sennet/actions/workflows/pages.yml), choose **Run workflow** on `main`, and check the deployment result. Future pushes to `main` automatically rebuild and publish Sennet.
 
-3. Under **Settings → Pages**, choose **GitHub Actions** as the build and deployment source. The included `.github/workflows/pages.yml` automatically deploys the web app at `https://marcusdhaynes.github.io/sennet/` on pushes to `main`. GitHub Codespaces allows editing and previewing the Vite app directly from the browser.
-4. For multiplayer on the public web, host the separately packaged WebSocket relay on a suitable HTTPS/WSS service and set `VITE_SENNET_WS_URL` during web build or paste its URL in Sennet Settings. **Do not deploy the current relay publicly until the security checklist is finished.**
+GitHub Pages hosts the playable local/offline web interface. Real-time multiplayer requires deploying `apps/server` to a separate HTTPS/WSS service; Pages does not run servers. The starter relay is only suitable for development/testing until its security checklist has been addressed.
 
 ## Creator-owned asset storage (BYOS)
 
