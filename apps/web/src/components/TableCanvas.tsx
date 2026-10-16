@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -161,17 +161,14 @@ function drawTcgMats(
  */
 function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number){
   const layers=new Map<number,Container>();
-  const outward=-Math.PI/2+viewerSeat*Math.PI/6;
-  const dx=Math.cos(outward),dy=Math.sin(outward);
-  const separation=TCG_MAT_HEIGHT+116;
+  const layout=opposingMatLayout(viewerSeat,opponentSeat);
   for(const which of [viewerSeat,opponentSeat]){
     const origin=tcgMatOrigin(which);
-    const side=which===viewerSeat?1:-1;
+    const target=which===viewerSeat?layout.player:layout.opponent;
     const group=new Container();
     group.pivot.set(origin.x,origin.y);
-    group.position.set(BOARD_CENTER+dx*separation/2*side,
-      BOARD_CENTER+dy*separation/2*side);
-    group.rotation=which===viewerSeat?0:(viewerSeat+6-which)*Math.PI/6;
+    group.position.set(target.x,target.y);
+    group.rotation=target.rotation;
     board.addChild(group);layers.set(which,group);
   }
   return layers;
@@ -781,5 +778,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       window.removeEventListener('keydown',key);
     };
   },[]);
-  return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space with mouse or touch to move the camera; drag cards and pieces to move them."/>;
+  return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
+    {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
+      <span>Choose an opponent's mat or seat</span>
+      <button type="button" onClick={()=>{selectView({kind:'overview',opponent:null});resetCamera.current();}}>Cancel</button>
+    </div>}
+  </div>;
 }
