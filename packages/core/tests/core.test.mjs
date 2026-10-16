@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -398,6 +398,77 @@ test('opposing player mats meet precisely along the shared middle boundary',()=>
       // At unit scale, each player's play area occupies half the height.
       const screenFit=1080/(2*TCG_MAT_HEIGHT);
       assert.ok(Math.abs(2*TCG_MAT_HEIGHT*screenFit-1080)<1e-9);
+    }
+  }
+});
+
+test('left and right opponent arrows follow counter-clockwise and clockwise numbered seats',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    for(let opponent=0;opponent<12;opponent++){
+      if(opponent===viewer)continue;
+      for(const direction of ['left','right']){
+        const delta=direction==='left'?-1:1;
+        let expected=(opponent+delta+12)%12;
+        if(expected===viewer)expected=(expected+delta+12)%12;
+        const result=neighboringOpponentSeat(viewer,opponent,direction);
+        assert.equal(result,expected);
+        assert.notEqual(result,viewer,'navigation never selects own seat');
+      }
+      // All eleven opponent seats are reachable in clockwise order.
+      let pos=opponent;
+      const visited=new Set();
+      for(let i=0;i<11;i++){
+        visited.add(pos);
+        pos=neighboringOpponentSeat(viewer,pos,'right');
+      }
+      assert.equal(pos,opponent,'wraparound returns to initial opponent');
+      assert.equal(visited.size,11);
+    }
+  }
+});
+
+test('opposing mats project to distinct halves with actual slot edges meeting at the seam',()=>{
+  const h=TCG_MAT_HEIGHT,w=TCG_MAT_WIDTH;
+  for(let viewer=0;viewer<12;viewer++){
+    const tableAngle=viewerTableRotation(viewer);
+    for(let opponent=0;opponent<12;opponent++){
+      if(opponent===viewer)continue;
+      const layout=opposingMatLayout(viewer,opponent);
+      const intoScreen=(position,seat)=>{
+        const dx=position.x-BOARD_CENTER,dy=position.y-BOARD_CENTER;
+        const cx=dx*Math.cos(tableAngle)-dy*Math.sin(tableAngle);
+        const cy=dx*Math.sin(tableAngle)+dy*Math.cos(tableAngle);
+        const rotation=tcgMatOrigin(seat).angle+position.rotation+tableAngle;
+        return {cx,cy,rotation};
+      };
+      const local=intoScreen(layout.player,viewer);
+      const remote=intoScreen(layout.opponent,opponent);
+      const yBounds=(mat)=>{
+        const ys=[];
+        const xs=[];
+        for(const x of [-w/2,w/2]){
+          for(const y of [-h/2,h/2]){
+            xs.push(mat.cx+x*Math.cos(mat.rotation)-y*Math.sin(mat.rotation));
+            ys.push(mat.cy+x*Math.sin(mat.rotation)+y*Math.cos(mat.rotation));
+          }
+        }
+        return {top:Math.min(...ys),bottom:Math.max(...ys),
+          left:Math.min(...xs),right:Math.max(...xs)};
+      };
+      const ourArea=yBounds(local),theirArea=yBounds(remote);
+      assert.ok(Math.abs(ourArea.top)<1e-8,'player mat starts at seam');
+      assert.ok(Math.abs(theirArea.bottom)<1e-8,'opponent mat ends at seam');
+      assert.ok(ourArea.bottom>0&&theirArea.top<0);
+      assert.ok(Math.abs(ourArea.left+theirArea.right)<1e-8);
+      assert.ok(Math.abs(ourArea.right-theirArea.right)<1e-8);
+      // Opponent arrow controls are outside left/right edges, both at
+      // the opponent's mid-height: between the second and third rows.
+      const leftArrowX=remote.cx+(w/2+31)*Math.cos(remote.rotation);
+      const rightArrowX=remote.cx-(w/2+31)*Math.cos(remote.rotation);
+      const arrowsY=remote.cy+(w/2+31)*Math.sin(remote.rotation);
+      assert.ok(leftArrowX<theirArea.left);
+      assert.ok(rightArrowX>theirArea.right);
+      assert.ok(Math.abs(arrowsY-remote.cy)<1e-8);
     }
   }
 });
