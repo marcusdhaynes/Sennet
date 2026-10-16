@@ -244,5 +244,113 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',end);
     return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);};
   },[]);
+
+  useEffect(()=>{
+    const host=mount.current;if(!host)return;
+    const clampZoom=(v:number)=>Math.min(18,Math.max(.65,v));
+    const coordinates=(event:{clientX:number;clientY:number})=>{
+      const r=host.getBoundingClientRect();
+      return {x:event.clientX-r.left,y:event.clientY-r.top};
+    };
+    const zoomAt=(x:number,y:number,ratio:number)=>{
+      const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
+      const {scene}=current,c=camera.current;
+      const before=c.zoom,after=clampZoom(before*ratio);
+      if(after===before)return;
+      const localX=(x-scene.x)/scene.scale.x;
+      const localY=(y-scene.y)/scene.scale.y;
+      c.zoom=after;
+      const fit=Math.min(host.clientWidth/(TABLE_VIEW_RADIUS*2),
+        host.clientHeight/(TABLE_VIEW_RADIUS*2));
+      const newScale=fit*after;
+      c.panX=x-localX*newScale-(host.clientWidth/2-BOARD_CENTER*newScale);
+      c.panY=y-localY*newScale-(host.clientHeight/2-BOARD_CENTER*newScale);
+      updateView.current();
+    };
+    const pan=(dx:number,dy:number)=>{
+      camera.current.panX+=dx;camera.current.panY+=dy;
+      updateView.current();
+    };
+    const wheel=(event:WheelEvent)=>{
+      event.preventDefault();
+      const point=coordinates(event);
+      const factor=event.deltaMode===1?16:event.deltaMode===2?host.clientHeight:1;
+      if(event.shiftKey&&!event.ctrlKey){
+        pan(-event.deltaY*factor,-event.deltaX*factor);
+      }else{
+        // Standard mouse wheel, high-resolution touchpad two-finger scroll,
+        // and browser touchpad pinch (ctrlKey wheel) use the same camera.
+        zoomAt(point.x,point.y,Math.exp(-event.deltaY*factor*(event.ctrlKey?.009:.0018)));
+      }
+    };
+    const down=(event:PointerEvent)=>{
+      if(event.pointerType==='touch'){
+        pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
+        if(pointers.current.size>=2){
+          // The second finger cancels object movement and begins camera control.
+          drag.current=null;
+          if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
+        }
+      }else if(event.button===1||event.button===2){
+        event.preventDefault();
+        mousePan.current=event.pointerId;
+      }
+    };
+    const move=(event:PointerEvent)=>{
+      if(mousePan.current===event.pointerId){
+        pan(event.movementX,event.movementY);return;
+      }
+      const points=pointers.current;
+      if(event.pointerType!=='touch'||!points.has(event.pointerId))return;
+      const previous=points.get(event.pointerId)!;
+      const allBefore=[...points.values()];
+      points.set(event.pointerId,{x:event.clientX,y:event.clientY});
+      const allNow=[...points.values()];
+      if(points.size>=2){
+        const [a,b]=allBefore,[c,d]=allNow;
+        const oldCenter={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        const newCenter={x:(c.x+d.x)/2,y:(c.y+d.y)/2};
+        const oldDistance=Math.hypot(a.x-b.x,a.y-b.y);
+        const newDistance=Math.hypot(c.x-d.x,c.y-d.y);
+        const p=coordinates({clientX:oldCenter.x,clientY:oldCenter.y});
+        if(oldDistance>5&&newDistance>5)zoomAt(p.x,p.y,newDistance/oldDistance);
+        pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
+      }else if(!drag.current){
+        // One-finger panning on an empty area; a touched card still drags.
+        pan(event.clientX-previous.x,event.clientY-previous.y);
+      }
+    };
+    const up=(event:PointerEvent)=>{
+      pointers.current.delete(event.pointerId);
+      if(mousePan.current===event.pointerId)mousePan.current=null;
+    };
+    const reset=()=>{camera.current={zoom:1,panX:0,panY:0};updateView.current();};
+    const key=(event:KeyboardEvent)=>{
+      const target=event.target;
+      if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
+      if(event.key==='0'){reset();}
+      if(event.key==='+'||event.key==='='){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1.25);}
+      if(event.key==='-'){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1/1.25);}
+    };
+    host.addEventListener('wheel',wheel,{passive:false});
+    host.addEventListener('pointerdown',down);
+    host.addEventListener('contextmenu',preventMenu);
+    host.addEventListener('dblclick',reset);
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+    window.addEventListener('pointercancel',up);
+    window.addEventListener('keydown',key);
+    function preventMenu(event:MouseEvent){event.preventDefault();}
+    return()=>{
+      host.removeEventListener('wheel',wheel);
+      host.removeEventListener('pointerdown',down);
+      host.removeEventListener('contextmenu',preventMenu);
+      host.removeEventListener('dblclick',reset);
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',up);
+      window.removeEventListener('pointercancel',up);
+      window.removeEventListener('keydown',key);
+    };
+  },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Select or drag pieces with mouse or touch."/>;
 }
