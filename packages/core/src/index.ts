@@ -154,6 +154,18 @@ export interface OpposingMatLayout {
   opponent:{x:number;y:number;rotation:number};
 }
 /** Visual-only framing. Source table seats, card coordinates and replay remain unchanged. */
+/** From the numbered, zoomed-out seating arrangement: increasing seat
+ * numbers run clockwise. Skip the viewer's seat when cycling opponents. */
+export function neighboringOpponentSeat(
+  viewerSeat:number,currentOpponent:number,direction:'left'|'right'
+):number {
+  const own=((Math.trunc(viewerSeat)%SEATS)+SEATS)%SEATS;
+  let next=((Math.trunc(currentOpponent)%SEATS)+SEATS)%SEATS;
+  const delta=direction==='left'?-1:1;
+  // With twelve positions exactly one step can land on the viewer.
+  do {next=(next+delta+SEATS)%SEATS;}while(next===own);
+  return next;
+}
 export function opposingMatLayout(viewerSeat:number,opponentSeat:number):OpposingMatLayout {
   const radial=-Math.PI/2+viewerSeat*Math.PI/6;
   const dx=Math.cos(radial),dy=Math.sin(radial);
