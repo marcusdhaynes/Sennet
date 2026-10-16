@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -265,4 +265,67 @@ test('camera panning clamps each axis independently and ignores invalid values',
   assert.deepEqual(clampTablePan(900,-700,.5,1200,800),{panX:0,panY:0});
   assert.deepEqual(clampTablePan(Infinity,NaN,2,1200,800),{panX:0,panY:0});
   assert.deepEqual(clampTablePan(900,-700,2,NaN,-100),{panX:0,panY:0});
+});
+
+test('center merge joins exactly two adjacent center rows without affecting other columns or players',()=>{
+  const key=centerMergeKey(0,1);
+  const base=createGame('tcg');
+  const action=c('SET_CENTER_MERGE',{seat:0,boundary:1,merged:true});
+  const next=applyCommand(base,action);
+  assert.deepEqual(next.centerMerges,[key]);
+  const zones=tcgMatRegions(0,next.centerMerges);
+  assert.equal(zones.filter(z=>z.column===1).length,3);
+  const joined=zones.find(z=>z.column===1&&z.row===1);
+  assert.ok(joined);
+  assert.equal(joined.lastRow,2);
+  assert.equal(joined.height,2*TCG_MAT.rowHeight+TCG_MAT.gap);
+  assert.equal(zones.filter(z=>z.column!==1).length,8);
+  assert.equal(tcgMatRegions(1,next.centerMerges).length,12);
+  assert.equal(tcgMatRegions(0,base.centerMerges).length,12);
+  assert.deepEqual(replay(base,[action]),next);
+});
+
+test('adjacent merges combine into three- and four-row center areas, then undo cleanly',()=>{
+  let state=createGame('tcg');
+  const set=(boundary,merged)=>{state=applyCommand(state,c('SET_CENTER_MERGE',{seat:5,boundary,merged}));};
+  set(0,true);set(2,true);
+  assert.equal(tcgMatRegions(5,state.centerMerges).filter(z=>z.column===1).length,2);
+  set(1,true);
+  const joined=tcgMatRegions(5,state.centerMerges).find(z=>z.column===1);
+  assert.equal(joined.row,0);
+  assert.equal(joined.lastRow,3);
+  assert.equal(joined.height,TCG_MAT_HEIGHT);
+  set(1,false);
+  assert.equal(tcgMatRegions(5,state.centerMerges).filter(z=>z.column===1).length,2);
+  set(0,false);set(2,false);
+  assert.equal(tcgMatRegions(5,state.centerMerges).length,12);
+  assert.deepEqual(state.centerMerges,[]);
+});
+
+test('merged center rows share seven horizontal snap positions across their combined height',()=>{
+  const base=createGame('tcg');
+  const state=applyCommand(base,c('SET_CENTER_MERGE',{seat:0,boundary:0,merged:true}));
+  const region=tcgMatRegions(0,state.centerMerges).find(z=>z.column===1&&z.row===0);
+  const top=tcgMatCells(0).find(z=>z.column===1&&z.row===0);
+  const bottom=tcgMatCells(0).find(z=>z.column===1&&z.row===1);
+  for(const input of [top,bottom]){
+    const dest=tcgSnapPoint(input.x,input.y,state.centerMerges);
+    assert.equal(dest.row,0);
+    assert.equal(dest.slot,3);
+    assert.ok(Math.hypot(dest.x-region.x,dest.y-region.y)<1e-6);
+    const card=applyCommand(state,c('MOVE',{id:'hero-a',x:input.x,y:input.y})).objects.find(z=>z.id==='hero-a');
+    assert.ok(Math.hypot(card.x-region.x,card.y-region.y)<1e-6);
+  }
+});
+
+test('merge command rejects invalid positions, unsupported games, and changing other players mats',()=>{
+  const tcg=createGame('tcg');
+  for(const payload of [{seat:12,boundary:0,merged:true},{seat:0,boundary:3,merged:true},
+    {seat:0,boundary:0,merged:'true'},{seat:0.5,boundary:0,merged:true}]){
+    assert.throws(()=>applyCommand(tcg,c('SET_CENTER_MERGE',payload)),/Invalid center mat merge/);
+  }
+  assert.throws(()=>applyCommand(createGame('sandbox'),c('SET_CENTER_MERGE',{seat:0,boundary:1,merged:true})),/only supported/);
+  const players={...tcg,players:[{id:'P1',seat:3,name:'Player',online:true}]};
+  assert.throws(()=>applyCommand(players,c('SET_CENTER_MERGE',{seat:0,boundary:0,merged:true})),/only merge/);
+  assert.equal(applyCommand(players,c('SET_CENTER_MERGE',{seat:3,boundary:0,merged:true})).centerMerges[0],centerMergeKey(3,0));
 });
