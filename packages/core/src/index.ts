@@ -40,6 +40,29 @@ export function clampTableZoom(value:number):number {
   return Number.isFinite(value) ? Math.min(MAX_TABLE_ZOOM,Math.max(MIN_TABLE_ZOOM,value)) : MIN_TABLE_ZOOM;
 }
 
+/**
+ * Keep the entire camera viewport inside the world rectangle visible at
+ * the initial fit-to-table zoom. Pan is measured in screen pixels relative
+ * to the centered initial camera.
+ *
+ * At zoom=1 the viewport already fills the permitted area: no panning.
+ * At zoom=2 only half that area is shown, giving half a viewport of travel
+ * along either axis. All camera inputs share these limits.
+ */
+export function clampTablePan(
+  panX:number, panY:number, zoom:number, viewportWidth:number, viewportHeight:number
+):{panX:number;panY:number}{
+  const excess=clampTableZoom(zoom)-MIN_TABLE_ZOOM;
+  const width=Number.isFinite(viewportWidth)?Math.max(0,viewportWidth):0;
+  const height=Number.isFinite(viewportHeight)?Math.max(0,viewportHeight):0;
+  const limitX=width*excess/2,limitY=height*excess/2;
+  const x=Number.isFinite(panX)?panX:0,y=Number.isFinite(panY)?panY:0;
+  return {
+    panX:Math.min(limitX,Math.max(-limitX,x)),
+    panY:Math.min(limitY,Math.max(-limitY,y))
+  };
+}
+
 
 /**
  * One independent four-row/three-column mat per seat. The middle rectangle
