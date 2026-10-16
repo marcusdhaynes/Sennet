@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,TCG_MAT,type GameState,type Player,type TableObject} from '@sennet/core';
+import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -116,7 +116,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   const callbacks=useRef({onSelect,onMove});callbacks.current={onSelect,onMove};
-  const drag=useRef<{id:string;visual:Container;x:number;y:number}|null>(null);
+  const drag=useRef<{id:string;visual:Container;x:number;y:number;card:boolean}|null>(null);
+  const snapHighlight=useRef<Graphics|null>(null);
+  const currentKind=useRef(state.kind);currentKind.current=state.kind;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
   useEffect(()=>{
@@ -144,8 +146,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const {app,board}=current;
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
     board.removeChildren().forEach(child=>child.destroy({children:true}));
+    snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
     drawBackground(board,seat,state.players,playerName,state.kind);
+    const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
     const visible=state.objects.filter(o=>o.zone!=='DECK'||deckTop.has(o.id.split('-')[0])&&deckTop.get(o.id.split('-')[0])?.id===o.id);
@@ -179,7 +183,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       if(!readonly&&!obj.locked){
         piece.on('pointerdown',(e)=>{
-          e.stopPropagation();drag.current={id:obj.id,visual:piece,x:obj.x,y:obj.y};callbacks.current.onSelect(obj.id);
+          e.stopPropagation();drag.current={id:obj.id,visual:piece,x:obj.x,y:obj.y,card:obj.kind==='card'};callbacks.current.onSelect(obj.id);
         });
       }
     }
@@ -195,8 +199,25 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const p=new Point((event.clientX-rect.left)*current.app.renderer.width/rect.width,(event.clientY-rect.top)*current.app.renderer.height/rect.height);
       const local=current.board.toLocal(p,current.app.stage);
       d.x=Math.max(175,Math.min(825,local.x));d.y=Math.max(80,Math.min(580,local.y));d.visual.position.set(d.x,d.y);
+      const hint=snapHighlight.current;
+      if(hint&&!hint.destroyed){
+        hint.clear();
+        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y):null;
+        if(cell){
+          hint.roundRect(cell.x-cell.width/2+3,cell.y-cell.height/2+3,cell.width-6,cell.height-6,5)
+            .fill({color:0xc7d8ac,alpha:.18})
+            .stroke({color:0xf6daa2,width:2.4,alpha:.9});
+        }
+      }
     };
-    const end=()=>{const d=drag.current;if(!d)return;drag.current=null;callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));};
+    const end=()=>{const d=drag.current;if(!d)return;
+      drag.current=null;
+      if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
+      // Start the snap tween at the pointer's release position, not where
+      // the card was before the drag.
+      oldLocations.current.set(d.id,{x:d.x,y:d.y});
+      callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));
+    };
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',end);
     return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);};
   },[]);
