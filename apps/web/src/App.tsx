@@ -3,6 +3,7 @@ import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHori
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
+import PersonalDrawer from './components/PersonalDrawer';
 import {RoomConnection} from './lib/network';
 import {choosePseudoBotAction} from './lib/bot';
 import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,rememberPack} from './lib/storage';
@@ -169,11 +170,6 @@ export default function App(){
       setScriptOutput('Lua completed · '+actions.length+' action(s) submitted.');
     }catch(e){setScriptOutput('Lua error: '+String(e));}
   }
-  const BOOKS:{id:Book;number:string;subtitle:string}[]=[
-    {id:'sennet',number:'01',subtitle:'Instructions'},
-    {id:'games',number:'02',subtitle:'Games & library'},
-    {id:'settings',number:'03',subtitle:'Preferences'}
-  ];
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
@@ -181,14 +177,7 @@ export default function App(){
           const old=game.objects.find(o=>o.id===id);if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
         }} readonly={replayAt!==null}/>
     </div>
-    <div className="table-books" aria-label="Tabletop command books">
-      {BOOKS.map(b=><button key={b.id} className={'table-book book-'+b.id+(book===b.id?' opened':'')} onClick={()=>setBook(b.id)} aria-label={'Open '+b.id+' book'}>
-        <span className="book-spine" aria-hidden="true"/><span className="book-cover">
-          <span className="book-ornament">✦</span><span className="book-title">{b.id==='sennet'?'Sennet':b.id==='games'?'Games':'Settings'}</span>
-          <span className="book-rule"/><span className="book-subtitle">{b.subtitle}</span><span className="book-number">{b.number}</span>
-        </span>
-      </button>)}
-    </div>
+    <PersonalDrawer activeBook={book} openBook={setBook}/>
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
         <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
@@ -200,7 +189,7 @@ export default function App(){
             <div className="guide-grid">
               <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
               <article><span>02</span><h3>Move your pieces</h3><p>Drag cards, tokens and miniatures directly across the felt. Select a piece to adjust it using Games → Table Tools.</p></article>
-              <article><span>03</span><h3>Always your seat</h3><p>Your seat remains at the bottom. Every other seat and its pieces are oriented relative to you. Choose a seat in Settings.</p></article>
+              <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings.</p></article>
               <article><span>04</span><h3>Replay every move</h3><p>Actions are stored as compact commands, not video. Export or replay them from Games → Table Tools.</p></article>
               <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
               <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
