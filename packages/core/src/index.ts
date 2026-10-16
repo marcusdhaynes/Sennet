@@ -58,8 +58,8 @@ export function clampTablePan(
   const limitX=width*excess/2,limitY=height*excess/2;
   const x=Number.isFinite(panX)?panX:0,y=Number.isFinite(panY)?panY:0;
   return {
-    panX:Math.min(limitX,Math.max(-limitX,x)),
-    panY:Math.min(limitY,Math.max(-limitY,y))
+    panX:limitX===0?0:Math.min(limitX,Math.max(-limitX,x)),
+    panY:limitY===0?0:Math.min(limitY,Math.max(-limitY,y))
   };
 }
 
