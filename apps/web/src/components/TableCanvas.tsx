@@ -17,8 +17,10 @@ function drawTcgMats(
   onEyeTap:()=>void,onEyeHold:()=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
 ){
-  for(let seat=0;seat<12;seat++){
-    if(seatLayers&&!seatLayers.has(seat))continue;
+  const drawnSeats=seatLayers
+    ? [...seatLayers.keys()]
+    : Array.from({length:12},(_,i)=>i);
+  for(const seat of drawnSeats){
     const parent=seatLayers?.get(seat)??board;
     const cells=tcgMatCells(seat);
     const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
@@ -107,16 +109,20 @@ function drawTcgMats(
     // Circular eye tool lives at the TOP of the local mat.
     if(seat===viewerSeat){
       const eye=new Container();
-      eye.position.set(0,-TCG_MAT_HEIGHT/2-64);
+      // In the opposing view the eye sits directly over the shared seam,
+      // with exactly the same outer circle size as a merge control.
+      const duel=seatLayers!==null,outerRadius=duel?16:32;
+      eye.position.set(0,-TCG_MAT_HEIGHT/2-(duel?0:64));
       eye.eventMode='static';
-      eye.hitArea=new Circle(0,0,38);
+      eye.hitArea=new Circle(0,0,duel?19:38);
       eye.cursor='pointer';
       eye.addChild(new Graphics()
-        .circle(0,0,32).fill({color:0x183a33,alpha:.96})
-        .stroke({color:0xe4cf9d,alpha:1,width:2.5})
-        .ellipse(0,0,18,11).stroke({color:0xf4e4bd,width:2.8})
-        .circle(0,0,6).fill({color:0xf6e4c1})
-        .circle(2,-2,2).fill({color:0x3f5e53}));
+        .circle(0,0,outerRadius).fill({color:0x183a33,alpha:.96})
+        .stroke({color:0xe4cf9d,alpha:1,width:duel?1.5:2.5})
+        .ellipse(0,0,duel?10:18,duel?6:11)
+          .stroke({color:0xf4e4bd,width:duel?1.8:2.8})
+        .circle(0,0,duel?3.3:6).fill({color:0xf6e4c1})
+        .circle(duel?1:-2,duel?-1:-2,duel?1.2:2).fill({color:0x3f5e53}));
       // The pointer must remain almost motionless for the 250 ms hold.
       let pending:number|null=null;
       let pressedPointer:number|null=null;
@@ -162,7 +168,8 @@ function drawTcgMats(
 function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number){
   const layers=new Map<number,Container>();
   const layout=opposingMatLayout(viewerSeat,opponentSeat);
-  for(const which of [viewerSeat,opponentSeat]){
+  // Draw the local mat last so the shared-seam eye stays above both mats.
+  for(const which of [opponentSeat,viewerSeat]){
     const origin=tcgMatOrigin(which);
     const target=which===viewerSeat?layout.player:layout.opponent;
     const group=new Container();
@@ -180,7 +187,22 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
-  if(duelOpponent===null){
+  if(duelOpponent!==null){
+    // Each opponent-view player owns one entire half of the viewport.
+    // Wide felt planes fill spare screen width without deforming cards.
+    const panels=new Container();
+    panels.position.set(BOARD_CENTER,BOARD_CENTER);
+    panels.rotation=-viewerTableRotation(seat);
+    const span=BOARD_W*2;
+    panels.addChild(new Graphics()
+      .rect(-span/2,-TCG_MAT_HEIGHT,span,TCG_MAT_HEIGHT)
+        .fill({color:0x203b35})
+      .rect(-span/2,0,span,TCG_MAT_HEIGHT)
+        .fill({color:0x24443b})
+      .moveTo(-span/2,0).lineTo(span/2,0)
+        .stroke({color:0xbc9a62,width:2.4,alpha:.86}));
+    board.addChild(panels);
+  }else{
     const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
     const points=Array.from({length:12},(_,i)=>{
       const a=(i*Math.PI/6)-Math.PI/2-Math.PI/12;
@@ -202,7 +224,9 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,
     onEyeTap,onEyeHold,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
-    if(layers&&!layers.has(i))continue;
+    // Retractable HTML edge labels replace physical chair/name blocks
+    // in the versus mode, preserving the full play area for cards.
+    if(layers)continue;
     const angle=i*Math.PI/6-Math.PI/2;
     const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle);
     const y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
@@ -595,11 +619,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const w=host.clientWidth,h=host.clientHeight;
       if(w<=0||h<=0)return;
       const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
-      const separation=TCG_MAT_HEIGHT+116;
-      const neededHeight=TCG_MAT_HEIGHT+separation+175;
-      // Camera shows the re-framed local mat below and selected opponent
-      // above, with the eye still reachable between them.
-      const fitScale=Math.min(.94*w/(TCG_MAT_WIDTH+52),.91*h/neededHeight);
+      // Both felt player areas occupy exactly one viewport half; the
+      // rounded mat edges meet on the horizontal center line.
+      const fitScale=h/(2*TCG_MAT_HEIGHT);
       animateTo(fitScale/fit,0,0);
     };
     eyeTapHandler.current=()=>{
