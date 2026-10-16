@@ -1,0 +1,15 @@
+{
+  "schema":"sennet.pack/1",
+  "id":"example.castleboard",
+  "name":"Castleboard Demo",
+  "author":"Sennet",
+  "kind":"boardgame",
+  "description":"Example community-made pack using universal objects.",
+  "license":"CC0-1.0",
+  "objects":[
+    {"id":"base","kind":"board","name":"Castleboard","x":500,"y":330,"color":"#a49172","locked":true},
+    {"id":"white-king","kind":"miniature","name":"Ivory King","x":350,"y":250,"color":"#eee0b4"},
+    {"id":"black-king","kind":"miniature","name":"Obsidian King","x":650,"y":410,"color":"#9588a1"},
+    {"id":"turn-die","kind":"die","name":"D6","x":500,"y":240,"color":"#c8b4de","sides":6,"value":1}
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "sennet",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "npm run dev -w @sennet/web",
+    "dev:server": "npm run dev -w @sennet/server",
+    "build": "npm run build -w @sennet/web",
+    "preview": "npm run preview -w @sennet/web",
+    "check": "npm run check -w @sennet/web && npm run check -w @sennet/server",
+    "test": "node --experimental-strip-types --test packages/core/tests/*.test.mjs",
+    "tauri": "npm run tauri -w @sennet/web"
+  },
+  "engines": { "node": ">=22.16" }
+}

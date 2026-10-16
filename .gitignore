@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+*.log
+.vite/
+coverage/
+target/
+gen/
+.sennet-server/
+*.tsbuildinfo

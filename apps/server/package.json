@@ -1,0 +1,9 @@
+{
+  "name": "@sennet/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "dev": "tsx watch src/index.ts", "start": "tsx src/index.ts", "check": "tsc --noEmit" },
+  "dependencies": { "@sennet/core": "0.1.0", "ws": "^8.18.0" },
+  "devDependencies": { "@types/node": "^22.0.0", "@types/ws": "^8.5.0", "tsx": "^4.20.0", "typescript": "^5.8.3" }
+}

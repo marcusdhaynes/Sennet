@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default Sennet window access to basic safe desktop functionality.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
