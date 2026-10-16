@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,type GameState,type Player,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,type GameState,type Player,type TableObject} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -76,6 +76,14 @@ function drawBackground(board:Container,seat:number,players:Player[],playerName:
   }
 
 }
+function markHeldStack(piece:Container,count:number){
+  const indicator=new Graphics().ellipse(0,0,44,58)
+    .stroke({color:0xffdd88,width:3,alpha:.98});
+  indicator.eventMode='none';
+  piece.addChild(indicator);
+  const text=label(String(count)+' cards',14,0xffe5a0,'bold');
+  text.position.set(0,-64);text.eventMode='none';piece.addChild(text);
+}
 function createPiece(o:TableObject,isSelected:boolean){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
   const shadow=new Graphics().ellipse(4,13,33,12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
@@ -111,7 +119,7 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -122,8 +130,17 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   // Canvas pan belongs to the pointer that pressed empty space, never to a card drag.
   const panPointer=useRef<{id:number;x:number;y:number}|null>(null);
   const lastView=useRef({x:NaN,y:NaN,scale:NaN});
-  const callbacks=useRef({onSelect,onMove,onViewChange});callbacks.current={onSelect,onMove,onViewChange};
-  const drag=useRef<{id:string;pointerId:number;visual:Container;x:number;y:number;card:boolean}|null>(null);
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onViewChange};
+  type ActiveDrag={
+    id:string;pointerId:number;visual:Container;card:boolean;
+    x:number;y:number;startX:number;startY:number;
+    startClientX:number;startClientY:number;moved:boolean;
+    whole:boolean;members:{id:string;x:number;y:number}[];
+    timer:number|null;
+  };
+  const drag=useRef<ActiveDrag|null>(null);
+  const visuals=useRef(new Map<string,Container>());
+  const cancelActiveDrag=useRef<()=>void>(()=>{});
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
@@ -162,7 +179,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current=rescale;
       resizeObserver=new ResizeObserver(rescale);resizeObserver.observe(mount.current!);rescale();
     })().catch(err=>console.error('PixiJS initialization failed',err));
-    return()=>{disposed=true;resizeObserver?.disconnect();session.current=null;drag.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
+    return()=>{disposed=true;resizeObserver?.disconnect();cancelActiveDrag.current();session.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
   },[]);
   useEffect(()=>{
     const current=session.current;
@@ -170,6 +187,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const {app,board}=current;
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
     board.removeChildren().forEach(child=>child.destroy({children:true}));
+    visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
     updateView.current();
@@ -182,11 +200,15 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
     for(const obj of visible){
       const piece=createPiece(obj,obj.id===selected);
+      visuals.current.set(obj.id,piece);
+      if(drag.current?.id===obj.id){
+        drag.current.visual=piece;
+        if(drag.current.whole)markHeldStack(piece,drag.current.members.length);
+      }
       // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
       const ownerSeat=obj.matSeat??(obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat);
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       board.addChild(piece);
-      if(drag.current?.id===obj.id) drag.current.visual=piece;
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=220;
@@ -208,11 +230,30 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       if(!readonly&&!obj.locked){
         piece.on('pointerdown',(e)=>{
-          // Only the pointer pressed on this movable object may drag it.
-          // Other pointers remain available for pinching and camera control.
+          // A short drag always grabs one card. Holding without motion
+          // arms a stack pick, but never takes a card from another owner.
           if(e.button!==0)return;
           e.stopPropagation();
-          drag.current={id:obj.id,pointerId:e.pointerId,visual:piece,x:obj.x,y:obj.y,card:obj.kind==='card'};
+          cancelActiveDrag.current();
+          const members=cardStackMembers(state,obj.id);
+          const eligible=members.length>=2&&members.every(o=>!o.locked&&
+            (state.kind!=='tcg'||!o.owner||o.owner===(state.players.length?actorId:'local')));
+          const active:ActiveDrag={
+            id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind==='card',
+            x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
+            startClientX:e.clientX,startClientY:e.clientY,moved:false,
+            whole:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
+            timer:null
+          };
+          drag.current=active;
+          if(eligible){
+            active.timer=window.setTimeout(()=>{
+              if(drag.current!==active||active.moved)return;
+              active.timer=null;
+              active.whole=true;
+              if(!active.visual.destroyed)markHeldStack(active.visual,active.members.length);
+            },Math.min(5000,Math.max(250,stackHoldMs)));
+          }
           callbacks.current.onSelect(obj.id);
         });
       }
@@ -221,15 +262,51 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs]);
   useEffect(()=>{
+    const clearHighlight=()=>{
+      const hint=snapHighlight.current;
+      if(hint&&!hint.destroyed)hint.clear();
+    };
+    const discard=(restore=true)=>{
+      const d=drag.current;
+      if(!d)return;
+      if(d.timer!==null)window.clearTimeout(d.timer);
+      if(restore){
+        for(const member of d.members.length?d.members:[{id:d.id,x:d.startX,y:d.startY}]){
+          const visual=visuals.current.get(member.id);
+          if(visual&&!visual.destroyed)visual.position.set(member.x,member.y);
+        }
+      }
+      drag.current=null;
+      clearHighlight();
+    };
+    cancelActiveDrag.current=()=>discard();
     const move=(event:PointerEvent)=>{
       const d=drag.current,current=session.current;
       if(!d||d.pointerId!==event.pointerId||!current||!mount.current)return;
+      if(!d.moved){
+        if(Math.hypot(event.clientX-d.startClientX,event.clientY-d.startClientY)<6)return;
+        d.moved=true;
+        // Any motion before hold completes commits to picking the TOP card.
+        if(d.timer!==null){window.clearTimeout(d.timer);d.timer=null;}
+      }
       const rect=current.app.canvas.getBoundingClientRect();
-      const p=new Point((event.clientX-rect.left)*current.app.renderer.width/rect.width,(event.clientY-rect.top)*current.app.renderer.height/rect.height);
-      const local=current.board.toLocal(p,current.app.stage);
-      d.x=Math.max(0,Math.min(BOARD_W,local.x));d.y=Math.max(0,Math.min(BOARD_W,local.y));d.visual.position.set(d.x,d.y);
+      const point=new Point(
+        (event.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (event.clientY-rect.top)*current.app.renderer.height/rect.height);
+      const local=current.board.toLocal(point,current.app.stage);
+      d.x=Math.max(0,Math.min(BOARD_W,local.x));
+      d.y=Math.max(0,Math.min(BOARD_W,local.y));
+      const dx=d.x-d.startX,dy=d.y-d.startY;
+      if(d.whole){
+        for(const m of d.members){
+          const visual=visuals.current.get(m.id);
+          if(visual&&!visual.destroyed)visual.position.set(m.x+dx,m.y+dy);
+        }
+      }else if(!d.visual.destroyed){
+        d.visual.position.set(d.x,d.y);
+      }
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
         hint.clear();
@@ -243,23 +320,34 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         }
       }
     };
-    const end=(event:PointerEvent)=>{const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
-      drag.current=null;
-      if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
-      // Start the snap tween at the pointer's release position, not where
-      // the card was before the drag.
-      oldLocations.current.set(d.id,{x:d.x,y:d.y});
-      callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));
+    const end=(event:PointerEvent)=>{
+      const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
+      if(d.timer!==null)window.clearTimeout(d.timer);
+      drag.current=null;clearHighlight();
+      // Merely selecting or holding still is not a move.
+      if(!d.moved)return;
+      const dx=d.x-d.startX,dy=d.y-d.startY;
+      if(d.whole){
+        for(const m of d.members)oldLocations.current.set(m.id,{x:m.x+dx,y:m.y+dy});
+        callbacks.current.onMoveStack(d.id,Math.round(d.x),Math.round(d.y));
+      }else{
+        oldLocations.current.set(d.id,{x:d.x,y:d.y});
+        callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));
+      }
+    };
+    const cancel=(event:PointerEvent)=>{
+      if(drag.current?.pointerId===event.pointerId)discard();
     };
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',end);
     window.addEventListener('pointercancel',cancel);
-    function cancel(event:PointerEvent){
-      if(drag.current?.pointerId!==event.pointerId)return;
-      drag.current=null;
-      if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
-    }
-    return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);window.removeEventListener('pointercancel',cancel);};
+    return()=>{
+      cancelActiveDrag.current=()=>{};
+      discard();
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',end);
+      window.removeEventListener('pointercancel',cancel);
+    };
   },[]);
 
   useEffect(()=>{
@@ -306,7 +394,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         if(pointers.current.size>=2){
           // Two touches switch to view manipulation, even if the first was
           // touching a card; do not commit a partial card drag.
-          drag.current=null;
+          cancelActiveDrag.current();
           panPointer.current=null;
           if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
           host.classList.remove('is-panning');
