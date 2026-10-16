@@ -58,7 +58,7 @@ export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:Comma
         const factor=active?(active.over?.57:1):docked?(open?.57:.12):1;
         const visible=!docked||open||Boolean(active);
         const angle=docked||active?0:b.id==='sennet'?-7:b.id==='games'?3:9;
-        const style={left:active?active.x:x,top:active?active.y:y,opacity:visible?1:0,['--book-scale' as string]:factor,['--book-angle' as string]:String(angle)+'deg',zIndex:active?12:docked?8:6} as CSSProperties;
+        const style={left:active?active.x:x,top:active?active.y:y,opacity:visible?1:0,pointerEvents:visible?'auto':'none',['--book-scale' as string]:factor,['--book-angle' as string]:String(angle)+'deg',zIndex:active?12:docked?8:6} as CSSProperties;
         return <button key={b.id} type="button" className={'table-book book-'+b.id+(docked?' is-stored':'')+(active?' is-dragging':'')+(activeBook===b.id?' opened':'')}
           style={style} tabIndex={docked&&!open?-1:0}
           aria-label={'Open '+b.name+'. '+(docked?'In your drawer':'On the table')+'. Drag to '+(docked?'table':'drawer')+'.'}
