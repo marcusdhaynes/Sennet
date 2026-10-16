@@ -212,3 +212,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){
   .personal-drawer,.books-layer .table-book{transition:none}
 }
+
+/* Selection guide does not block the tabletop: the next click may land
+   anywhere on an opponent's mat, including directly over a card. */
+.opponent-target-prompt{
+  position:absolute;z-index:20;top:max(18px,env(safe-area-inset-top));left:50%;
+  transform:translateX(-50%);
+  display:flex;align-items:center;gap:16px;
+  max-width:calc(100vw - 20px);padding:9px 11px 9px 18px;
+  border:1px solid #bba477;border-radius:50px;
+  background:#142f2ae8;color:#f3e4c6;
+  font:600 12px 'DM Sans',system-ui,sans-serif;
+  box-shadow:0 9px 25px #0007;
+  white-space:nowrap;pointer-events:none;
+}
+.opponent-target-prompt button{
+  border:1px solid #bca784;border-radius:20px;
+  padding:6px 12px;background:#e0cb9e;color:#233c34;
+  pointer-events:auto;font-weight:700;font-size:11px;
+}
+@media(max-width:420px){.opponent-target-prompt{font-size:10px;gap:8px;padding:7px 9px}}
