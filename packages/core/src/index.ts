@@ -290,8 +290,8 @@ export function validateCommand(state: GameState, command: Command): string | nu
   if(command.type==='SET_CENTER_MERGE'){
     const seat=command.payload.seat,boundary=command.payload.boundary;
     if(state.kind!=='tcg')return 'Center merging is only supported on TCG mats';
-    if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS||
-       !Number.isInteger(boundary)||Number(boundary)<0||Number(boundary)>=3||
+    if(typeof seat!=='number'||!Number.isInteger(seat)||seat<0||seat>=SEATS||
+       typeof boundary!=='number'||!Number.isInteger(boundary)||boundary<0||boundary>=3||
        typeof command.payload.merged!=='boolean')return 'Invalid center mat merge';
     if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
       return 'You can only merge sections on your own mat';
