@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -159,4 +159,63 @@ test('Initial fit-to-table zoom is the maximum zoom-out limit',()=>{
   assert.equal(clampTableZoom(NaN),MIN_TABLE_ZOOM);
   assert.equal(clampTableZoom(1.5),1.5);
   assert.equal(clampTableZoom(999),MAX_TABLE_ZOOM);
+});
+
+test('cards stacked at the same spot form one group; adjacent mat cards do not',()=>{
+  const state=createGame('tcg');
+  const cards=cardStackMembers(state,'alpha-1');
+  assert.equal(cards.length,12);
+  assert.equal(cards[0].zone,'DECK');
+  assert.ok(cards.every(card=>card.matSeat===0));
+  assert.deepEqual(cardStackMembers(state,'hero-a').map(o=>o.id),['hero-a']);
+  assert.deepEqual(cardStackMembers(state,'not-an-object'),[]);
+  // Sharing x/y is not enough to group across separate deck/table zones.
+  const combined={...state,objects:[...state.objects,{...cards[0],id:'table-card',zone:'TABLE'}]};
+  assert.equal(cardStackMembers(combined,'alpha-1').length,12);
+  assert.deepEqual(cardStackMembers(combined,'table-card').map(o=>o.id),['table-card']);
+});
+
+test('Normal short drag takes one top card, preserving the rest of its deck',()=>{
+  const state=createGame('tcg');
+  const target=tcgMatCells(0).find(cell=>cell.row===0&&cell.column===1);
+  const moved=applyCommand(state,c('MOVE',{id:'alpha-1',x:target.x,y:target.y}));
+  const card=moved.objects.find(o=>o.id==='alpha-1');
+  assert.equal(card?.zone,'TABLE');
+  assert.equal(card?.matSeat,0);
+  assert.equal(moved.objects.filter(o=>o.id.startsWith('alpha-')&&o.zone==='DECK').length,11);
+  assert.equal(cardStackMembers(moved,'alpha-2').length,11);
+  const free=applyCommand(state,c('MOVE',{id:'alpha-1',x:BOARD_CENTER,y:BOARD_CENTER}));
+  assert.equal(free.objects.find(o=>o.id==='alpha-1').zone,'TABLE');
+});
+
+test('Atomic stack move takes every card and preserves relative state',()=>{
+  const start=createGame('tcg');
+  const target=tcgMatCells(3).find(cell=>cell.row===2&&cell.column===1);
+  const action=c('MOVE_STACK',{id:'alpha-1',x:target.x,y:target.y});
+  const next=applyCommand(start,action);
+  assert.equal(next.seq,start.seq+1);
+  const before=start.objects.filter(o=>o.id.startsWith('alpha-'));
+  const after=next.objects.filter(o=>o.id.startsWith('alpha-'));
+  assert.equal(after.length,12);
+  for(let i=0;i<before.length;i++){
+    assert.equal(after[i].zone,'DECK');
+    assert.equal(after[i].matSeat,3);
+    assert.equal(after[i].order,before[i].order);
+    assert.equal(after[i].faceUp,before[i].faceUp);
+    assert.equal(after[i].owner,before[i].owner);
+    assert.ok(Math.abs(after[i].x-target.x)<1e-6);
+    assert.ok(Math.abs(after[i].y-target.y)<1e-6);
+  }
+  assert.deepEqual(next.objects.filter(o=>o.id.startsWith('beta-')),start.objects.filter(o=>o.id.startsWith('beta-')));
+  assert.deepEqual(replay(start,[action]),next);
+  assert.equal(cardStackMembers(next,'alpha-1').length,12);
+});
+
+test('Stack actions reject single cards, locked members and other players cards',()=>{
+  const state=createGame('tcg');
+  assert.throws(()=>applyCommand(state,c('MOVE_STACK',{id:'hero-a',x:1500,y:1500})),/No stack/);
+  const locked={...state,objects:state.objects.map(o=>o.id==='alpha-5'?{...o,locked:true}:o)};
+  assert.throws(()=>applyCommand(locked,c('MOVE_STACK',{id:'alpha-1',x:1500,y:1500})),/locked/);
+  const owned={...state,objects:state.objects.map(o=>o.id==='alpha-5'?{...o,owner:'other-player'}:o)};
+  assert.throws(()=>applyCommand(owned,c('MOVE_STACK',{id:'alpha-1',x:1500,y:1500})),/another player's card/);
 });
