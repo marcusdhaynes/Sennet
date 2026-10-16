@@ -26,6 +26,18 @@ const ACTOR_KEY='sennet.actor.v1';
 const RECENT_KEY='sennet.recent.v1';
 const STACK_HOLD_KEY='sennet.stack-hold-ms.v1';
 const STACK_HOLD_DEFAULT_MS=1000;
+const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
+const MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
+const MERGE_OPACITY_DEFAULT=.16;
+const MERGE_DELAY_DEFAULT=500;
+function storedPreference(key:string,fallback:number,min:number,max:number):number{
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw===null)return fallback;
+    const value=Number(raw);
+    return Number.isFinite(value)&&value>=min&&value<=max?value:fallback;
+  }catch{return fallback;}
+}
 const STACK_HOLD_MIN_MS=250;
 const STACK_HOLD_MAX_MS=5000;
 function storedStackHoldMs():number{
@@ -55,6 +67,8 @@ export default function App(){
   const [selected,setSelected]=useState<string|null>(null);
   const [seat,setSeat]=useState(0);
   const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
+  const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
+  const [mergeHoverMs,setMergeHoverMs]=useState(()=>storedPreference(MERGE_DELAY_KEY,MERGE_DELAY_DEFAULT,100,2500));
   const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
@@ -123,6 +137,8 @@ export default function App(){
   useEffect(()=>{
     try{localStorage.setItem(STACK_HOLD_KEY,String(stackHoldMs));}catch{/* Private browsing can disable storage. */}
   },[stackHoldMs]);
+  useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
+  useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
@@ -190,7 +206,8 @@ export default function App(){
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} onViewChange={setSeatView}
-        stackHoldMs={stackHoldMs}
+        stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs}
+        onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
           if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y});
@@ -212,7 +229,7 @@ export default function App(){
               <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
               <article><span>02</span><h3>Move &amp; zoom</h3><p>Drag pieces across the felt. Mouse-wheel scroll or two-finger touchpad scrolling zooms around the pointer. Pinch on a touchscreen to zoom. Click and drag empty table space to move the camera; grab a card to move only that card. Double-click the table (or press 0) to reset the view.</p></article>
               <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings. Scroll or pinch to zoom the tabletop without losing detail.</p></article>
-              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat: one card across each outside column, seven cards across the center. Cards snap into nearby positions. Actions are stored as replayable commands.</p></article>
+              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven cards across the center. Use the Center button at the bottom of your mat to fill the screen. Hover over the + controls to join neighboring middle sections; hover over − to separate them. All changes can be replayed.</p></article>
               <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
               <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
             </div>
@@ -264,6 +281,22 @@ export default function App(){
                   <button onClick={()=>setStackHoldMs(STACK_HOLD_DEFAULT_MS)}>Reset to 1 second</button>
                 </div>
                 <p>Personal preference saved in this browser. Moving before the timer expires cancels full-stack pickup.</p>
+              </div>
+              <div className="reader-block">
+                <h3>TCG center-section controls</h3>
+                <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into one larger card-snapping area. Hover and click the − control to separate them again.</p>
+                <label htmlFor="merge-control-opacity">Button transparency — <strong>{Math.round((1-mergeOpacity)*100)}% transparent</strong>
+                  <input id="merge-control-opacity" aria-label="Center merge button transparency" type="range"
+                    min={.05} max={.5} step={.01} value={mergeOpacity}
+                    onChange={e=>setMergeOpacity(Number(e.target.value))}/>
+                </label>
+                <label htmlFor="merge-hover-delay">Hover to activate — <strong>{(mergeHoverMs/1000).toFixed(2)} seconds</strong>
+                  <input id="merge-hover-delay" aria-label="Center merge hover duration" type="range"
+                    min={100} max={2500} step={50} value={mergeHoverMs}
+                    onChange={e=>setMergeHoverMs(Number(e.target.value))}/>
+                </label>
+                <div className="tool-buttons"><button onClick={()=>{setMergeOpacity(MERGE_OPACITY_DEFAULT);setMergeHoverMs(MERGE_DELAY_DEFAULT);}}>Restore default appearance</button></div>
+                <p>Both preferences are saved in this browser. Merges themselves belong to the table and appear in saved games and replays.</p>
               </div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
