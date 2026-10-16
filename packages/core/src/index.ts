@@ -157,7 +157,8 @@ export interface OpposingMatLayout {
 export function opposingMatLayout(viewerSeat:number,opponentSeat:number):OpposingMatLayout {
   const radial=-Math.PI/2+viewerSeat*Math.PI/6;
   const dx=Math.cos(radial),dy=Math.sin(radial);
-  const distance=(TCG_MAT_HEIGHT+116)/2;
+  // Centers are one mat-height apart: their inside edges meet at the seam.
+  const distance=TCG_MAT_HEIGHT/2;
   return {
     player:{x:BOARD_CENTER+dx*distance,y:BOARD_CENTER+dy*distance,rotation:0},
     opponent:{x:BOARD_CENTER-dx*distance,y:BOARD_CENTER-dy*distance,
