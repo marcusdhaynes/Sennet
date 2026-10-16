@@ -6,7 +6,7 @@ const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
-  const t=new Text({text,style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
+  const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
@@ -65,11 +65,11 @@ function drawBackground(board:Container,seat:number,players:Player[],playerName:
     const chair=new Container();
     chair.position.set(x,y);
     chair.rotation=playerSeatRotation(i);
-    chair.addChild(new Graphics().roundRect(-31,-15,62,30,8)
+    chair.addChild(new Graphics().roundRect(-112,-48,224,96,19)
       .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
       .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
     const nickname=mine?'YOU':player?.name||'';
-    const seatText=label(nickname?nickname.slice(0,10):String(i+1),nickname?10:12,mine?0x263a32:0xe7e0c9,'bold');
+    const seatText=label(nickname?nickname.slice(0,10):String(i+1),nickname?37:41,mine?0x263a32:0xe7e0c9,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);
