@@ -1,5 +1,5 @@
-import type {Command,GameKind,GameState,Player} from '@sennet/core';
-export interface RoomCallbacks {onState:(state:GameState)=>void;onEvent:(event:Command)=>void;onPlayers:(players:Player[])=>void;onStatus:(s:string)=>void;onError:(s:string)=>void}
+import type {Command,EventRecord,GameKind,GameState,Player} from '@sennet/core';
+export interface RoomCallbacks {onState:(state:GameState)=>void;onEvent:(event:EventRecord)=>void;onPlayers:(players:Player[])=>void;onStatus:(s:string)=>void;onError:(s:string)=>void}
 export class RoomConnection {
   private ws:WebSocket;
   private pending:Command[]=[];
