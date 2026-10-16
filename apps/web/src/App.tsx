@@ -24,6 +24,17 @@ const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
 ];
 const ACTOR_KEY='sennet.actor.v1';
 const RECENT_KEY='sennet.recent.v1';
+const STACK_HOLD_KEY='sennet.stack-hold-ms.v1';
+const STACK_HOLD_DEFAULT_MS=1000;
+const STACK_HOLD_MIN_MS=250;
+const STACK_HOLD_MAX_MS=5000;
+function storedStackHoldMs():number{
+  try{
+    const saved=Number(localStorage.getItem(STACK_HOLD_KEY));
+    return Number.isFinite(saved)&&saved>=STACK_HOLD_MIN_MS&&saved<=STACK_HOLD_MAX_MS
+      ?Math.round(saved/50)*50:STACK_HOLD_DEFAULT_MS;
+  }catch{return STACK_HOLD_DEFAULT_MS;}
+}
 function emptyTable():GameState{return {...createGame('sandbox'),objects:[],players:[],message:'A fresh table. Open a book to begin.'};}
 function localActor(){try{let id=localStorage.getItem(ACTOR_KEY);if(!id){id='player_'+createId();localStorage.setItem(ACTOR_KEY,id);}return id;}catch{return 'player-local';}}
 function recentGames():SavedSession[]{try{const value=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');return Array.isArray(value)?value.slice(0,8):[];}catch{return [];}}
@@ -43,6 +54,7 @@ export default function App(){
   const [settingsPage,setSettingsPage]=useState<SettingsPage>('general');
   const [selected,setSelected]=useState<string|null>(null);
   const [seat,setSeat]=useState(0);
+  const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
   const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
@@ -109,6 +121,9 @@ export default function App(){
   }
   useEffect(()=>()=>connection.current?.close(),[]);
   useEffect(()=>{
+    try{localStorage.setItem(STACK_HOLD_KEY,String(stackHoldMs));}catch{/* Private browsing can disable storage. */}
+  },[stackHoldMs]);
+  useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
       const saved:SavedSession={id:sessionId.current,title:nameFor(game.kind),updated:Date.now(),initial,game,history:history.slice(-500)};
@@ -174,7 +189,13 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected} onViewChange={setSeatView} onMove={(id,x,y)=>{
+        onSelect={setSelected} onViewChange={setSeatView}
+        stackHoldMs={stackHoldMs}
+        onMoveStack={(id,x,y)=>{
+          const old=game.objects.find(o=>o.id===id);
+          if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y});
+        }}
+        onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
         }} readonly={replayAt!==null}/>
     </div>
@@ -232,6 +253,18 @@ export default function App(){
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Seat {i+1}</option>)}</select></label></div>
               <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. Click and drag empty tabletop space (left mouse button) or drag with one finger to pan. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 or double-click to reset. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
+              <div className="reader-block">
+                <h3>Card stacks</h3>
+                <p>Drag immediately to take only the top card. Hold over a stack without moving to pick up every card together, then drag the stack.</p>
+                <label htmlFor="stack-hold-duration">Hold to pick up stack — <strong>{(stackHoldMs/1000).toFixed(2)} seconds</strong>
+                  <input id="stack-hold-duration" aria-label="Stack pickup hold duration" type="range" min={STACK_HOLD_MIN_MS} max={STACK_HOLD_MAX_MS} step={50} value={stackHoldMs}
+                    onChange={event=>setStackHoldMs(Number(event.target.value))}/>
+                </label>
+                <div className="tool-buttons">
+                  <button onClick={()=>setStackHoldMs(STACK_HOLD_DEFAULT_MS)}>Reset to 1 second</button>
+                </div>
+                <p>Personal preference saved in this browser. Moving before the timer expires cancels full-stack pickup.</p>
+              </div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
             </>}
