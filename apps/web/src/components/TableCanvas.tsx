@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,type GameState,type Player,type TableObject} from '@sennet/core';
+import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -25,7 +25,7 @@ function drawBackground(board:Container,seat:number,players:Player[],playerName:
     const player=players.find(p=>p.seat===i);
     const chair=new Container();
     chair.position.set(x,y);
-    chair.rotation=-Math.PI+i*Math.PI/6;
+    chair.rotation=playerSeatRotation(i);
     chair.addChild(new Graphics().roundRect(-31,-15,62,30,8)
       .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
       .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
@@ -105,7 +105,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const {app,board}=current;
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
     board.removeChildren().forEach(child=>child.destroy({children:true}));
-    board.rotation=Math.PI-seat*Math.PI/6;
+    board.rotation=viewerTableRotation(seat);
     drawBackground(board,seat,state.players,playerName);
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
@@ -116,7 +116,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const piece=createPiece(obj,obj.id===selected);
       // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
       const ownerSeat=obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat;
-      piece.rotation=(-Math.PI+(ownerSeat??seat)*Math.PI/6)+obj.rotation*Math.PI/180;
+      piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       board.addChild(piece);
       if(drag.current?.id===obj.id) drag.current.visual=piece;
       const old=oldLocations.current.get(obj.id);
