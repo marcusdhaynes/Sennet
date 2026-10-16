@@ -136,10 +136,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const scene=new Container(),board=new Container();board.position.set(BOARD_CENTER,BOARD_CENTER);board.pivot.set(BOARD_CENTER,BOARD_CENTER);
       scene.addChild(board);app.stage.addChild(scene);mount.current?.appendChild(app.canvas);
       session.current={app,scene,board};setReady(true);
+      let lastWidth=0,lastHeight=0;
       const rescale=()=>{
         if(!mount.current)return;
         const w=Math.max(100,mount.current.clientWidth),h=Math.max(100,mount.current.clientHeight);
-        app.renderer.resize(w,h);
+        // Zoom and pan never resize the GPU framebuffer. Resizing is only
+        // necessary when the actual viewport dimensions have changed.
+        if(w!==lastWidth||h!==lastHeight){app.renderer.resize(w,h);lastWidth=w;lastHeight=h;}
         const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
         const c=camera.current,scale=fit*c.zoom;
         scene.scale.set(scale);
