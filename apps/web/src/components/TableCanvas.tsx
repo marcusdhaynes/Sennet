@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,type GameState,type Player,type TableObject} from '@sennet/core';
+import {nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -115,7 +115,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const [ready,setReady]=useState(false);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
-  const camera=useRef({zoom:1,panX:0,panY:0});
+  const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
   const seatRef=useRef(seat);seatRef.current=seat;
   const pointers=useRef(new Map<number,{x:number;y:number}>());
@@ -250,7 +250,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
 
   useEffect(()=>{
     const host=mount.current;if(!host)return;
-    const clampZoom=(v:number)=>Math.min(18,Math.max(.65,v));
+    // Zooming out stops at the same 100% fit-to-table view used on launch.
     const coordinates=(event:{clientX:number;clientY:number})=>{
       const r=host.getBoundingClientRect();
       return {x:event.clientX-r.left,y:event.clientY-r.top};
@@ -258,7 +258,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const zoomAt=(x:number,y:number,ratio:number)=>{
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
       const {scene}=current,c=camera.current;
-      const before=c.zoom,after=clampZoom(before*ratio);
+      const before=c.zoom,after=clampTableZoom(before*ratio);
       if(after===before)return;
       const localX=(x-scene.x)/scene.scale.x;
       const localY=(y-scene.y)/scene.scale.y;
@@ -327,7 +327,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       pointers.current.delete(event.pointerId);
       if(mousePan.current===event.pointerId)mousePan.current=null;
     };
-    const reset=()=>{camera.current={zoom:1,panX:0,panY:0};updateView.current();};
+    const reset=()=>{camera.current={zoom:MIN_TABLE_ZOOM,panX:0,panY:0};updateView.current();};
     const key=(event:KeyboardEvent)=>{
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
