@@ -27,9 +27,10 @@ const RECENT_KEY='sennet.recent.v1';
 const STACK_HOLD_KEY='sennet.stack-hold-ms.v1';
 const STACK_HOLD_DEFAULT_MS=1000;
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
-const MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
+const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
+const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
 const MERGE_OPACITY_DEFAULT=.16;
-const MERGE_DELAY_DEFAULT=500;
+const MERGE_DELAY_DEFAULT=250;
 function storedPreference(key:string,fallback:number,min:number,max:number):number{
   try{
     const raw=localStorage.getItem(key);
@@ -37,6 +38,20 @@ function storedPreference(key:string,fallback:number,min:number,max:number):numb
     const value=Number(raw);
     return Number.isFinite(value)&&value>=min&&value<=max?value:fallback;
   }catch{return fallback;}
+}
+function storedMergeHoverMs():number{
+  try{
+    const newer=localStorage.getItem(MERGE_DELAY_KEY);
+    if(newer!==null)return storedPreference(MERGE_DELAY_KEY,MERGE_DELAY_DEFAULT,100,2500);
+    const older=localStorage.getItem(PREVIOUS_MERGE_DELAY_KEY);
+    if(older!==null){
+      const previous=Number(older);
+      // Version 1 automatically persisted its 500 ms default on first visit.
+      // Migrate that original default to 250 ms; retain other custom timings.
+      if(Number.isFinite(previous)&&previous>=100&&previous<=2500&&previous!==500)return previous;
+    }
+  }catch{/* Storage unavailable. */}
+  return MERGE_DELAY_DEFAULT;
 }
 const STACK_HOLD_MIN_MS=250;
 const STACK_HOLD_MAX_MS=5000;
@@ -68,7 +83,7 @@ export default function App(){
   const [seat,setSeat]=useState(0);
   const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
   const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
-  const [mergeHoverMs,setMergeHoverMs]=useState(()=>storedPreference(MERGE_DELAY_KEY,MERGE_DELAY_DEFAULT,100,2500));
+  const [mergeHoverMs,setMergeHoverMs]=useState(storedMergeHoverMs);
   const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
@@ -269,7 +284,7 @@ export default function App(){
             <Tabs items={[{id:'general',label:'General'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Seat {i+1}</option>)}</select></label></div>
-              <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 or double-click to reset. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
+              <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 to reset. Double-clicking does not change the zoom. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
               <div className="reader-block">
                 <h3>Card stacks</h3>
                 <p>Drag immediately to take only the top card. Hold over a stack without moving to pick up every card together, then drag the stack.</p>
