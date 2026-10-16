@@ -1,14 +1,14 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {nearestFrameIndex,type GameState,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
+import {nearestFrameIndex,type GameState,type Player,type TableObject} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
-function drawBackground(board:Container,seat:number){
+function drawBackground(board:Container,seat:number,players:Player[],playerName:string){
   const backdrop=new Graphics().rect(-200,-200,1400,1100).fill(0x142723);
   board.addChild(backdrop);
   const points=Array.from({length:12},(_,i)=>{const a=(i*Math.PI/6)-Math.PI/12;return {x:500+292*Math.cos(a),y:330+281*Math.sin(a)};});
@@ -16,20 +16,26 @@ function drawBackground(board:Container,seat:number){
   board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark).stroke({color:0x110f0c,width:18}));
   board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.975,330+(p.y-330)*.975]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
   board.addChild(new Graphics().poly(points.map(p=>[500+(p.x-500)*.918,330+(p.y-330)*.918]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
-  const grid=new Graphics();
-  for(let x=230;x<=770;x+=45)grid.moveTo(x,70).lineTo(x,590).stroke({color:COLORS.line,alpha:.13,width:1});
-  for(let y=70;y<=590;y+=45)grid.moveTo(210,y).lineTo(790,y).stroke({color:COLORS.line,alpha:.13,width:1});
-  board.addChild(grid);
-  const ring=new Graphics().circle(500,330,157).stroke({color:0xb89c70,width:1,alpha:.15}).circle(500,330,72).stroke({color:0xb89c70,width:1,alpha:.12});
-  board.addChild(ring);
+  // Each chair is attached to the shared tabletop, then the whole board is rotated
+  // so the viewer's seat is always on the near (bottom) edge.
   for(let i=0;i<12;i++){
     const angle=i*Math.PI/6-Math.PI/2;
     const x=500+271*Math.cos(angle),y=330+259*Math.sin(angle);
-    const dot=new Graphics().circle(x,y,13).fill(i===seat?0xe4c48d:0x31544c).stroke({color:i===seat?0xf8dfab:0x657a67,width:1.4});board.addChild(dot);
-    const number=label(String(i+1),12,i===seat?0x243b35:0xcbd2bb,'bold');number.position.set(x,y);board.addChild(number);
+    const mine=i===seat;
+    const player=players.find(p=>p.seat===i);
+    const chair=new Container();
+    chair.position.set(x,y);
+    chair.rotation=-Math.PI+i*Math.PI/6;
+    chair.addChild(new Graphics().roundRect(-31,-15,62,30,8)
+      .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
+      .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
+    const nickname=mine?'YOU':player?.name||'';
+    const seatText=label(nickname?nickname.slice(0,10):String(i+1),nickname?10:12,mine?0x263a32:0xe7e0c9,'bold');
+    seatText.position.set(0,-1);
+    chair.addChild(seatText);
+    board.addChild(chair);
   }
-  const title=label('S E N N E T',42,0x759080,'bold');title.alpha=.15;title.position.set(500,330);board.addChild(title);
-  const subtitle=label('THE TABLE IS YOURS',9,0x89aa94);subtitle.alpha=.24;subtitle.position.set(500,363);board.addChild(subtitle);
+
 }
 function createPiece(o:TableObject,isSelected:boolean){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
@@ -66,7 +72,7 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
-export default function TableCanvas({state,seat,selected,onSelect,onMove,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -86,8 +92,8 @@ export default function TableCanvas({state,seat,selected,onSelect,onMove,readonl
       const rescale=()=>{
         if(!mount.current)return;
         const w=Math.max(100,mount.current.clientWidth),h=Math.max(100,mount.current.clientHeight);
-        app.renderer.resize(w,h);const s=Math.min(w/1000,h/660);
-        scene.scale.set(s);scene.position.set((w-1000*s)/2,(h-660*s)/2);
+        app.renderer.resize(w,h);const s=Math.min(w/710,h/630);
+        scene.scale.set(s);scene.position.set(w/2-500*s,h/2-330*s);
       };
       resizeObserver=new ResizeObserver(rescale);resizeObserver.observe(mount.current!);rescale();
     })().catch(err=>console.error('PixiJS initialization failed',err));
@@ -99,8 +105,8 @@ export default function TableCanvas({state,seat,selected,onSelect,onMove,readonl
     const {app,board}=current;
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
     board.removeChildren().forEach(child=>child.destroy({children:true}));
-    board.rotation=-seat*Math.PI/6;
-    drawBackground(board,seat);
+    board.rotation=Math.PI-seat*Math.PI/6;
+    drawBackground(board,seat,state.players,playerName);
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
     const visible=state.objects.filter(o=>o.zone!=='DECK'||deckTop.has(o.id.split('-')[0])&&deckTop.get(o.id.split('-')[0])?.id===o.id);
@@ -108,6 +114,9 @@ export default function TableCanvas({state,seat,selected,onSelect,onMove,readonl
     visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
     for(const obj of visible){
       const piece=createPiece(obj,obj.id===selected);
+      // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
+      const ownerSeat=obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat;
+      piece.rotation=(-Math.PI+(ownerSeat??seat)*Math.PI/6)+obj.rotation*Math.PI/180;
       board.addChild(piece);
       if(drag.current?.id===obj.id) drag.current.visual=piece;
       const old=oldLocations.current.get(obj.id);
@@ -139,7 +148,7 @@ export default function TableCanvas({state,seat,selected,onSelect,onMove,readonl
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,selected,readonly,ready]);
+  },[state,seat,playerName,actorId,selected,readonly,ready]);
   useEffect(()=>{
     const move=(event:PointerEvent)=>{
       const d=drag.current,current=session.current;if(!d||!current||!mount.current)return;
