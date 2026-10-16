@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string;
+  locked?: boolean; height?: number; description?: string; matSeat?: number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -27,62 +27,105 @@ export type GamePack = {
   lua?: string; assetBaseUrl?: string; license?: string;
 };
 export const SEATS = 12;
-export const BOARD_W = 1000;
-export const BOARD_H = 660;
+export const BOARD_W = 4000;
+export const BOARD_H = 4000;
+export const BOARD_CENTER = BOARD_W / 2;
+export const TABLE_APOTHEM = 1650;
+export const TABLE_SEAT_RADIUS = 1730;
+export const TABLE_VIEW_RADIUS = 1800;
+
 
 /**
- * A TCG mat has four rows, three columns, and 4 tabletop-unit gutters.
- * Both outer columns hold one 62x88 card each. The center is a wider
- * play area. All coordinates are canonical tabletop coordinates, so a
- * replay and every remote client arrive at the same snapped position.
+ * One independent four-row/three-column mat per seat. The middle rectangle
+ * fits SEVEN cards side-by-side, without introducing extra visible columns.
+ * The mat width also defines the player's tangent boundary line.
+ * The whole duodecagonal table is sized so even the INNER corners of all
+ * twelve mats remain strictly inside their own 30-degree seat sectors.
  */
 export const TCG_MAT = {
-  x:500,y:330,cardWidth:62,cardHeight:88,
-  rowHeight:94,outerWidth:66,centerWidth:192,gap:4,rows:4,columns:3,
-  snapOutside:26
+  cardWidth:62,cardHeight:88,rowHeight:94,
+  outerWidth:66,centerWidth:7*62+6*2,
+  centerCards:7,gap:4,rows:4,columns:3,
+  snapOutside:26,outerRadius:1580
 } as const;
+export const TCG_MAT_WIDTH=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
+export const TCG_MAT_HEIGHT=TCG_MAT.rowHeight*TCG_MAT.rows+TCG_MAT.gap*(TCG_MAT.rows-1);
 export interface TcgMatCell {
-  row:number;column:number;x:number;y:number;width:number;height:number;
+  seat:number;row:number;column:number;
+  x:number;y:number;width:number;height:number;
+  angle:number; // Mat local x/y axes, oriented toward the owning seat
 }
-export function tcgMatCells():TcgMatCell[] {
+export interface TcgSnapLocation extends TcgMatCell {slot:number}
+export function tcgMatOrigin(seat:number):{x:number;y:number;angle:number} {
+  const index=((seat%SEATS)+SEATS)%SEATS;
+  const radial=-Math.PI/2+index*Math.PI/6;
+  const distance=TCG_MAT.outerRadius-TCG_MAT_HEIGHT/2;
+  return {x:BOARD_CENTER+distance*Math.cos(radial),
+    y:BOARD_CENTER+distance*Math.sin(radial),
+    angle:-Math.PI+index*Math.PI/6};
+}
+export function tcgMatCells(seat=0):TcgMatCell[] {
   const m=TCG_MAT;
   const widths=[m.outerWidth,m.centerWidth,m.outerWidth];
-  const left=m.x-(widths.reduce((a,b)=>a+b,0)+(m.columns-1)*m.gap)/2;
-  const top=m.y-(m.rows*m.rowHeight+(m.rows-1)*m.gap)/2;
+  const top=-TCG_MAT_HEIGHT/2;
+  const transform=tcgMatOrigin(seat),cos=Math.cos(transform.angle),sin=Math.sin(transform.angle);
   const cells:TcgMatCell[]=[];
-  let offset=left;
+  let offset=-TCG_MAT_WIDTH/2;
   for(let col=0;col<widths.length;col++){
     for(let row=0;row<m.rows;row++){
-      cells.push({
-        row,column:col,x:offset+widths[col]/2,
-        y:top+row*(m.rowHeight+m.gap)+m.rowHeight/2,
-        width:widths[col],height:m.rowHeight
-      });
+      const localX=offset+widths[col]/2;
+      const localY=top+row*(m.rowHeight+m.gap)+m.rowHeight/2;
+      cells.push({seat:((seat%SEATS)+SEATS)%SEATS,row,column:col,
+        x:transform.x+localX*cos-localY*sin,
+        y:transform.y+localX*sin+localY*cos,
+        width:widths[col],height:m.rowHeight,angle:transform.angle});
     }
     offset+=widths[col]+m.gap;
   }
   return cells;
 }
-export function tcgSnapPoint(x:number,y:number):TcgMatCell|null {
+export function allTcgMatCells():TcgMatCell[] {
+  return Array.from({length:SEATS},(_,seat)=>tcgMatCells(seat)).flat();
+}
+/** Convert point into the owning mat's unrotated coordinates. */
+export function tcgMatLocal(x:number,y:number,seat:number):{x:number;y:number} {
+  const o=tcgMatOrigin(seat),dx=x-o.x,dy=y-o.y;
+  return {x:dx*Math.cos(o.angle)+dy*Math.sin(o.angle),
+    y:-dx*Math.sin(o.angle)+dy*Math.cos(o.angle)};
+}
+export function tcgMatWorld(x:number,y:number,seat:number):{x:number;y:number} {
+  const o=tcgMatOrigin(seat);
+  return {x:o.x+x*Math.cos(o.angle)-y*Math.sin(o.angle),
+    y:o.y+x*Math.sin(o.angle)+y*Math.cos(o.angle)};
+}
+/** Closest rectangle test, then nearest card position in wide middle zone.
+ * Returns null when the card is beyond a small edge tolerance.
+ * Logic is fully deterministic: the network transmits only drop coordinates.
+ */
+export function tcgSnapPoint(x:number,y:number):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
-  let best:TcgMatCell|null=null,bestDistance=Infinity;
-  for(const cell of tcgMatCells()){
-    // Find the true closest rectangle, not the nearest center. This is
-    // important for the deliberately wider center column.
-    const dx=Math.max(0,Math.abs(x-cell.x)-cell.width/2);
-    const dy=Math.max(0,Math.abs(y-cell.y)-cell.height/2);
-    const d=Math.hypot(dx,dy);
-    if(d<bestDistance-1e-9){
-      best=cell;bestDistance=d;
-    } else if(Math.abs(d-bestDistance)<1e-9&&best){
-      // Inside the narrow gap between two zones: prefer the center
-      // of the nearer zone so a card cannot unpredictably switch sides.
-      const old=Math.hypot(x-best.x,y-best.y);
-      const next=Math.hypot(x-cell.x,y-cell.y);
-      if(next<old){best=cell;}
+  let best:TcgSnapLocation|null=null,dist=Infinity,centerDist=Infinity;
+  for(let seat=0;seat<SEATS;seat++){
+    const local=tcgMatLocal(x,y,seat);
+    for(const cell of tcgMatCells(seat)){
+      const anchor=tcgMatLocal(cell.x,cell.y,seat);
+      const dx=Math.max(0,Math.abs(local.x-anchor.x)-cell.width/2);
+      const dy=Math.max(0,Math.abs(local.y-anchor.y)-cell.height/2);
+      const distance=Math.hypot(dx,dy);
+      if(distance>TCG_MAT.snapOutside)continue;
+      const midDist=Math.hypot(local.x-anchor.x,local.y-anchor.y);
+      if(distance>dist+1e-8 || (Math.abs(distance-dist)<=1e-8 && midDist>=centerDist))continue;
+      const positions=cell.column===1?TCG_MAT.centerCards:1;
+      const slot=Math.min(positions-1,Math.max(0,
+        Math.round((local.x-(anchor.x-cell.width/2)+(cell.column===1?-0.5:0))/ (cell.width/positions)-0.5)));
+      // All 7 card anchors are within the same single wide, rounded rectangle.
+      const snappedLocalX=anchor.x+(slot-(positions-1)/2)*(cell.width/positions);
+      const snapped=tcgMatWorld(snappedLocalX,anchor.y,seat);
+      best={...cell,...snapped,slot};
+      dist=distance;centerDist=midDist;
     }
   }
-  return bestDistance<=TCG_MAT.snapOutside?best:null;
+  return best;
 }
 /** Rotates the whole table so the viewer's seat sits on the bottom edge. */
 export function viewerTableRotation(seat:number):number {
@@ -99,11 +142,11 @@ export const createId = () => typeof crypto !== 'undefined' && crypto.randomUUID
 const deck = (prefix: string, x: number, y: number, count: number, owner?: string): TableObject[] =>
   Array.from({ length: count }, (_, i) => ({
     id: `${prefix}-${i+1}`, kind: 'card', name: `${prefix === 'alpha' ? 'A' : 'B'} · ${i+1}`,
-    x, y, rotation: 0, faceUp: false, color: i % 3 === 0 ? '#6f93a0' : i % 3 === 1 ? '#ad8cbd' : '#dcab74',
+    x:x+BOARD_CENTER-500, y:y+BOARD_CENTER-330, rotation: 0, faceUp: false, color: i % 3 === 0 ? '#6f93a0' : i % 3 === 1 ? '#ad8cbd' : '#dcab74',
     zone: 'DECK', order: i, owner
   }));
 const object = (id: string, kind: ObjectKind, name: string, x: number, y: number, color: string, extra: Partial<TableObject> = {}): TableObject => ({
-  id, kind, name, x, y, color, zone: 'TABLE', order: 0, rotation: 0, faceUp: true, ...extra
+  id, kind, name, x:x+BOARD_CENTER-500, y:y+BOARD_CENTER-330, color, zone: 'TABLE', order: 0, rotation: 0, faceUp: true, ...extra
 });
 export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameState {
   const shared = [
@@ -116,7 +159,12 @@ export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameSt
   const presets: Record<GameKind, TableObject[]> = {
     sandbox: shared,
     boardgame: [object('game-board','board','Checkered board',500,330,'#ad9879',{locked:true}), ...Array.from({length:8},(_,i)=>object(`pawn-${i}`,'token',`Piece ${i+1}`,370+i*37,300,i%2?'#bf9d70':'#86b6a8'))],
-    tcg: [...deck('alpha',260,484,12),...deck('beta',736,172,12),object('hero-a','card','Guardian',452,468,'#6baaa6'),object('hero-b','card','Invoker',542,212,'#ba8ab6')],
+    tcg: [
+      ...deck('alpha',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===3&&c.column===0)!.x,tcgMatCells(0).find(c=>c.row===3&&c.column===0)!.y)!,matSeat:0})),
+      ...deck('beta',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===3&&c.column===0)!.x,tcgMatCells(6).find(c=>c.row===3&&c.column===0)!.y)!,matSeat:6})),
+      object('hero-a','card','Guardian',500,330,'#6baaa6',{...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:0}),
+      object('hero-b','card','Invoker',500,330,'#ba8ab6',{...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:6})
+    ],
     rpg: [object('map','board','Campaign Map',500,330,'#538175',{locked:true}),object('hero','miniature','Hero',460,290,'#d9c391'),object('enemy','miniature','Goblin',570,367,'#b69e89'),object('rpg-die','die','D20',340,440,'#dce3df',{sides:20,value:17})],
     wargame: [object('map','board','Battlefield',500,330,'#647e60',{locked:true}),...Array.from({length:6},(_,i)=>object(`soldier-${i}`,'miniature',`Unit ${i+1}`,345+60*(i%3),235+150*Math.floor(i/3),i<3?'#bd9985':'#83b5a6'))],
     dice: [4,6,8,10,12,20].map((sides,i)=>object(`die-${sides}`,'die',`D${sides}`,290+i*82,340,i%2?'#edc890':'#c1c9e9',{sides,value:1})),
@@ -137,13 +185,14 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
   const frameUrls = Array.isArray(input.frameUrls) ? input.frameUrls.slice(0,72).map(safeUrl).filter((s):s is string=>!!s) : undefined;
   return {
     id: textValue(input.id || createId(),80), kind, name: textValue(input.name || kind,80),
-    x:clamp(finite(input.x,500),0,BOARD_W),y:clamp(finite(input.y,330),0,BOARD_H),
+    x:clamp(finite(input.x,BOARD_CENTER),0,BOARD_W),y:clamp(finite(input.y,BOARD_CENTER),0,BOARD_H),
     rotation: ((finite(input.rotation)%360)+360)%360,
     color,faceUp:input.faceUp!==false,
     zone:['TABLE','DECK','HAND','DISCARD'].includes(String(input.zone)) ? input.zone as Zone : 'TABLE',
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
+    ...(Number.isInteger(input.matSeat)&&Number(input.matSeat)>=0&&Number(input.matSeat)<SEATS ? {matSeat:Number(input.matSeat)} : {}),
     ...(kind==='die'?{sides:clamp(Math.floor(finite(input.sides,6)),2,100),value:clamp(Math.floor(finite(input.value,1)),1,100)}:{}),
     ...(frameUrls?.length?{frameUrls}:{}),
     ...(safeUrl(input.faceUrl)?{faceUrl:safeUrl(input.faceUrl)}:{}),
@@ -194,11 +243,12 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
-      if(snapped) {
+      if(snapped) { obj.matSeat=snapped.seat;
         // Playing a card from a deck or hand makes it a public table card.
         obj.zone='TABLE';
-        message=`Placed ${obj.name} in mat row ${snapped.row+1}, column ${snapped.column+1}`;
+        message=`Placed ${obj.name} on seat ${snapped.seat+1}, row ${snapped.row+1}, column ${snapped.column+1}, position ${snapped.slot+1}`;
       } else {
+        if(state.kind==='tcg' && obj.kind==='card')delete obj.matSeat;
         message=`Moved ${obj.name}`;
       }
     }break;
