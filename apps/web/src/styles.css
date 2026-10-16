@@ -119,3 +119,91 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .field-row button{width:100%}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+
+/* Personal furniture. The invisible drop region lives inside the animated
+   drawer; only the drawer's wood and lining are visible to the player. */
+.books-layer{position:absolute;inset:0;z-index:6;pointer-events:none}
+.books-layer .table-book{
+  position:absolute;pointer-events:auto;
+  margin:0;
+  transform:translate(-50%,-50%) rotate(var(--book-angle,0deg)) rotateX(9deg) scale(var(--book-scale,1));
+  transform-origin:center center;
+  transition:left .34s cubic-bezier(.2,.8,.2,1),top .34s cubic-bezier(.2,.8,.2,1),
+    transform .34s cubic-bezier(.2,.8,.2,1),opacity .20s ease,filter .2s ease;
+  touch-action:none;
+  will-change:transform,left,top;
+}
+.books-layer .table-book:hover,.books-layer .table-book:focus-visible,.books-layer .table-book.opened{
+  transform:translate(-50%,-50%) rotate(0deg) scale(calc(var(--book-scale,1) * 1.055));
+  filter:brightness(1.13)
+}
+.books-layer .table-book.is-dragging{
+  transition:transform .13s ease;
+  cursor:grabbing;
+  filter:brightness(1.14);
+}
+.books-layer .table-book.is-dragging:hover{
+  transform:translate(-50%,-50%) scale(var(--book-scale,1));
+}
+.books-layer .table-book.is-stored{
+  filter:brightness(.96);
+}
+.personal-drawer{
+  position:absolute;
+  z-index:4;
+  border:8px solid #63452e;
+  border-top:12px solid #946f47;
+  border-bottom:13px solid #3a261a;
+  border-radius:12px 12px 9px 9px;
+  background:linear-gradient(160deg,#152b27 0%,#203d35 55%,#19342f 100%);
+  box-shadow:0 11px 25px #0009,inset 0 3px 15px #040e0b9e,inset 0 0 0 2px #af85548c;
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,var(--drawer-distance)) scaleY(.13);
+  transform-origin:center bottom;
+  transition:transform .42s cubic-bezier(.16,1,.3,1),opacity .22s ease;
+}
+.personal-drawer.is-open{
+  opacity:1;
+  transform:translate(-50%,0) scaleY(1);
+}
+.personal-drawer-inner{
+  position:absolute;inset:0;
+  border:0;
+  background:transparent;
+  /* This is intentionally an invisible storage container. */
+}
+.personal-drawer-handle{
+  position:absolute;bottom:-12px;left:50%;transform:translateX(-50%);
+  height:8px;width:74px;border-radius:8px 8px 4px 4px;
+  background:linear-gradient(90deg,#7d5a34,#c9a46d,#79532f);
+  box-shadow:0 1px 3px #0008
+}
+.seat-drawer-trigger{
+  position:absolute;
+  z-index:8;
+  padding:0;border:0;border-radius:12px;
+  background:transparent;color:#263b33;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+  touch-action:manipulation;
+  display:flex;justify-content:center;align-items:center;
+}
+.seat-drawer-trigger:hover,.seat-drawer-trigger:focus-visible{
+  box-shadow:inset 0 0 0 2px #edd39b,0 0 24px #d2af6a66;
+}
+.drawer-indicator{
+  position:absolute;bottom:1px;left:50%;transform:translateX(-50%);
+  line-height:1;font-size:16px;font-weight:700;color:#34483d;
+  pointer-events:none;opacity:.75;
+}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:640px){
+  .personal-drawer{border-width:5px;border-top-width:8px;border-bottom-width:9px}
+  .personal-drawer-handle{bottom:-9px;width:54px}
+  .drawer-indicator{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){
+  .personal-drawer,.books-layer .table-book{transition:none}
+}
