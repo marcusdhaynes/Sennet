@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string;
 }
-export type CommandType = 'ADD' | 'MOVE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -206,10 +206,25 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     ...(typeof input.description==='string'?{description:textValue(input.description,250)}:{})
   };
 }
+/** Cards sharing one exact physical spot are a stack. This deliberately
+ * excludes separate hands and adjacent cards on the seven-card mat. Stacks
+ * are reconstructed from public positions, not client-submitted ID lists. */
+export const STACK_POSITION_TOLERANCE = 2;
+export function cardStackMembers(state:GameState,id:string):TableObject[] {
+  const anchor=state.objects.find(o=>o.id===id);
+  if(!anchor || !['card','deck'].includes(anchor.kind) || !['TABLE','DECK'].includes(anchor.zone))return [];
+  return state.objects.filter(o=>
+    (o.kind==='card'||o.kind==='deck') &&
+    o.zone===anchor.zone &&
+    (o.matSeat??null)===(anchor.matSeat??null) &&
+    Math.hypot(o.x-anchor.x,o.y-anchor.y)<=STACK_POSITION_TOLERANCE
+  );
+}
+
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -217,10 +232,17 @@ export function validateCommand(state: GameState, command: Command): string | nu
   }
   const id=String(command.payload.id ?? '');
   const target=state.objects.find(o=>o.id===id);
-  if (['MOVE','ROTATE','FLIP','DELETE','CLONE','ROLL'].includes(command.type)) {
+  if (['MOVE','MOVE_STACK','ROTATE','FLIP','DELETE','CLONE','ROLL'].includes(command.type)) {
     if(!target) return 'Object does not exist';
     if(target.locked) return 'Object is locked';
     if (target.owner && target.owner!==command.actor && state.kind==='tcg') return 'This card belongs to another player';
+  }
+  if(command.type==='MOVE_STACK') {
+    const stack=cardStackMembers(state,id);
+    if(stack.length<2)return 'No stack to move';
+    if(stack.some(o=>o.locked))return 'Stack contains a locked card';
+    if(state.kind==='tcg'&&stack.some(o=>o.owner && o.owner!==command.actor))
+      return 'Stack contains another player\'s card';
   }
   if (command.type === 'ADD' && state.objects.length >= 1000) return 'Maximum objects reached';
   if (command.type === 'ADD' && (!command.payload.object || typeof command.payload.object !== 'object' || Array.isArray(command.payload.object))) return 'Invalid object';
@@ -257,6 +279,30 @@ export function applyCommand(state: GameState, command: Command): GameState {
         if(state.kind==='tcg' && obj.kind==='card')delete obj.matSeat;
         message=`Moved ${obj.name}`;
       }
+      // A normal short drag lifts only this card from a deck stack.
+      if(obj.kind==='card' && obj.zone==='DECK')obj.zone='TABLE';
+    }break;
+    case 'MOVE_STACK': if(obj){
+      // One atomic command moves the entire source stack, preserving each
+      // card's ordering, face state, ownership, zone and small offsets.
+      // Every peer derives identical membership from the pre-move state.
+      const cards=cardStackMembers(state,obj.id);
+      const requestedX=clamp(finite(p.x,obj.x),0,BOARD_W);
+      const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
+      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY):null;
+      const dx=(snapped?.x??requestedX)-obj.x;
+      const dy=(snapped?.y??requestedY)-obj.y;
+      const ids=new Set(cards.map(o=>o.id));
+      for(const card of objects){
+        if(!ids.has(card.id))continue;
+        card.x=clamp(card.x+dx,0,BOARD_W);
+        card.y=clamp(card.y+dy,0,BOARD_H);
+        if(state.kind==='tcg'){
+          if(snapped)card.matSeat=snapped.seat;
+          else delete card.matSeat;
+        }
+      }
+      message=`Moved stack of ${cards.length} cards`;
     }break;
     case 'ROTATE': if(obj){obj.rotation=((obj.rotation+finite(p.degrees,30))%360+360)%360;message=`Rotated ${obj.name}`;}break;
     case 'FLIP':if(obj){obj.faceUp=!obj.faceUp;message=`Flipped ${obj.name}`;}break;
