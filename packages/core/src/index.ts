@@ -147,6 +147,28 @@ export function tcgMatWorld(x:number,y:number,seat:number):{x:number;y:number} {
   return {x:o.x+x*Math.cos(o.angle)-y*Math.sin(o.angle),
     y:o.y+x*Math.sin(o.angle)+y*Math.cos(o.angle)};
 }
+/** Hit-test seats and whole mats independently of cards or other objects.
+ * This is used when the eye tool is waiting for an opponent selection. */
+export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
+  if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+  for(let seat=0;seat<SEATS;seat++){
+    if(seat===viewerSeat)continue;
+    const local=tcgMatLocal(x,y,seat);
+    if(Math.abs(local.x)<=TCG_MAT_WIDTH/2+12&&
+      Math.abs(local.y)<=TCG_MAT_HEIGHT/2+12)return seat;
+    // Chair, name and seat number share the same hit target.
+    const theta=seat*Math.PI/6-Math.PI/2;
+    const chairX=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(theta);
+    const chairY=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(theta);
+    const angle=playerSeatRotation(seat);
+    const dx=x-chairX,dy=y-chairY;
+    const lx=dx*Math.cos(angle)+dy*Math.sin(angle);
+    const ly=-dx*Math.sin(angle)+dy*Math.cos(angle);
+    if(Math.abs(lx)<=125&&Math.abs(ly)<=66)return seat;
+  }
+  return null;
+}
+
 /** Closest rectangle test, then nearest card position in wide middle zone.
  * Returns null when the card is beyond a small edge tolerance.
  * Logic is fully deterministic: the network transmits only drop coordinates.
