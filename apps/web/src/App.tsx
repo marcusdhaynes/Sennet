@@ -189,9 +189,9 @@ export default function App(){
             <p className="intro">Your tabletop. Your rules. Everything begins at an empty table with three books.</p>
             <div className="guide-grid">
               <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
-              <article><span>02</span><h3>Move your pieces</h3><p>Drag cards, tokens and miniatures directly across the felt. Select a piece to adjust it using Games → Table Tools.</p></article>
+              <article><span>02</span><h3>Move &amp; zoom</h3><p>Drag pieces across the felt. Mouse-wheel scroll or two-finger touchpad scrolling zooms around the pointer. Pinch on a touchscreen to zoom, drag empty space to pan, and double-click the table (or press 0) to reset the view.</p></article>
               <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings. Scroll or pinch to zoom the tabletop without losing detail.</p></article>
-              <article><span>04</span><h3>Replay every move</h3><p>Actions are stored as compact commands, not video. Export or replay them from Games → Table Tools.</p></article>
+              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat: one card across each outside column, seven cards across the center. Cards snap into nearby positions. Actions are stored as replayable commands.</p></article>
               <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
               <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
             </div>
@@ -231,6 +231,7 @@ export default function App(){
             <Tabs items={[{id:'general',label:'General'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Seat {i+1}</option>)}</select></label></div>
+              <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. Pan with a finger on the felt, middle-mouse drag, or Shift + scroll. Press + / − to zoom and 0 or double-click to reset. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
             </>}
