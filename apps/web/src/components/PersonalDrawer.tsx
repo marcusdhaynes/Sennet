@@ -5,7 +5,7 @@ const KEY='sennet.personal-drawer.books.v1';
 function storedBooks():CommandBook[]{try{const a:unknown=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(a)?BOOKS.map(b=>b.id).filter(id=>a.includes(id)):[];}catch{return [];}}
 type Gesture={id:CommandBook;pointerId:number;startX:number;startY:number;offsetX:number;offsetY:number;moved:boolean};
 type Drag={id:CommandBook;x:number;y:number;over:boolean};
-export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:CommandBook)=>void;activeBook:CommandBook|null}){
+export default function PersonalDrawer({openBook,activeBook,seatView}:{openBook:(id:CommandBook)=>void;activeBook:CommandBook|null;seatView:{x:number;y:number;scale:number}|null}){
   const [size,setSize]=useState(()=>({w:window.innerWidth,h:window.innerHeight}));
   const [open,setOpen]=useState(false);
   const [stored,setStored]=useState<CommandBook[]>(storedBooks);
@@ -13,7 +13,10 @@ export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:Comma
   const gesture=useRef<Gesture|null>(null),drawer=useRef<HTMLDivElement>(null);
   useEffect(()=>{const resize=()=>setSize({w:window.innerWidth,h:window.innerHeight});window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize);},[]);
   useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(stored));}catch{/* Storage may be disabled */}},[stored]);
-  const {w,h}=size,scale=Math.min(w/710,h/630),seatY=h/2+259*scale;
+  const {w,h}=size,fit=Math.min(w/3600,h/3600),scale=seatView?.scale??fit;
+  const seatX=seatView?.x??w/2,seatY=seatView?.y??h/2+1730*fit;
+  // The drawer is an interface-sized piece of furniture anchored to the
+  // viewer's projected seat, even after viewport pan, pinch or wheel zoom.
   const dw=Math.min(w-16,Math.max(260,Math.min(520,400*scale)));
   const dh=Math.min(152,Math.max(105,105*scale)),dy=seatY-dh+6;
   const bw=w<=640?Math.min(87,Math.max(69,w*.21)):Math.min(112,Math.max(66,w*.084));
@@ -43,7 +46,7 @@ export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:Comma
     else openBook(g.id);
     if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);
   }
-  const drawerStyle={left:w/2,top:dy,width:dw,height:dh,['--drawer-distance' as string]:String(dh-18)+'px'} as CSSProperties;
+  const drawerStyle={left:seatX,top:dy,width:dw,height:dh,['--drawer-distance' as string]:String(dh-18)+'px'} as CSSProperties;
   return <>
     <div ref={drawer} className={'personal-drawer'+(open?' is-open':'')} style={drawerStyle} aria-hidden={!open}>
       <div className="personal-drawer-inner" data-book-drop-area="" />
@@ -52,7 +55,7 @@ export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:Comma
     <div className="books-layer" aria-label="Tabletop command books">
       {BOOKS.map(b=>{
         const docked=stored.includes(b.id),group=docked?inside:tabletop,index=group.findIndex(a=>a.id===b.id);
-        const x=w/2+(index-(group.length-1)/2)*(docked?Math.min(101,dw/3.55):bw+Math.max(10,Math.min(28,w*.02)));
+        const x=seatX+(index-(group.length-1)/2)*(docked?Math.min(101,dw/3.55):bw+Math.max(10,Math.min(28,w*.02)));
         const y=docked?(open?drawerY:seatY-14):tableY;
         const active=drag?.id===b.id?drag:null;
         const factor=active?(active.over?.57:1):docked?(open?.57:.12):1;
@@ -73,7 +76,7 @@ export default function PersonalDrawer({openBook,activeBook}:{openBook:(id:Comma
     <button type="button" className={'seat-drawer-trigger'+(open?' is-open':'')} aria-expanded={open}
       aria-label={open?'Close your book drawer':'Open your book drawer'}
       title={open?'Close your drawer':'Open your drawer'}
-      style={{left:w/2,top:seatY,width:Math.max(76,72*scale),height:Math.max(42,38*scale)}} onClick={()=>setOpen(v=>!v)}>
+      style={{left:seatX,top:seatY,width:Math.max(76,Math.min(120,72*scale)),height:Math.max(42,Math.min(86,38*scale))}} onClick={()=>setOpen(v=>!v)}>
       <span className="visually-hidden">{open?'Close':'Open'} your drawer</span>
       <span className="drawer-indicator" aria-hidden="true">{open?'⌄':'⌃'}</span>
     </button>
