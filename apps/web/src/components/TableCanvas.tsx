@@ -237,11 +237,14 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     const panels=new Container();
     panels.position.set(BOARD_CENTER,BOARD_CENTER);
     panels.rotation=-viewerTableRotation(seat);
+    // Extend both colored player areas beyond any possible viewport.
+    // The halves remain full-screen even on very narrow screens where
+    // fitting the side arrows forces a smaller camera magnification.
     const span=BOARD_W*2;
     panels.addChild(new Graphics()
-      .rect(-span/2,-TCG_MAT_HEIGHT,span,TCG_MAT_HEIGHT)
+      .rect(-span/2,-BOARD_W,span,BOARD_W)
         .fill({color:0x203b35})
-      .rect(-span/2,0,span,TCG_MAT_HEIGHT)
+      .rect(-span/2,0,span,BOARD_W)
         .fill({color:0x24443b})
       .moveTo(-span/2,0).lineTo(span/2,0)
         .stroke({color:0xbc9a62,width:2.4,alpha:.86}));
@@ -717,10 +720,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const w=host.clientWidth,h=host.clientHeight;
       if(w<=0||h<=0)return;
       const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
-      // Both felt player areas occupy exactly one viewport half; the
-      // rounded mat edges meet on the horizontal center line.
-      const fitScale=h/(2*TCG_MAT_HEIGHT);
-      animateTo(fitScale/fit,0,0);
+      // Use full viewport height on desktop; on narrow portrait screens,
+      // fit both side navigation buttons without stretching or clipping.
+      // The independent colored player halves always fill the viewport.
+      const heightScale=h/(2*TCG_MAT_HEIGHT);
+      const arrowsWidth=TCG_MAT_WIDTH+2*(31+19);
+      const widthScale=Math.max(80,w-24)/arrowsWidth;
+      animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
     cycleOpponentHandler.current=(direction)=>{
       const current=viewRef.current;
