@@ -453,8 +453,50 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const r=host.getBoundingClientRect();
       return {x:event.clientX-r.left,y:event.clientY-r.top};
     };
+    const interruptFocus=()=>{
+      if(activeFocusAnimation.current!==null){
+        cancelAnimationFrame(activeFocusAnimation.current);activeFocusAnimation.current=null;
+      }
+    };
+    focusMyMat.current=()=>{
+      const current=session.current;
+      if(!current||!host.clientWidth||!host.clientHeight)return;
+      const {scene,board}=current,w=host.clientWidth,h=host.clientHeight;
+      const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
+      if(fit<=0)return;
+      const cells=tcgMatCells(seatRef.current);
+      const a=cells.find(cell=>cell.column===0&&cell.row===0)!;
+      const b=cells.find(cell=>cell.column===2&&cell.row===3)!;
+      const origin=new Point((a.x+b.x)/2,(a.y+b.y)/2);
+      const projected=board.toGlobal(origin);
+      const localX=(projected.x-scene.x)/scene.scale.x;
+      const localY=(projected.y-scene.y)/scene.scale.y;
+      // Fit 96% of the screen width, not merely a fixed zoom multiplier.
+      // The tall mat can extend vertically: panning remains constrained
+      // to the area present in the original view.
+      const targetZoom=clampTableZoom(.96*w/(TCG_MAT_WIDTH*fit));
+      const targetScale=fit*targetZoom;
+      const unboundedPanX=(BOARD_CENTER-localX)*targetScale;
+      const unboundedPanY=(BOARD_CENTER-localY)*targetScale;
+      const limit=clampTablePan(unboundedPanX,unboundedPanY,targetZoom,w,h);
+      const original={...camera.current};
+      interruptFocus();
+      const started=performance.now(),duration=360;
+      const animate=(now:number)=>{
+        const t=Math.min(1,(now-started)/duration);
+        const eased=1-Math.pow(1-t,3);
+        camera.current.zoom=original.zoom+(targetZoom-original.zoom)*eased;
+        camera.current.panX=original.panX+(limit.panX-original.panX)*eased;
+        camera.current.panY=original.panY+(limit.panY-original.panY)*eased;
+        updateView.current();
+        if(t<1)activeFocusAnimation.current=requestAnimationFrame(animate);
+        else activeFocusAnimation.current=null;
+      };
+      activeFocusAnimation.current=requestAnimationFrame(animate);
+    };
     const zoomAt=(x:number,y:number,ratio:number)=>{
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
+      interruptFocus();
       const {scene}=current,c=camera.current;
       const before=c.zoom,after=clampTableZoom(before*ratio);
       if(after===before)return;
@@ -469,6 +511,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current();
     };
     const pan=(dx:number,dy:number)=>{
+      interruptFocus();
       camera.current.panX+=dx;camera.current.panY+=dy;
       updateView.current();
     };
@@ -558,7 +601,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       pointers.current.clear();
       host.classList.remove('is-panning');
     };
-    const reset=()=>{camera.current={zoom:MIN_TABLE_ZOOM,panX:0,panY:0};updateView.current();};
+    const reset=()=>{interruptFocus();camera.current={zoom:MIN_TABLE_ZOOM,panX:0,panY:0};updateView.current();};
     const key=(event:KeyboardEvent)=>{
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
@@ -577,6 +620,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
+      interruptFocus();focusMyMat.current=()=>{};
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',down);
       host.removeEventListener('contextmenu',preventMenu);
