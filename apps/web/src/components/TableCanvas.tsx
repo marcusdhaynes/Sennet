@@ -612,7 +612,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     host.addEventListener('wheel',wheel,{passive:false});
     host.addEventListener('pointerdown',down);
     host.addEventListener('contextmenu',preventMenu);
-    host.addEventListener('dblclick',reset);
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',up);
     window.addEventListener('pointercancel',up);
@@ -624,7 +623,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',down);
       host.removeEventListener('contextmenu',preventMenu);
-      host.removeEventListener('dblclick',reset);
       window.removeEventListener('pointermove',move);
       window.removeEventListener('pointerup',up);
       window.removeEventListener('pointercancel',up);
