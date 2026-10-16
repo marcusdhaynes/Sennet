@@ -260,7 +260,12 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'DRAW':{
       const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix)))).sort((a,b)=>a.order-b.order);
       const card=available[0];if(!card) throw new Error('No cards in that deck');
-      card.zone='HAND';card.owner=command.actor;card.faceUp=false;card.x=460+((objects.filter(o=>o.zone==='HAND' && o.owner===command.actor).length-1)%6)*45;card.y=580;message=`${command.actor.slice(0,8)} drew a card`;break;
+      card.zone='HAND';card.owner=command.actor;card.faceUp=false;
+      const handCount=objects.filter(o=>o.zone==='HAND'&&o.owner===command.actor).length;
+      const seat=state.players.find(player=>player.id===command.actor)?.seat??0;
+      const handPosition=tcgMatWorld(((handCount-1)%7-3)*69,TCG_MAT_HEIGHT/2+100,seat);
+      card.x=handPosition.x;card.y=handPosition.y;delete card.matSeat;
+      message=`${command.actor.slice(0,8)} drew a card`;break;
     }
     case 'SHUFFLE':{
       const list=objects.filter(o=>o.zone==='DECK' && (!p.prefix || o.id.startsWith(String(p.prefix))));const rand=prng(finite(p.seed,1));
