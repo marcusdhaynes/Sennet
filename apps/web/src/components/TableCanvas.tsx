@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
-import {Application,Assets,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -10,7 +10,13 @@ function label(text:string,size:number,color:number,weight:'normal'|'bold'='norm
 }
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
-function drawTcgMats(board:Container){
+function drawTcgMats(
+  board:Container,state:GameState,viewerSeat:number,readonly:boolean,
+  opacity:number,hoverMs:number,
+  onMerge:(seat:number,boundary:number,merged:boolean)=>void,
+  onCenter:()=>void,onControlDown:(pointerId:number)=>void,
+  hoverTimers:Set<number>
+){
   for(let seat=0;seat<12;seat++){
     const cells=tcgMatCells(seat);
     const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
@@ -24,7 +30,9 @@ function drawTcgMats(board:Container){
       .fill({color:0x101e1a,alpha:.82})
       .stroke({color:0x8d7855,width:1,alpha:.46}));
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
-    for(const cell of cells){
+    // Joined center rows are rendered as ONE pocket. The side columns
+    // remain four separate single-card rectangles.
+    for(const cell of tcgMatRegions(seat,state.centerMerges)){
       const dx=cell.x-mat.x,dy=cell.y-mat.y;
       const x=dx*cos+dy*sin-cell.width/2;
       const y=-dx*sin+dy*cos-cell.height/2;
@@ -39,13 +47,83 @@ function drawTcgMats(board:Container){
         .moveTo(x+4,y+8).lineTo(x+4,y+h-8).stroke({color:0x06140f,alpha:.48,width:2})
         .moveTo(x+8,y+h-4).lineTo(x+w-8,y+h-4).stroke({color:0xd4c9a5,alpha:.22,width:1.5}));
     }
-    // Individual tangent-side boundary, exactly matching mat width.
+    // Boundary line is precisely as wide as this player's playmat.
     mat.addChild(new Graphics().moveTo(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
       .lineTo(TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
       .stroke({color:0xbda47b,width:2,alpha:.83}));
+
+    // Three lightweight hover-to-arm controls sit in the center-column
+    // gutters. A merge keeps its control (shown as minus) for reversal.
+    for(let boundary=0;boundary<3;boundary++){
+      const index=centerMergeKey(seat,boundary);
+      const merged=Boolean(state.centerMerges?.includes(index));
+      const marker=new Container();
+      const gapCenter=-TCG_MAT_HEIGHT/2+(boundary+1)*TCG_MAT.rowHeight+
+        (boundary+.5)*TCG_MAT.gap;
+      marker.position.set(0,gapCenter);
+      marker.alpha=opacity;
+      marker.eventMode=seat===viewerSeat&&!readonly?'static':'none';
+      marker.hitArea=new Circle(0,0,19);
+      marker.cursor='default';
+      marker.addChild(new Graphics().circle(0,0,16)
+        .fill({color:0x102b29,alpha:.9})
+        .stroke({color:0xe5d4ac,width:1.5,alpha:.95}));
+      const sign=label(merged?'−':'+',29,0xf4e1b9,'bold');
+      sign.eventMode='none';sign.position.set(0,-1);marker.addChild(sign);
+      if(seat===viewerSeat&&!readonly){
+        let armed=false;
+        let timer:number|null=null;
+        const disarm=()=>{
+          if(timer!==null){window.clearTimeout(timer);hoverTimers.delete(timer);timer=null;}
+          armed=false;marker.alpha=opacity;marker.cursor='default';
+        };
+        const arm=()=>{
+          if(timer!==null)window.clearTimeout(timer);
+          timer=window.setTimeout(()=>{
+            if(marker.destroyed)return;
+            hoverTimers.delete(timer!);timer=null;armed=true;
+            marker.alpha=Math.max(.68,opacity);marker.cursor='pointer';
+          },hoverMs);
+          hoverTimers.add(timer);
+        };
+        marker.on('pointerover',arm);
+        marker.on('pointerout',disarm);
+        marker.on('pointerdown',e=>{
+          if(!armed)return;
+          e.stopPropagation();onControlDown(e.pointerId);
+        });
+        marker.on('pointertap',e=>{
+          if(!armed)return;
+          e.stopPropagation();
+          disarm();
+          onMerge(seat,boundary,!merged);
+        });
+      }
+      mat.addChild(marker);
+    }
+
+    // Only the local player's mat gets a camera shortcut.
+    if(seat===viewerSeat){
+      const center=new Container();
+      center.position.set(0,TCG_MAT_HEIGHT/2+66);
+      center.eventMode='static';
+      center.hitArea=new Rectangle(-103,-29,206,58);
+      center.cursor='pointer';
+      center.addChild(new Graphics().roundRect(-103,-29,206,58,24)
+        .fill({color:0x1b3b34,alpha:.95})
+        .stroke({color:0xddc394,alpha:.95,width:2}));
+      const caption=label('◎  CENTER MAT',23,0xf9e6c4,'bold');
+      caption.eventMode='none';center.addChild(caption);
+      center.on('pointerdown',e=>{e.stopPropagation();onControlDown(e.pointerId);});
+      center.on('pointertap',e=>{e.stopPropagation();onCenter();});
+      mat.addChild(center);
+    }
   }
 }
-function drawBackground(board:Container,seat:number,players:Player[],playerName:string,gameKind:GameState['kind']){
+function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
+  opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
+  onCenter:()=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>){
+  const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
@@ -54,7 +132,7 @@ function drawBackground(board:Container,seat:number,players:Player[],playerName:
   board.addChild(new Graphics().poly(pts).fill(COLORS.woodDark).stroke({color:0x110f0c,width:18}));
   board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.991,BOARD_CENTER+(p.y-BOARD_CENTER)*.991]).flat()).fill(COLORS.wood).stroke({color:COLORS.gold,width:3,alpha:.75}));
   board.addChild(new Graphics().poly(points.map(p=>[BOARD_CENTER+(p.x-BOARD_CENTER)*.972,BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt).stroke({color:0x112d2b,width:4}));
-  if(gameKind==='tcg')drawTcgMats(board);
+  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,onCenter,onControlDown,hoverTimers);
   // Each chair is attached to the shared tabletop, then the whole board is rotated
   // so the viewer's seat is always on the near (bottom) edge.
   for(let i=0;i<12;i++){
@@ -119,7 +197,7 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -130,7 +208,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   // Canvas pan belongs to the pointer that pressed empty space, never to a card drag.
   const panPointer=useRef<{id:number;x:number;y:number}|null>(null);
   const lastView=useRef({x:NaN,y:NaN,scale:NaN});
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onViewChange};
+  const focusMyMat=useRef<()=>void>(()=>{});
+  const activeFocusAnimation=useRef<number|null>(null);
+  const controlPointer=useRef<number|null>(null);
+  const hoverTimers=useRef(new Set<number>());
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onMergeCenter,onViewChange};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
@@ -143,6 +225,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const cancelActiveDrag=useRef<()=>void>(()=>{});
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
+  const currentState=useRef(state);currentState.current=state;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
   useEffect(()=>{
@@ -184,19 +267,27 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current=rescale;
       resizeObserver=new ResizeObserver(rescale);resizeObserver.observe(mount.current!);rescale();
     })().catch(err=>console.error('PixiJS initialization failed',err));
-    return()=>{disposed=true;resizeObserver?.disconnect();cancelActiveDrag.current();session.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
+    return()=>{disposed=true;resizeObserver?.disconnect();cancelActiveDrag.current();
+      for(const timer of hoverTimers.current)window.clearTimeout(timer);
+      hoverTimers.current.clear();
+      if(activeFocusAnimation.current!==null)cancelAnimationFrame(activeFocusAnimation.current);
+      session.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
   },[]);
   useEffect(()=>{
     const current=session.current;
     if(!current)return;
     const {app,board}=current;
     animations.current.forEach(id=>cancelAnimationFrame(id));animations.current=[];
+    for(const timer of hoverTimers.current)window.clearTimeout(timer);
+    hoverTimers.current.clear();
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
     updateView.current();
-    drawBackground(board,seat,state.players,playerName,state.kind);
+    drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
+      (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
+      ()=>focusMyMat.current(),id=>{controlPointer.current=id;},hoverTimers.current);
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
@@ -267,7 +358,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -315,9 +406,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
         hint.clear();
-        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y):null;
+        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges):null;
         if(cell){
-          const zone=tcgMatCells(cell.seat).find(c=>c.row===cell.row&&c.column===cell.column)!;
+          const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
           hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
             .fill({color:0xc7d8ac,alpha:.18})
@@ -407,7 +498,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       // Pixi's piece pointerdown is dispatched on the canvas before this
       // bubbling handler. Its active object drag takes priority over panning.
-      if(drag.current?.pointerId===event.pointerId)return;
+      if(drag.current?.pointerId===event.pointerId||controlPointer.current===event.pointerId)return;
       if(event.pointerType==='touch'){
         if(pointers.current.size===1){
           panPointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};
@@ -452,6 +543,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(dx||dy)pan(dx,dy);
     };
     const up=(event:PointerEvent)=>{
+      if(controlPointer.current===event.pointerId)controlPointer.current=null;
       pointers.current.delete(event.pointerId);
       if(panPointer.current?.id===event.pointerId){
         panPointer.current=null;
