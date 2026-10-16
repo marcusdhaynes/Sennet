@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -14,7 +14,7 @@ function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onControlDown:(pointerId:number)=>void,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
 ){
   const drawnSeats=seatLayers
@@ -29,8 +29,19 @@ function drawTcgMats(
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
     parent.addChild(mat);
+    // Both physical playing surfaces stop precisely at the shared seam.
+    // Old beveled backing extended 4 units beyond *both* edges, making the
+    // opposing mats visibly overlap despite correct center positions.
+    const duel=seatLayers!==null;
+    const backingTop=duel&&seat===viewerSeat
+      ?-TCG_MAT_HEIGHT/2
+      :-TCG_MAT_HEIGHT/2-4;
+    const backingBottom=duel&&seat!==viewerSeat
+      ?TCG_MAT_HEIGHT/2
+      :TCG_MAT_HEIGHT/2+4;
     mat.addChild(new Graphics()
-      .roundRect(-TCG_MAT_WIDTH/2-4,-TCG_MAT_HEIGHT/2-4,TCG_MAT_WIDTH+8,TCG_MAT_HEIGHT+8,12)
+      .roundRect(-TCG_MAT_WIDTH/2-4,backingTop,TCG_MAT_WIDTH+8,
+        backingBottom-backingTop,duel?7:12)
       .fill({color:0x101e1a,alpha:.82})
       .stroke({color:0x8d7855,width:1,alpha:.46}));
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
@@ -106,12 +117,45 @@ function drawTcgMats(
       mat.addChild(marker);
     }
 
+    // These are visual-view controls, not game commands. On the opponent's
+    // rotated mat, positive local X appears on the LEFT of the screen.
+    // Left = seat number decrement (counter-clockwise in full-table view).
+    // Right = seat number increment (clockwise), always skipping our seat.
+    if(seatLayers&&seat!==viewerSeat){
+      for(const direction of ['left','right'] as const){
+        const left=direction==='left';
+        const button=new Container();
+        button.position.set((left?1:-1)*(TCG_MAT_WIDTH/2+31),0);
+        button.eventMode='static';
+        button.hitArea=new Circle(0,0,19);
+        button.cursor='pointer';
+        button.addChild(new Graphics()
+          .circle(0,0,16).fill({color:0x102b29,alpha:.96})
+          .stroke({color:0xe5d4ac,alpha:.95,width:1.5}));
+        // A 180-degree facing rotation makes a local right-arrow appear
+        // as a LEFT arrow on screen, and vice-versa.
+        const tip=left?5:-5,base=left?-4:4;
+        button.addChild(new Graphics()
+          .moveTo(base,-7).lineTo(tip,0).lineTo(base,7)
+          .stroke({color:0xf4e1b9,width:2.7,cap:'round',join:'round'}));
+        button.on('pointerdown',e=>{
+          if(e.button!==0)return;
+          e.stopPropagation();onControlDown(e.pointerId);
+        });
+        button.on('pointertap',e=>{
+          e.stopPropagation();
+          onCycleOpponent(direction);
+        });
+        mat.addChild(button);
+      }
+    }
+
     // Circular eye tool lives at the TOP of the local mat.
     if(seat===viewerSeat){
       const eye=new Container();
       // In the opposing view the eye sits directly over the shared seam,
       // with exactly the same outer circle size as a merge control.
-      const duel=seatLayers!==null,outerRadius=duel?16:32;
+      const outerRadius=duel?16:32;
       eye.position.set(0,-TCG_MAT_HEIGHT/2-(duel?0:64));
       eye.eventMode='static';
       eye.hitArea=new Circle(0,0,duel?19:38);
@@ -182,7 +226,7 @@ function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:numbe
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,
   duelOpponent:number|null,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
@@ -222,7 +266,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   }
   const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,
-    onEyeTap,onEyeHold,onControlDown,hoverTimers,layers,eyeHoldMs);
+    onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -350,6 +394,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const selectView=(next:EyeView)=>{viewRef.current=next;setEyeView(next);};
   const eyeTapHandler=useRef<()=>void>(()=>{});
   const eyeHoldHandler=useRef<()=>void>(()=>{});
+  const cycleOpponentHandler=useRef<(direction:'left'|'right')=>void>(()=>{});
   const focusOpponent=useRef<()=>void>(()=>{});
   const resetCamera=useRef<()=>void>(()=>{});
   const duelLayers=useRef<Map<number,Container>|null>(null);
@@ -443,6 +488,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const seatGroups=drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
+      direction=>cycleOpponentHandler.current(direction),
       id=>{controlPointer.current=id;},hoverTimers.current,
       eyeView.kind==='versus'?eyeView.opponent:null,250);
     duelLayers.current=seatGroups;
@@ -676,6 +722,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const fitScale=h/(2*TCG_MAT_HEIGHT);
       animateTo(fitScale/fit,0,0);
     };
+    cycleOpponentHandler.current=(direction)=>{
+      const current=viewRef.current;
+      if(current.kind!=='versus'||current.opponent===null)return;
+      const opponent=neighboringOpponentSeat(seatRef.current,current.opponent,direction);
+      if(opponent===current.opponent)return;
+      cancelActiveDrag.current();
+      selectView({kind:'versus',opponent});
+      // The newly selected seat uses the same stable opposing camera.
+      // Only the opponent's mat and identity tab update.
+    };
     eyeTapHandler.current=()=>{
       const mode=viewRef.current.kind;
       if(mode==='overview'){
@@ -840,7 +896,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
-      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};
+      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};cycleOpponentHandler.current=()=>{};
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',selectOpponent,true);
       host.removeEventListener('pointerdown',down);
