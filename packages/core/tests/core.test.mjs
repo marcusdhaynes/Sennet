@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,tcgMatCells,tcgSnapPoint,tcgMatOrigin,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -218,4 +218,51 @@ test('Stack actions reject single cards, locked members and other players cards'
   assert.throws(()=>applyCommand(locked,c('MOVE_STACK',{id:'alpha-1',x:1500,y:1500})),/locked/);
   const owned={...state,objects:state.objects.map(o=>o.id==='alpha-5'?{...o,owner:'other-player'}:o)};
   assert.throws(()=>applyCommand(owned,c('MOVE_STACK',{id:'alpha-1',x:1500,y:1500})),/another player's card/);
+});
+
+test('camera cannot drag past the initial view at maximum zoom-out',()=>{
+  const size={w:1280,h:720};
+  for(const [dx,dy] of [[0,0],[400,500],[-400,-500],[1e6,-1e6]]){
+    assert.deepEqual(clampTablePan(dx,dy,MIN_TABLE_ZOOM,size.w,size.h),{panX:0,panY:0});
+  }
+});
+
+test('zoomed camera pans only within the world area visible on initial load',()=>{
+  for(const [w,h] of [[1280,720],[375,812],[1024,1024]]){
+    for(const zoom of [1.1,2,3,10,MAX_TABLE_ZOOM]){
+      const halfLimitX=w*(zoom-1)/2;
+      const halfLimitY=h*(zoom-1)/2;
+      const [pX,pY]=[1e8,-1e8];
+      assert.deepEqual(clampTablePan(pX,pY,zoom,w,h),
+        {panX:halfLimitX,panY:-halfLimitY});
+      assert.deepEqual(clampTablePan(-pX,-pY,zoom,w,h),
+        {panX:-halfLimitX,panY:halfLimitY});
+      // Convert camera translation back to world coordinates. Both the
+      // left/right and top/bottom viewport edges remain inside the load
+      // rectangle, even at the pan extremes.
+      const fit=Math.min(w/3600,h/3600),scale=fit*zoom;
+      const availableWorldWidth=w/fit,availableWorldHeight=h/fit;
+      for(const {panX,panY} of [
+        clampTablePan(pX,pY,zoom,w,h),
+        clampTablePan(-pX,-pY,zoom,w,h)
+      ]){
+        const visibleLeft=(-w/2-panX)/scale;
+        const visibleRight=(w/2-panX)/scale;
+        const visibleTop=(-h/2-panY)/scale;
+        const visibleBottom=(h/2-panY)/scale;
+        assert.ok(visibleLeft>=-availableWorldWidth/2-1e-8);
+        assert.ok(visibleRight<=availableWorldWidth/2+1e-8);
+        assert.ok(visibleTop>=-availableWorldHeight/2-1e-8);
+        assert.ok(visibleBottom<=availableWorldHeight/2+1e-8);
+      }
+    }
+  }
+});
+
+test('camera panning clamps each axis independently and ignores invalid values',()=>{
+  assert.deepEqual(clampTablePan(24,-40,2,1200,800),{panX:24,panY:-40});
+  assert.deepEqual(clampTablePan(900,-700,2,1200,800),{panX:600,panY:-400});
+  assert.deepEqual(clampTablePan(900,-700,.5,1200,800),{panX:0,panY:0});
+  assert.deepEqual(clampTablePan(Infinity,NaN,2,1200,800),{panX:0,panY:0});
+  assert.deepEqual(clampTablePan(900,-700,2,NaN,-100),{panX:0,panY:0});
 });
