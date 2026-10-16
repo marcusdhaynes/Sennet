@@ -290,6 +290,58 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
+/** In opposing view, player identification retracts off-screen while a
+ * small arrow tab remains visible. A 250ms dwell reveals it; without a
+ * click it automatically retracts after one second. Click to pin open. */
+function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;seat:number}){
+  const [shown,setShown]=useState(false);
+  const [pinned,setPinned]=useState(false);
+  const hoverTimer=useRef<number|null>(null);
+  const retractTimer=useRef<number|null>(null);
+  const clear=(ref:{current:number|null})=>{
+    if(ref.current!==null){window.clearTimeout(ref.current);ref.current=null;}
+  };
+  useEffect(()=>()=>{clear(hoverTimer);clear(retractTimer);},[]);
+  const scheduleHover=()=>{
+    if(pinned||shown)return;
+    clear(hoverTimer);
+    hoverTimer.current=window.setTimeout(()=>{
+      hoverTimer.current=null;
+      setShown(true);
+      clear(retractTimer);
+      retractTimer.current=window.setTimeout(()=>{
+        retractTimer.current=null;
+        setShown(false);
+      },1000);
+    },250);
+  };
+  const leave=()=>{
+    clear(hoverTimer);
+    if(!pinned){clear(retractTimer);setShown(false);}
+  };
+  const toggle=()=>{
+    clear(hoverTimer);clear(retractTimer);
+    if(pinned){setPinned(false);setShown(false);}
+    else {setPinned(true);setShown(true);}
+  };
+  const label=name.trim()||('Player '+(seat+1));
+  return <div
+    className={'opponent-seat-tab '+side+(shown?' expanded':'')}
+    onPointerDown={event=>event.stopPropagation()}
+    onPointerEnter={scheduleHover} onPointerLeave={leave}>
+    <button type="button" className="opponent-seat-tab-button"
+      aria-label={label+', seat '+(seat+1)+'. Hover to reveal or click to pin.'}
+      aria-expanded={shown} aria-pressed={pinned}
+      onClick={toggle}>
+      <span className="opponent-seat-tab-label">
+        <span className="opponent-seat-tab-title">{label}</span>
+        <span className="opponent-seat-tab-number">SEAT {seat+1}</span>
+        <span className="opponent-seat-tab-pin">{pinned?'PINNED':'CLICK TO PIN'}</span>
+      </span>
+      <span className="opponent-seat-tab-grip" aria-hidden="true">{side==='top'?'⌄':'⌃'}</span>
+    </button>
+  </div>;
+}
 type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
@@ -801,6 +853,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
+    {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
+      <RetractableSeatLabel key={'opponent-'+eyeView.opponent} side="top"
+        seat={eyeView.opponent}
+        name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
+      <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
+        name={playerName||'YOU'}/>
+    </>}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
       <span>Choose an opponent's mat or seat</span>
       <button type="button" onClick={()=>{selectView({kind:'overview',opponent:null});resetCamera.current();}}>Cancel</button>
