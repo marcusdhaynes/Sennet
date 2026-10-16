@@ -119,10 +119,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const updateView=useRef<()=>void>(()=>{});
   const seatRef=useRef(seat);seatRef.current=seat;
   const pointers=useRef(new Map<number,{x:number;y:number}>());
-  const mousePan=useRef<number|null>(null);
+  // Canvas pan belongs to the pointer that pressed empty space, never to a card drag.
+  const panPointer=useRef<{id:number;x:number;y:number}|null>(null);
   const lastView=useRef({x:NaN,y:NaN,scale:NaN});
   const callbacks=useRef({onSelect,onMove,onViewChange});callbacks.current={onSelect,onMove,onViewChange};
-  const drag=useRef<{id:string;visual:Container;x:number;y:number;card:boolean}|null>(null);
+  const drag=useRef<{id:string;pointerId:number;visual:Container;x:number;y:number;card:boolean}|null>(null);
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
@@ -207,7 +208,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       if(!readonly&&!obj.locked){
         piece.on('pointerdown',(e)=>{
-          e.stopPropagation();drag.current={id:obj.id,visual:piece,x:obj.x,y:obj.y,card:obj.kind==='card'};callbacks.current.onSelect(obj.id);
+          // Only the pointer pressed on this movable object may drag it.
+          // Other pointers remain available for pinching and camera control.
+          if(e.button!==0)return;
+          e.stopPropagation();
+          drag.current={id:obj.id,pointerId:e.pointerId,visual:piece,x:obj.x,y:obj.y,card:obj.kind==='card'};
+          callbacks.current.onSelect(obj.id);
         });
       }
     }
@@ -218,7 +224,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   },[state,seat,playerName,actorId,selected,readonly,ready]);
   useEffect(()=>{
     const move=(event:PointerEvent)=>{
-      const d=drag.current,current=session.current;if(!d||!current||!mount.current)return;
+      const d=drag.current,current=session.current;
+      if(!d||d.pointerId!==event.pointerId||!current||!mount.current)return;
       const rect=current.app.canvas.getBoundingClientRect();
       const p=new Point((event.clientX-rect.left)*current.app.renderer.width/rect.width,(event.clientY-rect.top)*current.app.renderer.height/rect.height);
       const local=current.board.toLocal(p,current.app.stage);
@@ -236,7 +243,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         }
       }
     };
-    const end=()=>{const d=drag.current;if(!d)return;
+    const end=(event:PointerEvent)=>{const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
       drag.current=null;
       if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
       // Start the snap tween at the pointer's release position, not where
@@ -244,8 +251,15 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       oldLocations.current.set(d.id,{x:d.x,y:d.y});
       callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));
     };
-    window.addEventListener('pointermove',move);window.addEventListener('pointerup',end);
-    return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);};
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',end);
+    window.addEventListener('pointercancel',cancel);
+    function cancel(event:PointerEvent){
+      if(drag.current?.pointerId!==event.pointerId)return;
+      drag.current=null;
+      if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
+    }
+    return()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',end);window.removeEventListener('pointercancel',cancel);};
   },[]);
 
   useEffect(()=>{
@@ -290,42 +304,74 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(event.pointerType==='touch'){
         pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
         if(pointers.current.size>=2){
-          // The second finger cancels object movement and begins camera control.
+          // Two touches switch to view manipulation, even if the first was
+          // touching a card; do not commit a partial card drag.
           drag.current=null;
+          panPointer.current=null;
           if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
+          host.classList.remove('is-panning');
         }
-      }else if(event.button===1||event.button===2){
-        event.preventDefault();
-        mousePan.current=event.pointerId;
+      }
+      // Pixi's piece pointerdown is dispatched on the canvas before this
+      // bubbling handler. Its active object drag takes priority over panning.
+      if(drag.current?.pointerId===event.pointerId)return;
+      if(event.pointerType==='touch'){
+        if(pointers.current.size===1){
+          panPointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};
+        }
+      }else if(event.button===0||event.button===1){
+        // Left-button drag over any empty felt OR surrounding view moves the
+        // camera intuitively. Middle mouse also works as a shortcut.
+        if(event.button===1)event.preventDefault();
+        panPointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};
+      }
+      if(panPointer.current?.id===event.pointerId){
+        host.classList.add('is-panning');
+        // Keep receiving moves after the pointer leaves the canvas.
+        try{host.setPointerCapture(event.pointerId);}catch{/* Some devices reject capture. */}
       }
     };
     const move=(event:PointerEvent)=>{
-      if(mousePan.current===event.pointerId){
-        pan(event.movementX,event.movementY);return;
+      const touches=pointers.current;
+      if(event.pointerType==='touch'&&touches.has(event.pointerId)){
+        const old=[...touches.values()];
+        touches.set(event.pointerId,{x:event.clientX,y:event.clientY});
+        if(touches.size>=2){
+          const now=[...touches.values()];
+          const [a,b]=old,[c,d]=now;
+          const oldCenter={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+          const newCenter={x:(c.x+d.x)/2,y:(c.y+d.y)/2};
+          const oldDistance=Math.hypot(a.x-b.x,a.y-b.y);
+          const newDistance=Math.hypot(c.x-d.x,c.y-d.y);
+          const target=coordinates({clientX:oldCenter.x,clientY:oldCenter.y});
+          if(oldDistance>5&&newDistance>5)zoomAt(target.x,target.y,newDistance/oldDistance);
+          pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
+          return;
+        }
       }
-      const points=pointers.current;
-      if(event.pointerType!=='touch'||!points.has(event.pointerId))return;
-      const previous=points.get(event.pointerId)!;
-      const allBefore=[...points.values()];
-      points.set(event.pointerId,{x:event.clientX,y:event.clientY});
-      const allNow=[...points.values()];
-      if(points.size>=2){
-        const [a,b]=allBefore,[c,d]=allNow;
-        const oldCenter={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
-        const newCenter={x:(c.x+d.x)/2,y:(c.y+d.y)/2};
-        const oldDistance=Math.hypot(a.x-b.x,a.y-b.y);
-        const newDistance=Math.hypot(c.x-d.x,c.y-d.y);
-        const p=coordinates({clientX:oldCenter.x,clientY:oldCenter.y});
-        if(oldDistance>5&&newDistance>5)zoomAt(p.x,p.y,newDistance/oldDistance);
-        pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
-      }else if(!drag.current){
-        // One-finger panning on an empty area; a touched card still drags.
-        pan(event.clientX-previous.x,event.clientY-previous.y);
-      }
+      const active=panPointer.current;
+      if(!active||active.id!==event.pointerId)return;
+      if(drag.current?.pointerId===event.pointerId)return;
+      // Translation exactly follows the user's pointer in screen pixels.
+      // Since it changes only the view transform, card positions are intact.
+      const dx=event.clientX-active.x,dy=event.clientY-active.y;
+      active.x=event.clientX;active.y=event.clientY;
+      if(dx||dy)pan(dx,dy);
     };
     const up=(event:PointerEvent)=>{
       pointers.current.delete(event.pointerId);
-      if(mousePan.current===event.pointerId)mousePan.current=null;
+      if(panPointer.current?.id===event.pointerId){
+        panPointer.current=null;
+        host.classList.remove('is-panning');
+      }
+      if(host.hasPointerCapture(event.pointerId)){
+        try{host.releasePointerCapture(event.pointerId);}catch{/* Capture already released. */}
+      }
+    };
+    const blur=()=>{
+      panPointer.current=null;
+      pointers.current.clear();
+      host.classList.remove('is-panning');
     };
     const reset=()=>{camera.current={zoom:MIN_TABLE_ZOOM,panX:0,panY:0};updateView.current();};
     const key=(event:KeyboardEvent)=>{
@@ -342,6 +388,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',up);
     window.addEventListener('pointercancel',up);
+    window.addEventListener('blur',blur);
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
@@ -352,8 +399,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       window.removeEventListener('pointermove',move);
       window.removeEventListener('pointerup',up);
       window.removeEventListener('pointercancel',up);
+      window.removeEventListener('blur',blur);
       window.removeEventListener('keydown',key);
     };
   },[]);
-  return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Select or drag pieces with mouse or touch."/>;
+  return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space with mouse or touch to move the camera; drag cards and pieces to move them."/>;
 }
