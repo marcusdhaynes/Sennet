@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,nearestFrameIndex,projectForActor,parseGamePack} from '../src/index.ts';
+import {createGame,applyCommand,replay,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -35,4 +35,18 @@ test('pack sanitization disallows javascript assets',()=>{
 test('event protocol rejects nondeterministic object IDs',()=>{
   assert.throws(()=>applyCommand(createGame('sandbox'),c('ADD',{object:{kind:'token',name:'X'}})),/Object ID required/);
   assert.throws(()=>applyCommand(createGame('sandbox'),c('CLONE',{id:'token-moon'})),/Clone ID required/);
+});
+
+test('the viewer is always at the bottom and all other players have relative facing angles',()=>{
+  const eps=1e-9;
+  for(let viewer=0;viewer<12;viewer++){
+    const angle=viewer*Math.PI/6-Math.PI/2+viewerTableRotation(viewer);
+    assert.ok(Math.abs(Math.sin(angle)-1)<eps,'viewer '+viewer+' is at bottom');
+    assert.ok(Math.abs(Math.cos(angle))<eps);
+    for(let other=0;other<12;other++){
+      const facing=viewerTableRotation(viewer)+playerSeatRotation(other);
+      const expected=(other-viewer)*Math.PI/6;
+      assert.ok(Math.abs(facing-expected)<eps,'seat '+other+' relative to viewer '+viewer);
+    }
+  }
 });
