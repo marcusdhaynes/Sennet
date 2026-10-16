@@ -417,6 +417,6 @@ export function parseGamePack(value:unknown):GamePack {
       centerMerges:[...new Set(pack.centerMerges.filter((n:unknown):n is number=>
         typeof n==='number'&&Number.isInteger(n)&&n>=0&&n<SEATS*3))].sort((a,b)=>a-b)
     }:{}) ,
-    ...(typeof pack.lua='string'&&pack.lua.length<=30000?{lua:pack.lua}:{})};
+    ...(typeof pack.lua==='string'&&pack.lua.length<=30000?{lua:pack.lua}:{})};
 }
 export function gameFromPack(pack:GamePack):GameState{return {...createGame(pack.kind),objects:pack.objects,centerMerges:pack.centerMerges??[],message:`Loaded ${pack.name} by ${pack.author}`};}
