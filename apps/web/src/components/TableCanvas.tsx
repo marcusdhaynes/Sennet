@@ -243,7 +243,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       nickname?37:41,mine?0x263a32:0xe7e0c9,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
-    (layers?.get(i)??board).addChild(chair);
+    board.addChild(chair);
   }
   return layers;
 }
