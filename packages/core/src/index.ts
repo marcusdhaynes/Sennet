@@ -29,6 +29,14 @@ export type GamePack = {
 export const SEATS = 12;
 export const BOARD_W = 1000;
 export const BOARD_H = 660;
+/** Rotates the whole table so the viewer's seat sits on the bottom edge. */
+export function viewerTableRotation(seat:number):number {
+  return Math.PI - ((((seat%SEATS)+SEATS)%SEATS)*Math.PI/6);
+}
+/** A seated player's nameplate faces their own chair. */
+export function playerSeatRotation(seat:number):number {
+  return -Math.PI + ((((seat%SEATS)+SEATS)%SEATS)*Math.PI/6);
+}
 export const clamp = (v: number, low: number, high: number) => Math.min(high, Math.max(low, v));
 export const finite = (v: unknown, fallback = 0) => typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 export const createId = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `c${Math.random().toString(36).slice(2)}`;
