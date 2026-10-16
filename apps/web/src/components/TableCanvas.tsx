@@ -270,8 +270,17 @@ function createPiece(o:TableObject,isSelected:boolean){
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
   return box;
 }
+type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
+  const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
+  const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
+  const selectView=(next:EyeView)=>{viewRef.current=next;setEyeView(next);};
+  const eyeTapHandler=useRef<()=>void>(()=>{});
+  const eyeHoldHandler=useRef<()=>void>(()=>{});
+  const focusOpponent=useRef<()=>void>(()=>{});
+  const resetCamera=useRef<()=>void>(()=>{});
+  const duelLayers=useRef<Map<number,Container>|null>(null);
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
@@ -327,8 +336,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
-        const point=board.toGlobal(new Point(BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),
-          BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle)));
+        const localChair=new Point(BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),
+          BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle));
+        const chairParent=duelLayers.current?.get(seatRef.current)??board;
+        const point=chairParent.toGlobal(localChair);
         if(callbacks.current.onViewChange&&
           (Math.abs(lastView.current.x-point.x)>.4||
            Math.abs(lastView.current.y-point.y)>.4||
@@ -357,10 +368,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
-    updateView.current();
-    drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
+    const seatGroups=drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
-      ()=>focusMyMat.current(),id=>{controlPointer.current=id;},hoverTimers.current);
+      ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
+      id=>{controlPointer.current=id;},hoverTimers.current,
+      eyeView.kind==='versus'?eyeView.opponent:null,250);
+    duelLayers.current=seatGroups;
+    updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
@@ -368,6 +382,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     visible.sort((a,b)=>Number(a.kind==='board')-Number(b.kind==='board')); // Boards drawn behind movable pieces
     visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
     for(const obj of visible){
+      const assumedOwner=obj.matSeat??
+        (obj.owner===actorId||obj.owner==='local'?seat:
+          state.players.find(p=>p.id===obj.owner)?.seat)??
+        (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges)?.seat:undefined);
+      if(seatGroups&&!seatGroups.has(assumedOwner??-1))continue;
       const piece=createPiece(obj,obj.id===selected);
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
@@ -375,9 +394,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         if(drag.current.whole)markHeldStack(piece,drag.current.members.length);
       }
       // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
-      const ownerSeat=obj.matSeat??(obj.owner===actorId||obj.owner==='local'?seat:state.players.find(p=>p.id===obj.owner)?.seat);
+      const ownerSeat=assumedOwner;
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
-      board.addChild(piece);
+      (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=220;
@@ -431,7 +450,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,eyeView]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -464,7 +483,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const point=new Point(
         (event.clientX-rect.left)*current.app.renderer.width/rect.width,
         (event.clientY-rect.top)*current.app.renderer.height/rect.height);
-      const local=current.board.toLocal(point,current.app.stage);
+      // The opponent mat may be temporarily re-framed. Its own presentation
+      // transform maps pointer movement back to canonical table coordinates.
+      const local=d.visual.parent.toLocal(point,current.app.stage);
       d.x=Math.max(0,Math.min(BOARD_W,local.x));
       d.y=Math.max(0,Math.min(BOARD_W,local.y));
       const dx=d.x-d.startX,dy=d.y-d.startY;
@@ -478,6 +499,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
+        if(hint.parent!==d.visual.parent)d.visual.parent.addChild(hint);
         hint.clear();
         const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges):null;
         if(cell){
