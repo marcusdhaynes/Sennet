@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import PersonalDrawer from './components/PersonalDrawer';
@@ -43,6 +43,7 @@ export default function App(){
   const [settingsPage,setSettingsPage]=useState<SettingsPage>('general');
   const [selected,setSelected]=useState<string|null>(null);
   const [seat,setSeat]=useState(0);
+  const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
   const [packs,setPacks]=useState<GamePack[]>(getPacks);
@@ -133,7 +134,7 @@ export default function App(){
   function addSprite(){
     const urls=spriteUrls.split(/[\s,]+/).filter(Boolean);
     if(!urls.length){inform('Enter image URLs for your miniature.');return;}
-    takeAction('ADD',{object:{id:createId(),kind:'miniature',name:assetName,x:500,y:330,frameUrls:urls,color:'#b89d78'}});
+    takeAction('ADD',{object:{id:createId(),kind:'miniature',name:assetName,x:BOARD_CENTER,y:BOARD_CENTER,frameUrls:urls,color:'#b89d78'}});
     setBook(null);
   }
   async function uploadDirect(){
@@ -156,7 +157,7 @@ export default function App(){
     const next=createGame('tcg');
     let order=0;
     const objects:TableObject[]=cards.flatMap(card=>Array.from({length:card.amount},()=>({
-      id:'deck-'+createId(),kind:'card' as const,name:card.name,x:270,y:490,rotation:0,faceUp:false,color:'#a7a0c7',zone:'DECK' as const,order:order++
+      id:'deck-'+createId(),kind:'card' as const,name:card.name,x:tcgMatCells(seat).find(c=>c.row===3&&c.column===0)!.x,y:tcgMatCells(seat).find(c=>c.row===3&&c.column===0)!.y,rotation:0,faceUp:false,color:'#a7a0c7',zone:'DECK' as const,matSeat:seat,order:order++
     })));
     resetWith({...next,objects,message:deckName+' · '+objects.length+' cards'});
   }
@@ -173,11 +174,11 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected} onMove={(id,x,y)=>{
+        onSelect={setSelected} onViewChange={setSeatView} onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
         }} readonly={replayAt!==null}/>
     </div>
-    <PersonalDrawer activeBook={book} openBook={setBook}/>
+    <PersonalDrawer activeBook={book} openBook={setBook} seatView={seatView}/>
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
         <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
@@ -189,7 +190,7 @@ export default function App(){
             <div className="guide-grid">
               <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
               <article><span>02</span><h3>Move your pieces</h3><p>Drag cards, tokens and miniatures directly across the felt. Select a piece to adjust it using Games → Table Tools.</p></article>
-              <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings.</p></article>
+              <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings. Scroll or pinch to zoom the tabletop without losing detail.</p></article>
               <article><span>04</span><h3>Replay every move</h3><p>Actions are stored as compact commands, not video. Export or replay them from Games → Table Tools.</p></article>
               <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
               <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
@@ -218,7 +219,7 @@ export default function App(){
               <details className="reader-details"><summary>Upload to your own storage</summary><div><p>Files go directly from your browser to your storage provider, not to Sennet. Provide a short-lived presigned PUT URL.</p><label>Signed upload URL<input type="password" value={signedUrl} onChange={e=>setSignedUrl(e.target.value)}/></label><label className="file-picker"><Upload size={16}/>{uploadFile?uploadFile.name:'Choose file'}<input type="file" accept=".json,.png,.webp,.glb,.gltf,.zip" onChange={e=>setUploadFile(e.target.files?.[0]||null)}/></label><button className="reader-secondary" onClick={uploadDirect}>Upload directly</button></div></details>
             </>}
             {gamesPage==='tools'&&<><div className="reader-heading"><div><h2>Table tools</h2><p>All tabletop actions live inside your books.</p></div></div>
-              <div className="tool-section"><h3>Place an object</h3><div className="tool-buttons"><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'card',name:'New card',x:500,y:330,faceUp:true,color:'#b49acb'}})}><Plus size={17}/> Card</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'token',name:'Token',x:500,y:330,color:'#b1bb8c'}})}><Plus size={17}/> Token</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'die',name:'D6',x:500,y:330,color:'#dbd8c4',sides:6,value:1}})}><Dices size={17}/> Die</button></div></div>
+              <div className="tool-section"><h3>Place an object</h3><div className="tool-buttons"><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'card',name:'New card',x:BOARD_CENTER,y:BOARD_CENTER,faceUp:true,color:'#b49acb'}})}><Plus size={17}/> Card</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'token',name:'Token',x:BOARD_CENTER,y:BOARD_CENTER,color:'#b1bb8c'}})}><Plus size={17}/> Token</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'die',name:'D6',x:BOARD_CENTER,y:BOARD_CENTER,color:'#dbd8c4',sides:6,value:1}})}><Dices size={17}/> Die</button></div></div>
               <div className="tool-section"><h3>Game commands</h3><div className="tool-buttons"><button onClick={()=>takeAction('DRAW')}><Layers size={17}/> Draw</button><button onClick={()=>takeAction('SHUFFLE',{seed:Date.now()%10000000})}><Shuffle size={17}/> Shuffle</button><button onClick={botMove}><Zap size={17}/> Bot move</button><button onClick={()=>takeAction('NEXT_TURN')}><SkipForward size={17}/> End turn</button><button onClick={undo}><ArrowLeft size={17}/> Undo</button></div></div>
               <div className="tool-section"><h3>{activeObject?'Selected: '+activeObject.name:'Selected object'}</h3>{activeObject?<div className="tool-buttons"><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:-30})}><RotateCw size={16}/> −30°</button><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:30})}><RotateCw size={16}/> +30°</button><button onClick={()=>takeAction('FLIP',{id:selected})}><FlipHorizontal size={16}/> Flip</button><button onClick={()=>takeAction('CLONE',{id:selected,newId:createId()})}><Copy size={16}/> Clone</button>{activeObject.kind==='die'&&<button onClick={()=>takeAction('ROLL',{id:selected,seed:Date.now()})}><Dices size={16}/> Roll</button>}<button onClick={()=>{takeAction('DELETE',{id:selected});setSelected(null);}}><Trash2 size={16}/> Remove</button></div>:<p>Click a piece on the table to select it, then reopen this book.</p>}</div>
               <details className="reader-details"><summary>Build a starter TCG deck</summary><div><label>Deck name<input value={deckName} onChange={e=>setDeckName(e.target.value)}/></label>{cards.map((card,i)=><div key={i} className="card-editor-row"><span>{card.name}</span><button aria-label={'Remove '+card.name} onClick={()=>setCards(a=>a.filter((_,j)=>j!==i))}><X size={13}/></button><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.max(1,c.amount-1)}:c))}><Minus size={13}/></button><strong>{card.amount}</strong><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.min(60,c.amount+1)}:c))}><Plus size={13}/></button></div>)}<div className="field-row"><input value={cardName} onChange={e=>setCardName(e.target.value)} placeholder="Card name"/><button onClick={()=>{if(cardName.trim()){setCards(a=>[...a,{name:cardName.trim(),amount:1}]);setCardName('');}}}>Add</button></div><button className="reader-secondary" onClick={createDeck}>Load deck onto table</button></div></details>
