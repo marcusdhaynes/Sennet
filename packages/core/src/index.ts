@@ -29,6 +29,61 @@ export type GamePack = {
 export const SEATS = 12;
 export const BOARD_W = 1000;
 export const BOARD_H = 660;
+
+/**
+ * A TCG mat has four rows, three columns, and 4 tabletop-unit gutters.
+ * Both outer columns hold one 62x88 card each. The center is a wider
+ * play area. All coordinates are canonical tabletop coordinates, so a
+ * replay and every remote client arrive at the same snapped position.
+ */
+export const TCG_MAT = {
+  x:500,y:330,cardWidth:62,cardHeight:88,
+  rowHeight:94,outerWidth:66,centerWidth:192,gap:4,rows:4,columns:3,
+  snapOutside:26
+} as const;
+export interface TcgMatCell {
+  row:number;column:number;x:number;y:number;width:number;height:number;
+}
+export function tcgMatCells():TcgMatCell[] {
+  const m=TCG_MAT;
+  const widths=[m.outerWidth,m.centerWidth,m.outerWidth];
+  const left=m.x-(widths.reduce((a,b)=>a+b,0)+(m.columns-1)*m.gap)/2;
+  const top=m.y-(m.rows*m.rowHeight+(m.rows-1)*m.gap)/2;
+  const cells:TcgMatCell[]=[];
+  let offset=left;
+  for(let col=0;col<widths.length;col++){
+    for(let row=0;row<m.rows;row++){
+      cells.push({
+        row,column:col,x:offset+widths[col]/2,
+        y:top+row*(m.rowHeight+m.gap)+m.rowHeight/2,
+        width:widths[col],height:m.rowHeight
+      });
+    }
+    offset+=widths[col]+m.gap;
+  }
+  return cells;
+}
+export function tcgSnapPoint(x:number,y:number):TcgMatCell|null {
+  if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+  let best:TcgMatCell|null=null,bestDistance=Infinity;
+  for(const cell of tcgMatCells()){
+    // Find the true closest rectangle, not the nearest center. This is
+    // important for the deliberately wider center column.
+    const dx=Math.max(0,Math.abs(x-cell.x)-cell.width/2);
+    const dy=Math.max(0,Math.abs(y-cell.y)-cell.height/2);
+    const d=Math.hypot(dx,dy);
+    if(d<bestDistance-1e-9){
+      best=cell;bestDistance=d;
+    } else if(Math.abs(d-bestDistance)<1e-9&&best){
+      // Inside the narrow gap between two zones: prefer the center
+      // of the nearer zone so a card cannot unpredictably switch sides.
+      const old=Math.hypot(x-best.x,y-best.y);
+      const next=Math.hypot(x-cell.x,y-cell.y);
+      if(next<old){best=cell;}
+    }
+  }
+  return bestDistance<=TCG_MAT.snapOutside?best:null;
+}
 /** Rotates the whole table so the viewer's seat sits on the bottom edge. */
 export function viewerTableRotation(seat:number):number {
   return Math.PI - ((((seat%SEATS)+SEATS)%SEATS)*Math.PI/6);
@@ -133,7 +188,20 @@ export function applyCommand(state: GameState, command: Command): GameState {
   const obj=objects.find(o=>o.id===p.id);
   switch(command.type) {
     case 'ADD':objects.push(sanitizeObject(p.object as Record<string,unknown>)); message='New object placed';break;
-    case 'MOVE': if(obj){obj.x=clamp(finite(p.x,obj.x),0,BOARD_W);obj.y=clamp(finite(p.y,obj.y),0,BOARD_H);message=`Moved ${obj.name}`;}break;
+    case 'MOVE': if(obj){
+      const x=clamp(finite(p.x,obj.x),0,BOARD_W);
+      const y=clamp(finite(p.y,obj.y),0,BOARD_H);
+      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y):null;
+      obj.x=snapped?snapped.x:x;
+      obj.y=snapped?snapped.y:y;
+      if(snapped) {
+        // Playing a card from a deck or hand makes it a public table card.
+        obj.zone='TABLE';
+        message=`Placed ${obj.name} in mat row ${snapped.row+1}, column ${snapped.column+1}`;
+      } else {
+        message=`Moved ${obj.name}`;
+      }
+    }break;
     case 'ROTATE': if(obj){obj.rotation=((obj.rotation+finite(p.degrees,30))%360+360)%360;message=`Rotated ${obj.name}`;}break;
     case 'FLIP':if(obj){obj.faceUp=!obj.faceUp;message=`Flipped ${obj.name}`;}break;
     case 'DELETE':objects=objects.filter(o=>o.id!==p.id);message='Object removed';break;
