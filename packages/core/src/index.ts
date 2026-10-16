@@ -33,6 +33,12 @@ export const BOARD_CENTER = BOARD_W / 2;
 export const TABLE_APOTHEM = 1650;
 export const TABLE_SEAT_RADIUS = 1730;
 export const TABLE_VIEW_RADIUS = 1800;
+/** Zoom 1 is the opening fit-to-table view and the farthest permitted zoom-out. */
+export const MIN_TABLE_ZOOM = 1;
+export const MAX_TABLE_ZOOM = 18;
+export function clampTableZoom(value:number):number {
+  return Number.isFinite(value) ? Math.min(MAX_TABLE_ZOOM,Math.max(MIN_TABLE_ZOOM,value)) : MIN_TABLE_ZOOM;
+}
 
 
 /**
