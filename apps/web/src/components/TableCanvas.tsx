@@ -553,6 +553,25 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         cancelAnimationFrame(activeFocusAnimation.current);activeFocusAnimation.current=null;
       }
     };
+    const animateTo=(zoom:number,panX:number,panY:number)=>{
+      const w=host.clientWidth,h=host.clientHeight;
+      const targetZoom=clampTableZoom(zoom);
+      const bounded=clampTablePan(panX,panY,targetZoom,w,h);
+      const from={...camera.current};
+      interruptFocus();
+      const started=performance.now(),duration=360;
+      const animate=(now:number)=>{
+        const t=Math.min(1,(now-started)/duration),ease=1-Math.pow(1-t,3);
+        camera.current.zoom=from.zoom+(targetZoom-from.zoom)*ease;
+        camera.current.panX=from.panX+(bounded.panX-from.panX)*ease;
+        camera.current.panY=from.panY+(bounded.panY-from.panY)*ease;
+        updateView.current();
+        if(t<1)activeFocusAnimation.current=requestAnimationFrame(animate);
+        else activeFocusAnimation.current=null;
+      };
+      activeFocusAnimation.current=requestAnimationFrame(animate);
+    };
+    resetCamera.current=()=>animateTo(MIN_TABLE_ZOOM,0,0);
     focusMyMat.current=()=>{
       const current=session.current;
       if(!current||!host.clientWidth||!host.clientHeight)return;
@@ -566,28 +585,63 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const projected=board.toGlobal(origin);
       const localX=(projected.x-scene.x)/scene.scale.x;
       const localY=(projected.y-scene.y)/scene.scale.y;
-      // Fit 96% of the screen width, not merely a fixed zoom multiplier.
-      // The tall mat can extend vertically: panning remains constrained
-      // to the area present in the original view.
-      const targetZoom=clampTableZoom(.96*w/(TCG_MAT_WIDTH*fit));
-      const targetScale=fit*targetZoom;
-      const unboundedPanX=(BOARD_CENTER-localX)*targetScale;
-      const unboundedPanY=(BOARD_CENTER-localY)*targetScale;
-      const limit=clampTablePan(unboundedPanX,unboundedPanY,targetZoom,w,h);
-      const original={...camera.current};
-      interruptFocus();
-      const started=performance.now(),duration=360;
-      const animate=(now:number)=>{
-        const t=Math.min(1,(now-started)/duration);
-        const eased=1-Math.pow(1-t,3);
-        camera.current.zoom=original.zoom+(targetZoom-original.zoom)*eased;
-        camera.current.panX=original.panX+(limit.panX-original.panX)*eased;
-        camera.current.panY=original.panY+(limit.panY-original.panY)*eased;
-        updateView.current();
-        if(t<1)activeFocusAnimation.current=requestAnimationFrame(animate);
-        else activeFocusAnimation.current=null;
-      };
-      activeFocusAnimation.current=requestAnimationFrame(animate);
+      // Fit to the screen, including the new eye above the mat.
+      // On sufficiently tall displays, the mat fills 96% of screen width.
+      const widthFit=.96*w/TCG_MAT_WIDTH;
+      const heightFit=.91*h/(TCG_MAT_HEIGHT+148);
+      const zoom=clampTableZoom(Math.min(widthFit,heightFit)/fit);
+      const scale=fit*zoom;
+      const panX=(BOARD_CENTER-localX)*scale,panY=(BOARD_CENTER-localY)*scale;
+      animateTo(zoom,panX,panY);
+    };
+    focusOpponent.current=()=>{
+      const w=host.clientWidth,h=host.clientHeight;
+      if(w<=0||h<=0)return;
+      const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
+      const separation=TCG_MAT_HEIGHT+116;
+      const neededHeight=TCG_MAT_HEIGHT+separation+175;
+      // Camera shows the re-framed local mat below and selected opponent
+      // above, with the eye still reachable between them.
+      const fitScale=Math.min(.94*w/(TCG_MAT_WIDTH+52),.91*h/neededHeight);
+      animateTo(fitScale/fit,0,0);
+    };
+    eyeTapHandler.current=()=>{
+      const mode=viewRef.current.kind;
+      if(mode==='overview'){
+        selectView({kind:'self',opponent:null});
+        requestAnimationFrame(()=>focusMyMat.current());
+      }else{
+        selectView({kind:'overview',opponent:null});
+        resetCamera.current();
+      }
+    };
+    eyeHoldHandler.current=()=>{
+      if(viewRef.current.kind==='versus'){
+        selectView({kind:'self',opponent:null});
+        requestAnimationFrame(()=>focusMyMat.current());
+      }else{
+        selectView({kind:'targeting',opponent:null});
+        resetCamera.current(); // reveal every available opponent to select
+      }
+    };
+    const selectOpponent=(event:PointerEvent)=>{
+      if(viewRef.current.kind!=='targeting'||event.button!==0)return;
+      const current=session.current;
+      if(!current)return;
+      const rect=current.app.canvas.getBoundingClientRect();
+      if(rect.width<=0||rect.height<=0)return;
+      const point=new Point(
+        (event.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (event.clientY-rect.top)*current.app.renderer.height/rect.height);
+      const local=current.board.toLocal(point,current.app.stage);
+      const target=opponentAtTablePoint(local.x,local.y,seatRef.current);
+      if(target===null)return;
+      // Capture before Pixi gets pointerdown: cards and other objects
+      // cannot steal a click intended to select the opponent's mat.
+      event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+      cancelActiveDrag.current();panPointer.current=null;
+      selectView({kind:'versus',opponent:target});
+      requestAnimationFrame(()=>focusOpponent.current());
     };
     const zoomAt=(x:number,y:number,ratio:number)=>{
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
@@ -696,7 +750,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       pointers.current.clear();
       host.classList.remove('is-panning');
     };
-    const reset=()=>{interruptFocus();camera.current={zoom:MIN_TABLE_ZOOM,panX:0,panY:0};updateView.current();};
+    const reset=()=>{selectView({kind:'overview',opponent:null});resetCamera.current();};
     const key=(event:KeyboardEvent)=>{
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
@@ -705,6 +759,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(event.key==='-'){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1/1.25);}
     };
     host.addEventListener('wheel',wheel,{passive:false});
+    host.addEventListener('pointerdown',selectOpponent,true);
     host.addEventListener('pointerdown',down);
     host.addEventListener('contextmenu',preventMenu);
     window.addEventListener('pointermove',move);
@@ -714,8 +769,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
-      interruptFocus();focusMyMat.current=()=>{};
+      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};
       host.removeEventListener('wheel',wheel);
+      host.removeEventListener('pointerdown',selectOpponent,true);
       host.removeEventListener('pointerdown',down);
       host.removeEventListener('contextmenu',preventMenu);
       window.removeEventListener('pointermove',move);
