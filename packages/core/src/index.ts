@@ -305,6 +305,31 @@ export function opposingMatLayout(viewerSeat:number,opponentSeat:number):Opposin
       rotation:(viewerSeat+6-opponentSeat)*Math.PI/6}
   };
 }
+export type OpponentRelation='enemy'|'ally'|null;
+/** Only one role can be active for an opponent; activating it again clears it. */
+export function toggleOpponentRelation(
+  current:OpponentRelation,choice:'enemy'|'ally'
+):OpponentRelation {
+  return current===choice?null:choice;
+}
+/** Allied mates stay side-by-side on the same (bottom) side of the divider,
+ * share the player's upright orientation, and do not overlap. Coordinates
+ * remain canonical: this is solely a re-framing of seat layers. */
+export const ALLY_MAT_GAP=18;
+export function alliedMatLayout(viewerSeat:number,allySeat:number):OpposingMatLayout {
+  const radial=-Math.PI/2+viewerSeat*Math.PI/6;
+  const downX=Math.cos(radial),downY=Math.sin(radial);
+  const playerAngle=tcgMatOrigin(viewerSeat).angle;
+  const rightX=Math.cos(playerAngle),rightY=Math.sin(playerAngle);
+  const spacing=(TCG_MAT_WIDTH+ALLY_MAT_GAP)/2;
+  const midX=BOARD_CENTER+downX*TCG_MAT_HEIGHT/2;
+  const midY=BOARD_CENTER+downY*TCG_MAT_HEIGHT/2;
+  return {
+    player:{x:midX-rightX*spacing,y:midY-rightY*spacing,rotation:0},
+    opponent:{x:midX+rightX*spacing,y:midY+rightY*spacing,
+      rotation:(viewerSeat-allySeat)*Math.PI/6}
+  };
+}
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   for(let seat=0;seat<SEATS;seat++){
