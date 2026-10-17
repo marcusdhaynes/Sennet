@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleAllySeats,nextCastleAllySeat,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1052,6 +1052,103 @@ test('Eye ignores Sword/Shield for facing, while Castle alone puts allies beside
           assert.equal(castle.mats.has(opponent),false,
             'Unclassified opponents must not appear in Castle');
         }
+      }
+    }
+  }
+});
+
+
+test('Castle ally Single cycles only Shield-marked seats, wrapping in seating order',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const a=(viewer+1)%12,b=(viewer+4)%12,d=(viewer+9)%12;
+    const relations={[a]:'ally',[b]:'enemy',[d]:'ally'};
+    const expected=[a,d].sort((x,y)=>x-y);
+    assert.deepEqual(castleAllySeats(viewer,relations),expected);
+    assert.equal(nextCastleAllySeat(viewer,null,'right',relations),expected[0]);
+    assert.equal(nextCastleAllySeat(viewer,expected[0],'right',relations),expected[1]);
+    assert.equal(nextCastleAllySeat(viewer,expected[1],'right',relations),expected[0]);
+    assert.equal(nextCastleAllySeat(viewer,expected[0],'left',relations),expected[1]);
+    assert.equal(nextCastleAllySeat(viewer,b,'right',relations),expected[0]);
+    assert.equal(nextCastleAllySeat(viewer,null,'right',{}),null);
+  }
+});
+
+test('Castle Single and All preserve the exact full-size, left-aligned player mat',()=>{
+  const viewports=[{width:320,height:620},{width:400,height:760},
+    {width:1080,height:720},{width:1920,height:1080},{width:2560,height:720}];
+  const pad=BATTLEFIELD_PLAYMAT_PADDING;
+  for(let viewer=0;viewer<12;viewer++)for(const viewport of viewports){
+    const others=Array.from({length:12},(_,seat)=>seat).filter(s=>s!==viewer);
+    const rotate=viewerTableRotation(viewer);
+    const project=pos=>{
+      const x=pos.x-BOARD_CENTER,y=pos.y-BOARD_CENTER;
+      return {x:x*Math.cos(rotate)-y*Math.sin(rotate),
+        y:x*Math.sin(rotate)+y*Math.cos(rotate)};
+    };
+    const full=Object.fromEntries(others.map(s=>[s,'ally']));
+    const mixed=Object.fromEntries(others.map((s,i)=>
+      [s,i%3===0?'enemy':i%3===1?'ally':null]));
+    const scenarios=[{},full,mixed,...others.map((_,n)=>
+      Object.fromEntries(others.slice(0,n+1).map(s=>[s,'ally'])))];
+    let anchor=null;
+    for(const relations of scenarios){
+      const first=castleAllySeats(viewer,relations)[0]??null;
+      const all=castleGridLayout(viewer,relations,'all',first,viewport);
+      const single=castleGridLayout(viewer,relations,'single',first,viewport);
+      for(const layout of [all,single]){
+        assert.equal(layout.mats.get(viewer).scale,1);
+        const location=project(layout.mats.get(viewer));
+        const expectedX=-viewport.width/(2*layout.cameraScale)+pad+TCG_MAT_WIDTH/2;
+        const expectedY=viewport.height/(4*layout.cameraScale);
+        assert.ok(Math.abs(location.x-expectedX)<1e-8,'Own mat is always left aligned');
+        assert.ok(Math.abs(location.y-expectedY)<1e-8,'Own mat keeps its vertical anchor');
+        const placement={...location,cameraScale:layout.cameraScale};
+        if(anchor)for(const key of ['x','y','cameraScale'])
+          assert.ok(Math.abs(placement[key]-anchor[key])<1e-8,
+            'Ally count and mode cannot shrink or shift the player's mat');
+        anchor=placement;
+        assert.deepEqual(layout.enemySeats,castleGridLayout(viewer,relations,
+          layout===all?'single':'all',first,viewport).enemySeats);
+        const allies=layout.allySeats;
+        assert.equal([...layout.mats].filter(([seat])=>allies.includes(seat)).length,
+          layout===all?allies.length:Math.min(1,allies.length));
+        const own=layout.mats.get(viewer);
+        for(const [seat,mat] of layout.mats){
+          assert.ok(mat.scale>0&&mat.scale<=1);
+          const at=project(mat),halfW=TCG_MAT_WIDTH*mat.scale/2;
+          const halfH=TCG_MAT_HEIGHT*mat.scale/2;
+          const visibleW=viewport.width/layout.cameraScale;
+          const visibleH=viewport.height/layout.cameraScale;
+          assert.ok(at.x-halfW>=-visibleW/2+pad-1e-7);
+          assert.ok(at.x+halfW<=visibleW/2-pad+1e-7);
+          assert.ok(at.y-halfH>=-visibleH/2+pad-1e-7);
+          assert.ok(at.y+halfH<=visibleH/2-pad+1e-7);
+          if(seat===viewer)continue;
+          if(relations[seat]==='enemy'){
+            assert.ok(at.y+halfH<=-pad+1e-7,'Enemies stay across divider');
+          }else{
+            const playerAt=project(own);
+            assert.ok(at.x-halfW>=playerAt.x+TCG_MAT_WIDTH/2+2*pad-1e-7,
+              'Allies retain the fixed spacing outside the player's mat');
+            assert.ok(at.y-halfH>=pad-1e-7,'Allies stay below divider');
+          }
+        }
+        const allyRects=[...layout.mats].filter(([seat])=>allies.includes(seat))
+          .map(([,mat])=>{
+            const at=project(mat);
+            return {x:at.x,y:at.y,w:TCG_MAT_WIDTH*mat.scale,h:TCG_MAT_HEIGHT*mat.scale};
+          });
+        for(let i=0;i<allyRects.length;i++)for(let j=i+1;j<allyRects.length;j++){
+          const a=allyRects[i],b=allyRects[j];
+          const dx=Math.abs(a.x-b.x)-(a.w+b.w)/2;
+          const dy=Math.abs(a.y-b.y)-(a.h+b.h)/2;
+          assert.ok(dx>=2*pad-1e-7||dy>=2*pad-1e-7,
+            'Neighboring allies retain two-sided padding and never overlap');
+        }
+      }
+      if(first!==null){
+        assert.equal(single.selectedAlly,first);
+        assert.equal(all.selectedAlly,first);
       }
     }
   }
