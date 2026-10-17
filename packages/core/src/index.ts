@@ -191,6 +191,9 @@ export interface TcgMatCell {
   x:number;y:number;width:number;height:number;
   angle:number; // Mat local x/y axes, oriented toward the owning seat
 }
+/** Slot 0..6 is unchanged; half-integer slots mark the six positions
+ * BETWEEN existing slots in every unmerged PLAY and HAND pocket.
+ */
 export interface TcgSnapLocation extends TcgMatCell {slot:number}
 export function tcgMatOrigin(seat:number):{x:number;y:number;angle:number} {
   const index=((seat%SEATS)+SEATS)%SEATS;
@@ -592,6 +595,40 @@ export function castleGridLayout(
   },false);
   return {mats,allySeats:allies,enemySeats,selectedAlly:active,cameraScale};
 }
+/** Focus a marked Castle ally or enemy in isolation without changing the
+ * all/single preference. Reuses the same locked Castle camera and the same
+ * full-size left-aligned viewer mat, regardless of the chosen opponent.
+ * Unmarked seats cannot be focused.
+ */
+export function castleFocusedLayout(
+  viewerSeat:number,targetSeat:number,
+  relations:Readonly<Record<number,OpponentRelation>>,
+  viewport:{width:number;height:number},
+  padding=BATTLEFIELD_PLAYMAT_PADDING
+):ReturnType<typeof castleGridLayout>|null{
+  if(!Number.isInteger(targetSeat)||targetSeat<0||targetSeat>=SEATS||
+     targetSeat===viewerSeat)return null;
+  const relation=relations[targetSeat];
+  if(relation!=='ally'&&relation!=='enemy')return null;
+  return castleGridLayout(viewerSeat,{[targetSeat]:relation},'single',
+    relation==='ally'?targetSeat:null,viewport,padding);
+}
+/** Cycle only players with the SAME relationship as the focused seat.
+ * This keeps a focused enemy on the enemy side and a focused ally beside
+ * the viewer instead of silently changing teams while cycling.
+ */
+export function nextCastleFocusedSeat(
+  viewerSeat:number,current:number,direction:'left'|'right',
+  relations:Readonly<Record<number,OpponentRelation>>
+):number|null{
+  const role=relations[current];
+  if(role!=='ally'&&role!=='enemy')return null;
+  const seats=Array.from({length:SEATS},(_,seat)=>seat)
+    .filter(seat=>seat!==viewerSeat&&relations[seat]===role);
+  const index=seats.indexOf(current);
+  if(index<0)return null;
+  return seats[(index+(direction==='left'?-1:1)+seats.length)%seats.length];
+}
 /** Eye ALWAYS shows exactly the viewer and the selected opponent on
  * opposite sides of the divider, regardless of Sword/Shield status.
  * Only Castle distributes marked allies beside the player.
@@ -631,7 +668,8 @@ export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number
 }
 
 /** Snap to the nearest valid play ZONE, then its nearest legal card SLOT.
- * Unmerged middle zones expose 7 independent card anchors per row.
+ * Unmerged PLAY/HAND center zones expose the original seven anchors AND
+ * six interstitial half-slots (13 independently selectable anchors per row).
  * Outside a pocket, ties in the gaps are decided by the actual nearest
  * card spot—not the midpoint of a wide middle zone.
  *
@@ -661,17 +699,24 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
       if(zoneDistance>TCG_MAT.snapOutside)continue;
       if(zoneDistance>bestZoneDistance+eps)continue;
 
-      const positions=cell.column===1?TCG_MAT.centerCards:1;
+      const isCenter=cell.column===1;
+      const positions=isCenter?TCG_MAT.centerCards:1;
       const slotWidth=cell.width/positions;
-      // Compare every legal slot, rather than rounding through floating
-      // boundaries. This works for all orientations and exact gutter ties.
+      // Keep original positions 0..6 exactly where they are. Odd half-step
+      // anchors 0.5..5.5 fill the gaps without changing any card geometry.
+      // Prefer original integer slots on an exact equidistant tie.
       let slot=0,nearestX=anchor.x;
       let slotDistance=Infinity;
-      for(let i=0;i<positions;i++){
-        const candidateX=anchor.x+(i-(positions-1)/2)*slotWidth;
+      const anchors=isCenter?2*positions-1:1;
+      for(let i=0;i<anchors;i++){
+        const candidateSlot=isCenter?i/2:0;
+        const candidateX=anchor.x+
+          (candidateSlot-(positions-1)/2)*slotWidth;
         const distance=Math.abs(local.x-candidateX);
-        if(distance<slotDistance-eps){
-          slot=i;nearestX=candidateX;slotDistance=distance;
+        if(distance<slotDistance-eps||
+          (Math.abs(distance-slotDistance)<=eps&&
+           Number.isInteger(candidateSlot)&&!Number.isInteger(slot))){
+          slot=candidateSlot;nearestX=candidateX;slotDistance=distance;
         }
       }
       const spotDistance=Math.hypot(slotDistance,local.y-anchor.y);
