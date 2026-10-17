@@ -431,6 +431,21 @@ export function groupedMatchupLayout(
     columns:Math.max(enemySeats.length,bottomSeats.length)
   };
 }
+/** A strict Eye matchup: exactly the viewer and ONE selected opponent.
+ * The selected seat uses its personal Ally/Enemy orientation, but the
+ * relationship status of every OTHER seat is irrelevant here.
+ * Castle is the only mode that uses the full grouped-matchup layout.
+ */
+export function oneOnOneMatchupLayout(
+  viewerSeat:number,opponentSeat:number,
+  relations:Readonly<Record<number,OpponentRelation>>
+):ReturnType<typeof groupedMatchupLayout>{
+  const relation=relations[opponentSeat]??null;
+  return groupedMatchupLayout(
+    viewerSeat,opponentSeat,
+    relation===null?{}:{[opponentSeat]:relation}
+  );
+}
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   for(let seat=0;seat<SEATS;seat++){
