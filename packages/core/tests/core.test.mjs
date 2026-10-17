@@ -1105,7 +1105,7 @@ test('Castle Single and All preserve the exact full-size, left-aligned player ma
         const placement={...location,cameraScale:layout.cameraScale};
         if(anchor)for(const key of ['x','y','cameraScale'])
           assert.ok(Math.abs(placement[key]-anchor[key])<1e-8,
-            'Ally count and mode cannot shrink or shift the player's mat');
+            'Ally count and mode cannot shrink or shift the viewer mat');
         anchor=placement;
         assert.deepEqual(layout.enemySeats,castleGridLayout(viewer,relations,
           layout===all?'single':'all',first,viewport).enemySeats);
@@ -1129,7 +1129,7 @@ test('Castle Single and All preserve the exact full-size, left-aligned player ma
           }else{
             const playerAt=project(own);
             assert.ok(at.x-halfW>=playerAt.x+TCG_MAT_WIDTH/2+2*pad-1e-7,
-              'Allies retain the fixed spacing outside the player's mat');
+              'Allies retain the fixed spacing outside the viewer mat');
             assert.ok(at.y-halfH>=pad-1e-7,'Allies stay below divider');
           }
         }
