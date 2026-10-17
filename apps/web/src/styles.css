@@ -236,14 +236,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 /* Compact opposing-view player plates. Their entire body lives off-screen by
    default, leaving just a small arrow grip at the appropriate edge. */
 .opponent-seat-tab{
-  --grip-height:18px;
+  --grip-height:16px;
   position:absolute;
   z-index:24;
   left:50%;
-  width:min(188px,calc(100vw - 34px));
+  width:min(148px,calc(100vw - 34px));
   transform:translateX(-50%);
   pointer-events:auto;
-  transition:transform 280ms cubic-bezier(.18,.84,.22,1);
+  transition:transform 280ms cubic-bezier(.18,.84,.22,1),opacity 180ms ease;
   will-change:transform;
 }
 .opponent-seat-tab.top{
@@ -264,7 +264,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   padding:0;
   margin:0;
   border:1px solid #bb9e6b;
-  border-radius:0 0 10px 10px;
+  border-radius:0 0 8px 8px;
   overflow:hidden;
   background:linear-gradient(165deg,#25493e,#172e29);
   color:#f1e4c9;
@@ -272,7 +272,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   touch-action:manipulation;
 }
 .opponent-seat-tab.bottom .opponent-seat-tab-button{
-  border-radius:10px 10px 0 0;
+  border-radius:8px 8px 0 0;
   flex-direction:column-reverse;
   box-shadow:0 -6px 19px #0008;
 }
@@ -283,11 +283,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   justify-content:center;
   gap:1px;
   width:100%;
-  height:58px;
-  padding:5px 10px 6px;
+  height:44px;
+  padding:3px 7px 4px;
 }
 .opponent-seat-tab-title{
-  font:700 16px/1.1 'Cormorant Garamond',Georgia,serif;
+  font:700 14px/1.1 'Cormorant Garamond',Georgia,serif;
   letter-spacing:.01em;
   white-space:nowrap;
   max-width:100%;
@@ -300,17 +300,19 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   color:#d6b983;
 }
 .opponent-seat-tab-pin{
-  font:500 7px/1.2 'DM Sans',system-ui,sans-serif;
+  font:500 6px/1.2 'DM Sans',system-ui,sans-serif;
   letter-spacing:.06em;
   color:#aebcb1;
 }
 .opponent-seat-tab-grip{
   height:var(--grip-height);
+  min-height:var(--grip-height);
+  padding:0;
   display:flex;align-items:center;justify-content:center;
   width:100%;
   background:#b79968;
   color:#172b26;
-  font-size:17px;
+  font-size:14px;
   font-weight:700;
   line-height:1;
   border-top:1px solid #dfc995;
