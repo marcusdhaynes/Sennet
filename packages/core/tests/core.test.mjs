@@ -893,3 +893,40 @@ test('a strict horizontal divider isolates enemy buttons above from ally buttons
   assert.equal(enemySword.x,-enemyShield.x);
   assert.equal(enemySword.x,OPPONENT_RELATION_BUTTON_OFFSET);
 });
+
+test('Castle lineup shows marked allies and enemies only, never neutral/unmarked opponents',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const candidates=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
+    const relations={
+      [candidates[1]]:'enemy',
+      [candidates[3]]:'ally',
+      [candidates[5]]:'enemy',
+      [candidates[7]]:null
+    };
+    const castle=groupedMatchupLayout(viewer,null,relations);
+    assert.deepEqual([...castle.mats.keys()].sort((a,b)=>a-b),
+      [viewer,candidates[1],candidates[3],candidates[5]].sort((a,b)=>a-b));
+    assert.deepEqual(castle.enemySeats,[candidates[1],candidates[5]]);
+    assert.deepEqual(castle.allySeats,[candidates[3]]);
+    assert.equal(castle.columns,2);
+    assert.equal(castle.mats.has(candidates[0]),false);
+    assert.equal(castle.mats.has(candidates[7]),false);
+    assert.equal(castle.mats.has(candidates[9]),false);
+    const eye=groupedMatchupLayout(viewer,candidates[9],relations);
+    assert.ok(eye.mats.has(candidates[9]),
+      'Existing Eye targeting still displays the selected unclassified opponent');
+    assert.ok(eye.mats.has(candidates[1]),'Sword-marked enemies still visible in Eye mode');
+    assert.ok(eye.mats.has(candidates[3]),'Shield-marked allies still visible in Eye mode');
+  }
+});
+test('Castle view with no classifications shows only own playmat',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const castle=groupedMatchupLayout(viewer,null,{});
+    assert.deepEqual([...castle.mats.keys()],[viewer]);
+    assert.deepEqual(castle.enemySeats,[]);
+    assert.deepEqual(castle.allySeats,[]);
+    assert.equal(castle.columns,1);
+    const selected=groupedMatchupLayout(viewer,(viewer+1)%12,{});
+    assert.equal(selected.mats.size,2,'Eye mode retains original selected-opponent behavior');
+  }
+});
