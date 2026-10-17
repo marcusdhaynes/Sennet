@@ -1,16 +1,15 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import PersonalDrawer from './components/PersonalDrawer';
-import TcgApp from './components/TcgApp';
 import {RoomConnection} from './lib/network';
 import {choosePseudoBotAction} from './lib/bot';
 import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,rememberPack} from './lib/storage';
 
 type Book = 'sennet'|'games'|'settings';
-type GamePage = 'all'|'recent'|'library'|'tools'|'tcg';
+type GamePage = 'all'|'recent'|'library'|'tools';
 type SettingsPage = 'general'|'multiplayer'|'scripting';
 type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[]};
 const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
@@ -204,7 +203,7 @@ export default function App(){
     const next=createGame('tcg');
     let order=0;
     const objects:TableObject[]=cards.flatMap(card=>Array.from({length:card.amount},()=>({
-      id:'deck-'+createId(),kind:'card' as const,name:card.name,x:tcgMatCells(seat).find(c=>c.row===3&&c.column===0)!.x,y:tcgMatCells(seat).find(c=>c.row===3&&c.column===0)!.y,rotation:0,faceUp:false,color:'#a7a0c7',zone:'DECK' as const,matSeat:seat,order:order++
+      id:'deck-'+createId(),kind:'card' as const,name:card.name,x:tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!.x,y:tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!.y,rotation:0,faceUp:false,color:'#a7a0c7',zone:'DECK' as const,matSeat:seat,order:order++
     })));
     resetWith({...next,objects,message:deckName+' · '+objects.length+' cards'});
   }
@@ -222,14 +221,25 @@ export default function App(){
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} onViewChange={setSeatView}
+        onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
+        onCardAction={(id,action)=>{
+          const card=game.objects.find(o=>o.id===id);
+          if(!card)return;
+          if(action==='flip')takeAction('FLIP',{id});
+          else takeAction('ROTATE',{id,degrees:card.rotation%180>=90?-90:90});
+        }}
         stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
-          if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y});
+          if(old&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat)){
+            for(const card of cardStackMembers(game,id))takeAction('DELETE',{id:card.id});
+          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y});
         }}
         onMove={(id,x,y)=>{
-          const old=game.objects.find(o=>o.id===id);if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
+          const old=game.objects.find(o=>o.id===id);
+          if(old&&['card','token'].includes(old.kind)&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat))takeAction('DELETE',{id});
+          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
         }} readonly={replayAt!==null}/>
     </div>
     <PersonalDrawer activeBook={book} openBook={setBook} seatView={seatView}/>
@@ -245,34 +255,16 @@ export default function App(){
               <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
               <article><span>02</span><h3>Move &amp; zoom</h3><p>Drag pieces across the felt. Mouse-wheel scroll or two-finger touchpad scrolling zooms around the pointer. Pinch on a touchscreen to zoom. Click and drag empty table space to move the camera; grab a card to move only that card. Double-click the table (or press 0) to reset the view.</p></article>
               <article><span>03</span><h3>Your seat & drawer</h3><p>Your seat stays at the bottom. Click your seat to slide out a personal drawer. Drag books into it to shrink and store them, or drag them back onto the table. Choose your seat in Settings. Scroll or pinch to zoom the tabletop without losing detail.</p></article>
-              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven cards across the center. Tap the eye at the TOP of your mat to focus it. Hold it for 0.25 seconds, then select any opponent to bring both mats together in a full-height opposing view: theirs above, yours below, touching at the eye. Hover over the tiny, semi-transparent caret tab for 0.25 seconds to reveal a smaller player name/seat label at full opacity. The tab uses the merge-button transparency setting. It stays open as long as you hover, then retracts 1 second after leaving unless clicked to pin. Use the circular left/right arrows centered on the opponent mat’s left and right edges to cycle counter-clockwise or clockwise through the numbered seats. While facing an opponent the camera is fixed—dragging or zooming the view is disabled, but cards can still be moved. Tap the eye again for the full table, or hold it to return to your mat alone. Hover over + or − to join or separate center sections. All changes can be replayed.</p></article>
+              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven cards across the center. Tap the eye at the TOP of your mat to focus it. Hold it for 0.25 seconds, then select any opponent to bring both mats together in a full-height opposing view: theirs above, yours below, touching at the eye. Hover over the tiny, semi-transparent caret tab for 0.25 seconds to reveal a smaller player name/seat label at full opacity. The tab uses the merge-button transparency setting. It stays open as long as you hover, then retracts 1 second after leaving unless clicked to pin. Use the circular left/right arrows centered on the opponent mat’s left and right edges to cycle counter-clockwise or clockwise through the numbered seats. While facing an opponent the camera is fixed—dragging or zooming the view is disabled, but cards can still be moved. Tap the eye again for the full table, or hold it to return to your mat alone. Hover over + or − to join or separate center sections. All changes can be replayed. The mat retains the original LOCATIONS, RESERVE, WAIT, RESOURCE, LEADERS, DECK, DISCARD and REMOVE pockets, three PLAY rows and HAND. Use the DECK arrow or D to draw; select a card and press T to tap/untap or F to flip. Drop a card or token into your REMOVE pocket to remove it.</p></article>
               <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
               <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
             </div>
             <button className="reader-primary" onClick={()=>{setBook('games');setGamesPage('all');}}>Open Games <ChevronRight size={17}/></button>
           </div>}
           {book==='games'&&<>
-            <Tabs items={[{id:'all',label:'All Games'},{id:'recent',label:'Recent'},{id:'library',label:'Library'},{id:'tools',label:'Table Tools'},{id:'tcg',label:'TCG App'}]} active={gamesPage} change={v=>setGamesPage(v as GamePage)}/>
-            {gamesPage==='tcg'&&<TcgApp
-              onBattle={()=>{if(game.kind==='tcg'){setBook(null);}else startGame('tcg');}}
-              onTools={()=>setGamesPage('tools')}
-              onSettings={()=>{setBook('settings');setSettingsPage('general');}}
-              onCard={card=>{
-                if(replayAt!==null){inform('Exit replay mode before making a move.');return;}
-                if(game.kind!=='tcg'){inform('Open Battleground first to start a TCG table.');return;}
-                const cell=tcgMatCells(seat).find(c=>c.row===2&&c.column===1)!;
-                takeAction('ADD',{object:{id:createId(),kind:'card',name:card.name,faceUrl:card.image,x:cell.x,y:cell.y,faceUp:true,color:'#a7a0c7',matSeat:seat,zone:'TABLE',order:game.objects.length}});
-                inform(card.name+' placed on your mat.');
-              }}
-              onToken={(name,color)=>{
-                if(replayAt!==null){inform('Exit replay mode before making a move.');return;}
-                if(game.kind!=='tcg'){inform('Open Battleground first to start a TCG table.');return;}
-                const cell=tcgMatCells(seat).find(c=>c.row===2&&c.column===1)!;
-                takeAction('ADD',{object:{id:createId(),kind:'token',name,color,x:cell.x,y:cell.y,matSeat:seat}});
-                inform(name+' placed on your mat.');
-              }}/>}
+            <Tabs items={[{id:'all',label:'All Games'},{id:'recent',label:'Recent'},{id:'library',label:'Library'},{id:'tools',label:'Table Tools'}]} active={gamesPage} change={v=>setGamesPage(v as GamePage)}/>
             {gamesPage==='all'&&<><div className="reader-heading"><div><h2>Choose a game</h2><p>Make the table yours. Your selection loads directly onto the felt.</p></div><label className="book-search"><Search size={15}/><input placeholder="Search games…" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
-              <div className="game-choices">{KINDS.filter(k=>(k.label+k.description).toLowerCase().includes(search.toLowerCase())).map(k=><button className="game-choice" key={k.id} onClick={()=>{if(k.id==='tcg'){setGamesPage('tcg');}else startGame(k.id);}}>
+              <div className="game-choices">{KINDS.filter(k=>(k.label+k.description).toLowerCase().includes(search.toLowerCase())).map(k=><button className="game-choice" key={k.id} onClick={()=>startGame(k.id)}>
                 <span className="game-symbol">{k.symbol}</span><span><strong>{k.label}</strong><small>{k.description}</small></span><ChevronRight size={18}/></button>)}</div>
             </>}
             {gamesPage==='recent'&&<><div className="reader-heading"><div><h2>Recent tables</h2><p>Continue any locally saved tabletop session.</p></div></div>
@@ -293,7 +285,12 @@ export default function App(){
             {gamesPage==='tools'&&<><div className="reader-heading"><div><h2>Table tools</h2><p>All tabletop actions live inside your books.</p></div></div>
               <div className="tool-section"><h3>Place an object</h3><div className="tool-buttons"><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'card',name:'New card',x:BOARD_CENTER,y:BOARD_CENTER,faceUp:true,color:'#b49acb'}})}><Plus size={17}/> Card</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'token',name:'Token',x:BOARD_CENTER,y:BOARD_CENTER,color:'#b1bb8c'}})}><Plus size={17}/> Token</button><button onClick={()=>takeAction('ADD',{object:{id:createId(),kind:'die',name:'D6',x:BOARD_CENTER,y:BOARD_CENTER,color:'#dbd8c4',sides:6,value:1}})}><Dices size={17}/> Die</button></div></div>
               <div className="tool-section"><h3>Game commands</h3><div className="tool-buttons"><button onClick={()=>takeAction('DRAW')}><Layers size={17}/> Draw</button><button onClick={()=>takeAction('SHUFFLE',{seed:Date.now()%10000000})}><Shuffle size={17}/> Shuffle</button><button onClick={botMove}><Zap size={17}/> Bot move</button><button onClick={()=>takeAction('NEXT_TURN')}><SkipForward size={17}/> End turn</button><button onClick={undo}><ArrowLeft size={17}/> Undo</button></div></div>
-              <div className="tool-section"><h3>{activeObject?'Selected: '+activeObject.name:'Selected object'}</h3>{activeObject?<div className="tool-buttons"><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:-30})}><RotateCw size={16}/> −30°</button><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:30})}><RotateCw size={16}/> +30°</button><button onClick={()=>takeAction('FLIP',{id:selected})}><FlipHorizontal size={16}/> Flip</button>{game.kind==='tcg'&&activeObject.kind==='card'&&<button onClick={()=>takeAction('ROTATE',{id:selected,degrees:activeObject.rotation%180>=90?-90:90})}>Tap / untap</button>}<button onClick={()=>takeAction('CLONE',{id:selected,newId:createId()})}><Copy size={16}/> Clone</button>{activeObject.kind==='die'&&<button onClick={()=>takeAction('ROLL',{id:selected,seed:Date.now()})}><Dices size={16}/> Roll</button>}<button onClick={()=>{takeAction('DELETE',{id:selected});setSelected(null);}}><Trash2 size={16}/> Remove</button></div>:<p>Click a piece on the table to select it, then reopen this book.</p>}</div>
+              <div className="tool-section"><h3>{activeObject?'Selected: '+activeObject.name:'Selected object'}</h3>{activeObject?<div className="tool-buttons"><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:-30})}><RotateCw size={16}/> −30°</button><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:30})}><RotateCw size={16}/> +30°</button><button onClick={()=>takeAction('FLIP',{id:selected})}><FlipHorizontal size={16}/> Flip</button><button onClick={()=>takeAction('CLONE',{id:selected,newId:createId()})}><Copy size={16}/> Clone</button>{activeObject.kind==='die'&&<button onClick={()=>takeAction('ROLL',{id:selected,seed:Date.now()})}><Dices size={16}/> Roll</button>}<button onClick={()=>{takeAction('DELETE',{id:selected});setSelected(null);}}><Trash2 size={16}/> Remove</button></div>:<p>Click a piece on the table to select it, then reopen this book.</p>}</div>
+              {game.kind==='tcg'&&<details className="reader-details"><summary>TCG playmat controls</summary><div>
+                <p>Use the ↓ button on your DECK pocket or press D to draw into your HAND. Select a card, then press T to tap/untap or F to flip it. Drag a card or token into your REMOVE pocket to remove it. Undo and replay include these actions. Your existing click selection and hold-to-pick-up-stack gestures are unchanged.</p>
+                <div className="tool-buttons"><button onClick={()=>takeAction('DRAW',{matSeat:seat})}>Draw from my mat</button>{activeObject?.kind==='card'&&<><button onClick={()=>takeAction('ROTATE',{id:selected,degrees:activeObject.rotation%180>=90?-90:90})}>Tap / untap</button><button onClick={()=>takeAction('FLIP',{id:selected})}>Flip selected card</button></>}</div>
+                {(['Basic','Positive','Negative'] as const).map((kind,k)=><div key={kind}><h4>{kind} tokens</h4><div className="tool-buttons">{(k===0?['#FF3B30','#FF9500','#FFCC00','#4CD964','#007AFF','#5856D6','#FF2D55','#8E8E93']:k===1?['#A57C00','#FF006E','#5856D6','#007AFF','#FF3B30','#4CD964']:['#FF9500','#00FF87','#5856D6','#00F5FF','#FF006E','#8E8E93']).map((color,i)=>{const symbol=k===0?'■':k===1?['★','ϟ','↑','◆','♥','●'][i]:['△','⬡','Ⅱ','○','◇','⌛'][i];return <button key={color} aria-label={kind+' token '+(i+1)} style={{color:k===0?'#111':color,background:k===0?color:k===1?'#fff':'#0a0a0a',borderColor:color}} onClick={()=>{const cell=tcgMatCells(seat).find(c=>c.row===2&&c.column===1)!;takeAction('ADD',{object:{id:createId(),kind:'token',name:kind+' '+symbol,color,x:cell.x,y:cell.y,matSeat:seat}});}}>{symbol}</button>;})}</div></div>)}
+              </div></details>}
               <details className="reader-details"><summary>Build a starter TCG deck</summary><div><label>Deck name<input value={deckName} onChange={e=>setDeckName(e.target.value)}/></label>{cards.map((card,i)=><div key={i} className="card-editor-row"><span>{card.name}</span><button aria-label={'Remove '+card.name} onClick={()=>setCards(a=>a.filter((_,j)=>j!==i))}><X size={13}/></button><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.max(1,c.amount-1)}:c))}><Minus size={13}/></button><strong>{card.amount}</strong><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.min(60,c.amount+1)}:c))}><Plus size={13}/></button></div>)}<div className="field-row"><input value={cardName} onChange={e=>setCardName(e.target.value)} placeholder="Card name"/><button onClick={()=>{if(cardName.trim()){setCards(a=>[...a,{name:cardName.trim(),amount:1}]);setCardName('');}}}>Add</button></div><button className="reader-secondary" onClick={createDeck}>Load deck onto table</button></div></details>
               <details className="reader-details"><summary>Move history and replay</summary><div><p>{history.length} actions recorded in compact command format.</p><div className="history-entries">{history.slice(-10).reverse().map(h=><button key={h.id} onClick={()=>{setReplayAt(h.seq);setBook(null);}}>{h.seq}. {h.type.toLowerCase().replaceAll('_',' ')}</button>)}</div>{replayAt!==null&&<button className="reader-secondary" onClick={()=>setReplayAt(null)}>Exit replay</button>}<button className="reader-secondary" onClick={()=>downloadText('sennet-replay.json',json({schema:'sennet.replay/1',initial,history}))}><Download size={15}/> Export moves</button></div></details>
               <button className="reader-primary" onClick={()=>setBook(null)}>Return to table <ChevronRight size={16}/></button>
