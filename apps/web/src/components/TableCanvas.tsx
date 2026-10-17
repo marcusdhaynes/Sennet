@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -137,7 +137,8 @@ function drawTcgMats(
     const duel=seatLayers!==null;
     // The bottom side (viewer and all allies) never extends over the
     // divider; every enemy pocket stops at it, regardless of selection.
-    const isEnemy=duel&&seat!==viewerSeat&&relations[seat]!=='ally';
+    const isEnemy=duel&&seat!==viewerSeat&&
+      opponentAcrossDivider(castleActive?'castle':'eye',relations[seat]??null);
     const backingTop=duel&&!isEnemy
       ?-TCG_MAT_HEIGHT/2
       :-TCG_MAT_HEIGHT/2-4;
@@ -254,7 +255,7 @@ function drawTcgMats(
     // Left = seat number decrement (counter-clockwise in full-table view).
     // Right = seat number increment (clockwise), always skipping our seat.
     if(seatLayers&&seat===selectedOpponent){
-      const allyHere=relations[seat]==='ally';
+      const allyHere=castleActive&&relations[seat]==='ally';
       for(const direction of ['left','right'] as const){
         const left=direction==='left';
         const button=new Container();
@@ -382,7 +383,8 @@ function drawTcgMats(
           const isSword=choice==='enemy';
           const active=relations[seat]===choice;
           const button=new Container();
-          const enemySide=relations[seat]!=='ally';
+          const enemySide=opponentAcrossDivider(
+            castleActive?'castle':'eye',relations[seat]??null);
           // Anchor to THIS opponent's own Hand-bottom line, not
           // the viewer's screen-bottom or the central battlefield divider.
           // For enemies that physical line appears screen-top after rotation.
@@ -665,8 +667,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
   const [relations,setRelations]=useState<Record<number,OpponentRelation>>(()=>readOpponentRelations(actorId));
   const relationsRef=useRef(relations);relationsRef.current=relations;
-  const selectedRelation=eyeView.kind==='versus'&&eyeView.opponent!==null
-    ?relations[eyeView.opponent]??null:null;
   useEffect(()=>{
     try{localStorage.setItem('sennet.opponent-relations.v1.'+
       encodeURIComponent(actorId),JSON.stringify(relations));}
@@ -1046,7 +1046,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(opponent===current.opponent)return;
       cancelActiveDrag.current();
       selectView({kind:'versus',opponent});
-      // A newly selected seat can have a different ally/enemy layout.
+      // Eye always keeps the new selected seat opposite, even if an Ally.
       requestAnimationFrame(()=>focusOpponent.current());
     };
     toggleRelationHandler.current=(targetSeat,choice)=>{
@@ -1286,13 +1286,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
-      <div className={selectedRelation==='ally'?'ally-identity ally-opponent':''}>
+      <div>
         <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
-          side={selectedRelation==='ally'?'bottom':'top'}
+          side="top"
           idleOpacity={mergeOpacity} seat={eyeView.opponent}
           name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
       </div>
-      <div className={selectedRelation==='ally'?'ally-identity ally-player':''}>
+      <div>
         <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
           idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
       </div>
