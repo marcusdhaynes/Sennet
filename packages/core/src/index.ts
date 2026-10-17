@@ -642,6 +642,27 @@ export function castleIndependentFocusLayout(
   return castleGridLayout(viewerSeat,displayed,'all',
     allyFocus??activeAlly,viewport,padding);
 }
+/** Pure per-mat arrow policy. In Castle Single BOTH roles have
+ * navigation. In mixed focus, a side's arrows stay active independently
+ * of whether the other side is in All, Single, or already focused.
+ */
+export function castleArrowsVisible(
+  viewerSeat:number,seat:number,mode:CastleMode|'focus',
+  baseMode:CastleMode,selectedAlly:number|null,selectedEnemy:number|null,
+  focused:Readonly<CastleSideFocus>,
+  relations:Readonly<Record<number,OpponentRelation>>
+):boolean{
+  if(seat===viewerSeat||seat<0||seat>=SEATS)return false;
+  const role=relations[seat];
+  if(role!=='ally'&&role!=='enemy')return false;
+  if(mode==='all')return false;
+  if(mode==='single')return role==='ally'
+    ?seat===selectedAlly:seat===selectedEnemy;
+  const focusedSeat=role==='ally'?focused.ally:focused.enemy;
+  const selectedSeat=role==='ally'?selectedAlly:selectedEnemy;
+  return focusedSeat===seat||
+    focusedSeat===null&&baseMode==='single'&&selectedSeat===seat;
+}
 /** Focus a marked Castle ally or enemy in isolation without changing the
  * all/single preference. Reuses the same locked Castle camera and the same
  * full-size left-aligned viewer mat, regardless of the chosen opponent.
