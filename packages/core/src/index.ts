@@ -306,6 +306,17 @@ export function opposingMatLayout(viewerSeat:number,opponentSeat:number):Opposin
   };
 }
 export type OpponentRelation='enemy'|'ally'|null;
+/** Relation buttons are equal-size merge-style circles centered as a pair
+ * on the upper border of every other player's first row. */
+export const OPPONENT_RELATION_BUTTON_OFFSET=22;
+export const OPPONENT_RELATION_BUTTON_RADIUS=16;
+export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=19;
+export function opponentRelationButtonPosition(choice:'enemy'|'ally'){
+  return {
+    x:choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET,
+    y:-TCG_MAT_HEIGHT/2
+  };
+}
 /** Only one role can be active for an opponent; activating it again clears it. */
 export function toggleOpponentRelation(
   current:OpponentRelation,choice:'enemy'|'ally'
