@@ -466,6 +466,42 @@ export function groupedMatchupLayout(
  * geometry is independent of which of the twelve seats is occupied.
  */
 export type CastleMode='single'|'all';
+/** Twelve table positions leave at most ten allies when the viewer and
+ * at least one enemy are present. The layout still handles 11 defensively.
+ */
+export const CASTLE_MAX_ALLIES=SEATS-2;
+/** Close spacing for GRID NEIGHBORS only. Do not change the much wider
+ * existing padding around the viewer's full-size playmat.
+ */
+export const CASTLE_GRID_GAP=6;
+
+/** Maximum UNIFORM mat scale over every rectangular row/column arrangement.
+ * Vertical seams allow the scaled Play 03 button to protrude beyond its mat.
+ * Horizontal seams can be very tight because buttons sit near the center.
+ */
+export function bestCastleGridShape(count:number,areaW:number,areaH:number){
+  const n=Math.max(0,Math.trunc(count));
+  if(!n)return {cols:0,rows:0,scale:0,gapX:CASTLE_GRID_GAP,gapY:CASTLE_GRID_GAP};
+  let bestCols=1,bestRows=n,bestScale=0;
+  for(let cols=1;cols<=n;cols++){
+    const rows=Math.ceil(n/cols);
+    const availableW=areaW-(cols-1)*CASTLE_GRID_GAP;
+    const availableH=areaH-(rows-1)*CASTLE_GRID_GAP;
+    if(availableW<=0||availableH<=0)continue;
+    const scale=Math.min(1,
+      availableW/(cols*TCG_MAT_WIDTH),
+      availableH/(rows*TCG_MAT_HEIGHT+(rows-1)*VIEW_BUTTON_HIT_RADIUS));
+    if(scale>bestScale+1e-9||
+      (Math.abs(scale-bestScale)<=1e-9&&rows<bestRows)){
+      bestScale=scale;bestCols=cols;bestRows=rows;
+    }
+  }
+  const s=Math.max(0.000001,bestScale);
+  return {cols:bestCols,rows:bestRows,scale:s,
+    gapX:CASTLE_GRID_GAP,
+    gapY:CASTLE_GRID_GAP+VIEW_BUTTON_HIT_RADIUS*s};
+}
+
 export function castleAllySeats(
   viewerSeat:number,relations:Readonly<Record<number,OpponentRelation>>
 ):number[]{
@@ -518,39 +554,27 @@ export function castleGridLayout(
   const viewerLeft=-visibleW/2+pad;
   const viewerCenter=world(viewerLeft+TCG_MAT_WIDTH/2,visibleH/4);
   mats.set(viewerSeat,{...viewerCenter,rotation:0,scale:1});
-  const gap=2*pad;
+  // Preserve the generous viewer-to-ally clearance, independently of
+  // the very tight spacing WITHIN each automatically optimized grid.
+  const playerGap=2*pad;
   const grid=(
     seats:readonly number[],rect:{left:number;right:number;top:number;bottom:number},
     enemy:boolean
   )=>{
     if(!seats.length)return;
     const areaW=rect.right-rect.left,areaH=rect.bottom-rect.top;
-    // Explore all row/column shapes and maximize an UNIFORM ally scale.
-    // The specified 2*padding spacing is kept even for tiny ally mats.
-    let bestCols=1,bestRows=seats.length,bestScale=0;
-    for(let cols=1;cols<=seats.length;cols++){
-      const rows=Math.ceil(seats.length/cols);
-      const availableW=areaW-(cols-1)*gap;
-      const availableH=areaH-(rows-1)*gap;
-      if(availableW<=0||availableH<=0)continue;
-      const scale=Math.min(1,
-        availableW/(cols*TCG_MAT_WIDTH),
-        availableH/(rows*TCG_MAT_HEIGHT));
-      if(scale>bestScale+1e-9||
-        (Math.abs(scale-bestScale)<=1e-9&&rows<bestRows)){
-        bestScale=scale;bestCols=cols;bestRows=rows;
-      }
-    }
-    // Extreme narrow screens: still keep all mats in view with positive size.
-    const s=Math.max(0.000001,bestScale);
+    // Compute the mathematically largest uniform scale for this count,
+    // for every shape from a tall column to a single horizontal row.
+    const shape=bestCastleGridShape(seats.length,areaW,areaH);
+    const {cols,scale:s,gapX,gapY}=shape;
     const cellW=TCG_MAT_WIDTH*s,cellH=TCG_MAT_HEIGHT*s;
-    const totalH=bestRows*cellH+(bestRows-1)*gap;
+    const totalH=shape.rows*cellH+(shape.rows-1)*gapY;
     for(let index=0;index<seats.length;index++){
-      const row=Math.floor(index/bestCols),col=index%bestCols;
-      const entries=Math.min(bestCols,seats.length-row*bestCols);
-      const rowWidth=entries*cellW+(entries-1)*gap;
-      const x=(rect.left+rect.right-rowWidth)/2+col*(cellW+gap)+cellW/2;
-      const y=(rect.top+rect.bottom-totalH)/2+row*(cellH+gap)+cellH/2;
+      const row=Math.floor(index/cols),col=index%cols;
+      const entries=Math.min(cols,seats.length-row*cols);
+      const rowWidth=entries*cellW+(entries-1)*gapX;
+      const x=(rect.left+rect.right-rowWidth)/2+col*(cellW+gapX)+cellW/2;
+      const y=(rect.top+rect.bottom-totalH)/2+row*(cellH+gapY)+cellH/2;
       const seat=seats[index];
       mats.set(seat,{...world(x,y),
         rotation:(viewerSeat+(enemy?6:0)-seat)*Math.PI/6,scale:s});
@@ -562,7 +586,7 @@ export function castleGridLayout(
   },true);
   const drawnAllies=mode==='single'?(active===null?[]:[active]):allies;
   grid(drawnAllies,{
-    left:viewerLeft+TCG_MAT_WIDTH+gap,
+    left:viewerLeft+TCG_MAT_WIDTH+playerGap,
     right:visibleW/2-pad,
     top:pad,bottom:visibleH/2-pad
   },false);
