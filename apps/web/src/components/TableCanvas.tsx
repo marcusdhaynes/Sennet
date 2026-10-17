@@ -372,9 +372,9 @@ function drawTcgMats(
           const active=relations[seat]===choice;
           const button=new Container();
           const enemySide=relations[seat]!=='ally';
-          // The bottom edge is local +Y for every mat. Enemies face 180°
-          // toward us, so their bottom border appears at the screen top.
-          // Mirror X so Sword and Shield retain their screen-side order.
+          // Every button pair sits on its mat's SCREEN-bottom border.
+          // Enemy mats face us (180°); mirror X and Y so their buttons
+          // remain just above the center divider, in the correct order.
           const position=opponentRelationButtonPosition(choice,enemySide);
           button.position.set(position.x,position.y);
           button.eventMode='static';
