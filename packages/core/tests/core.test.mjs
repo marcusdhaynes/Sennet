@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleAllySeats,nextCastleAllySeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,castleAllySeats,nextCastleAllySeat,nextCastleFocusedSeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1327,6 +1327,111 @@ test('Unmerged center rows snap to the nearest of seven slots in their nearest r
         }
       }
     }
+  }
+});
+
+test('PLAY 01-03 and HAND have 13 anchors: the seven originals plus six between them',()=>{
+  const game=createGame('tcg');
+  for(let seat=0;seat<12;seat++)for(let row=0;row<4;row++){
+    const cell=tcgMatCells(seat).find(c=>c.row===row&&c.column===1);
+    const local=tcgMatLocal(cell.x,cell.y,seat);
+    const step=cell.width/TCG_MAT.centerCards;
+    const anchors=[];
+    for(let halfIndex=0;halfIndex<=12;halfIndex++){
+      const slot=halfIndex/2;
+      const x=local.x+(slot-3)*step;
+      const point=tcgMatWorld(x,local.y,seat);
+      const snap=tcgSnapPoint(point.x,point.y);
+      assert.ok(snap);
+      assert.equal(snap.seat,seat);
+      assert.equal(snap.row,row);
+      assert.equal(snap.column,1);
+      assert.equal(snap.slot,slot,'Original slots remain integers; new ones are half slots');
+      assert.ok(Math.hypot(point.x-snap.x,point.y-snap.y)<1e-7);
+      const shift=(halfIndex%2===0?1:-1)*3;
+      const close=tcgMatWorld(x+shift,local.y+4,seat);
+      assert.equal(tcgSnapPoint(close.x,close.y).slot,slot);
+      anchors.push(snap.x.toFixed(6)+','+snap.y.toFixed(6));
+      // Both network-safe MOVE and MOVE_STACK must use the same 13 anchors.
+      if(seat===0&&row===0&&slot===2.5){
+        const move=applyCommand(game,c('MOVE',{id:'hero-a',x:point.x,y:point.y}));
+        const moved=move.objects.find(o=>o.id==='hero-a');
+        assert.ok(Math.hypot(moved.x-snap.x,moved.y-snap.y)<1e-8);
+        assert.match(move.message,/position 3\\.5/);
+        assert.deepEqual(replay(game,[c('MOVE',{id:'hero-a',x:point.x,y:point.y})])
+          .objects.find(o=>o.id==='hero-a').x,moved.x);
+      }
+    }
+    assert.equal(new Set(anchors).size,13,'All interstitial positions are unique');
+  }
+});
+
+test('Merged PLAY zones keep freeform opt-out but offer half positions when snapping is enabled',()=>{
+  const game=createGame('tcg');
+  const merged=[centerMergeKey(0,0)];
+  const cell=tcgMatCells(0).find(c=>c.row===0&&c.column===1);
+  const local=tcgMatLocal(cell.x,cell.y,0);
+  const point=tcgMatWorld(local.x+.5*(cell.width/7),local.y,0);
+  assert.equal(tcgSnapPoint(point.x,point.y,merged),null);
+  const snapped=tcgSnapPoint(point.x,point.y,merged,true,0);
+  assert.ok(snapped);
+  assert.equal(snapped.slot,3.5);
+  const center=tcgMatCells(0).find(c=>c.row===3&&c.column===1);
+  const hand=tcgMatLocal(center.x,center.y,0);
+  const between=tcgMatWorld(hand.x+.5*(center.width/7),hand.y,0);
+  assert.equal(tcgSnapPoint(between.x,between.y,merged)?.slot,3.5);
+});
+
+test('Castle focus shows only the selected classified ally or enemy, on its own side',()=>{
+  const viewports=[{width:360,height:700},{width:1080,height:720},{width:1920,height:1080}];
+  for(let viewer=0;viewer<12;viewer++){
+    const candidates=Array.from({length:12},(_,i)=>i).filter(seat=>seat!==viewer);
+    const relations=Object.fromEntries(candidates.map((seat,i)=>
+      [seat,i%2===0?'ally':'enemy']));
+    const rotate=viewerTableRotation(viewer);
+    const project=pos=>{
+      const x=pos.x-BOARD_CENTER,y=pos.y-BOARD_CENTER;
+      return {x:x*Math.cos(rotate)-y*Math.sin(rotate),
+        y:x*Math.sin(rotate)+y*Math.cos(rotate)};
+    };
+    for(const viewport of viewports){
+      const broad=castleGridLayout(viewer,relations,'all',candidates[0],viewport);
+      for(const target of candidates){
+        const focused=castleFocusedLayout(viewer,target,relations,viewport);
+        assert.ok(focused);
+        assert.deepEqual([...focused.mats.keys()],[viewer,target],
+          'No other ally or enemy survives focus');
+        assert.deepEqual(focused.mats.get(viewer),broad.mats.get(viewer),
+          'Focused viewer mat retains its exact position, size and orientation');
+        assert.equal(focused.cameraScale,broad.cameraScale);
+        const p=project(focused.mats.get(target));
+        if(relations[target]==='enemy'){
+          assert.ok(p.y<0,'Enemy remains above battlefield');
+          assert.deepEqual(focused.enemySeats,[target]);
+          assert.deepEqual(focused.allySeats,[]);
+        }else{
+          assert.ok(p.y>0,'Ally remains on lower battlefield');
+          assert.ok(p.x>project(focused.mats.get(viewer)).x,'Ally remains to the right');
+          assert.deepEqual(focused.allySeats,[target]);
+          assert.deepEqual(focused.enemySeats,[]);
+        }
+        assert.equal(focused.mats.get(target).scale,1,
+          'A single focused opponent has the largest possible mat');
+      }
+    }
+    assert.equal(castleFocusedLayout(viewer,viewer,relations,viewports[0]),null);
+    assert.equal(castleFocusedLayout(viewer,candidates[0],{},viewports[0]),null);
+    assert.equal(castleFocusedLayout(viewer,-1,relations,viewports[0]),null);
+    assert.equal(castleFocusedLayout(viewer,12,relations,viewports[0]),null);
+    for(const target of candidates){
+      const pool=candidates.filter(seat=>relations[seat]===relations[target]);
+      const index=pool.indexOf(target);
+      assert.equal(nextCastleFocusedSeat(viewer,target,'right',relations),
+        pool[(index+1)%pool.length]);
+      assert.equal(nextCastleFocusedSeat(viewer,target,'left',relations),
+        pool[(index-1+pool.length)%pool.length]);
+    }
+    assert.equal(nextCastleFocusedSeat(viewer,candidates[0],'left',{}),null);
   }
 });
 
