@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,matchupMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -111,6 +111,7 @@ function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,playmat:PlaymatAppearance,
   opponentRelation:OpponentRelation,onToggleRelation:(choice:'enemy'|'ally')=>void,
+  selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
@@ -132,11 +133,14 @@ function drawTcgMats(
     parent.addChild(mat);
     // In enemy view, opposite edges touch the central dividing line
     // without overlap. Ally view uses normal full-height mat backings.
-    const duel=seatLayers!==null,enemyView=duel&&opponentRelation!=='ally';
-    const backingTop=enemyView&&seat===viewerSeat
+    const duel=seatLayers!==null;
+    // The bottom side (viewer and all allies) never extends over the
+    // divider; every enemy pocket stops at it, regardless of selection.
+    const isEnemy=duel&&seat!==viewerSeat&&relations[seat]!=='ally';
+    const backingTop=duel&&!isEnemy
       ?-TCG_MAT_HEIGHT/2
       :-TCG_MAT_HEIGHT/2-4;
-    const backingBottom=enemyView&&seat!==viewerSeat
+    const backingBottom=isEnemy
       ?TCG_MAT_HEIGHT/2
       :TCG_MAT_HEIGHT/2+4;
     mat.addChild(new Graphics()
@@ -239,13 +243,15 @@ function drawTcgMats(
     // rotated mat, positive local X appears on the LEFT of the screen.
     // Left = seat number decrement (counter-clockwise in full-table view).
     // Right = seat number increment (clockwise), always skipping our seat.
-    if(seatLayers&&seat!==viewerSeat){
+    if(seatLayers&&seat===selectedOpponent){
+      const allyHere=relations[seat]==='ally';
       for(const direction of ['left','right'] as const){
         const left=direction==='left';
         const button=new Container();
-        // Center the circle ON the outside border, not beyond the mat.
-        // Opponent's rotated local +X is the screen's left side.
-        button.position.set((left?1:-1)*TCG_MAT_WIDTH/2,0);
+        // On enemy mats local +X points screen-left; on allied mats
+        // the same local axis points right. Keep arrow signs consistent
+        // with the screen and the numbered table seating order.
+        button.position.set((left?(allyHere?-1:1):(allyHere?1:-1))*TCG_MAT_WIDTH/2,0);
         button.eventMode='static';
         button.hitArea=new Circle(0,0,19);
         button.cursor='pointer';
@@ -254,7 +260,8 @@ function drawTcgMats(
           .stroke({color:0xe5d4ac,alpha:.95,width:1.5}));
         // A 180-degree facing rotation makes a local right-arrow appear
         // as a LEFT arrow on screen, and vice-versa.
-        const tip=left?5:-5,base=left?-4:4;
+        const tip=allyHere?(left?-5:5):(left?5:-5);
+        const base=-tip*.8;
         button.addChild(new Graphics()
           .moveTo(base,-7).lineTo(tip,0).lineTo(base,7)
           .stroke({color:0xf4e1b9,width:2.7,cap:'round',join:'round'}));
@@ -375,15 +382,19 @@ function drawTcgMats(
 /** Reframe arbitrary opponent into the opposing (top) position without
  * changing a single game coordinate. Pieces remain logically at their seats.
  */
-function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number,relation:OpponentRelation){
+function makeDuelSeatLayers(
+  board:Container,viewerSeat:number,opponentSeat:number,
+  relations:Readonly<Record<number,OpponentRelation>>
+){
   const layers=new Map<number,Container>();
-  // Sword/enemy opponents are always anchored across the divider,
-  // including after switching from an ally or cycling between seats.
-  const layout=matchupMatLayout(viewerSeat,opponentSeat,relation);
-  // Draw the local mat last so the shared-seam eye stays above both mats.
-  for(const which of [opponentSeat,viewerSeat]){
+  const layout=groupedMatchupLayout(viewerSeat,opponentSeat,relations);
+  // Render every marked enemy on the opposing side even while viewing
+  // an ally. Render the viewer last so their eye controls stay on top.
+  const order=[...layout.mats.keys()].filter(seat=>seat!==viewerSeat);
+  order.push(viewerSeat);
+  for(const which of order){
     const origin=tcgMatOrigin(which);
-    const target=which===viewerSeat?layout.player:layout.opponent;
+    const target=layout.mats.get(which)!;
     const group=new Container();
     group.pivot.set(origin.x,origin.y);
     group.position.set(target.x,target.y);
@@ -395,7 +406,8 @@ function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:numbe
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
-  duelOpponent:number|null,relation:OpponentRelation,eyeHoldMs:number):Map<number,Container>|null{
+  duelOpponent:number|null,relation:OpponentRelation,
+  relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
@@ -435,9 +447,9 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt)
       .stroke({color:0x112d2b,width:4}));
   }
-  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent,relation);
+  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent,relations);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
-    relation,onToggleRelation,onMerge,
+    relation,onToggleRelation,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
@@ -706,7 +718,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       direction=>cycleOpponentHandler.current(direction),
       choice=>toggleRelationHandler.current(choice),
       id=>{controlPointer.current=id;},hoverTimers.current,playmat,
-      eyeView.kind==='versus'?eyeView.opponent:null,selectedRelation,250);
+      eyeView.kind==='versus'?eyeView.opponent:null,selectedRelation,relations,250);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
@@ -796,7 +808,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView,selectedRelation]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView,selectedRelation,relations]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -949,12 +961,14 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
       // Fit the two player halves without stretching cards, including the
       // half-overhanging navigation circles centered ON the mat borders.
-      const ally=viewRef.current.kind==='versus'&&viewRef.current.opponent!==null&&
-        relationsRef.current[viewRef.current.opponent]==='ally';
+      const selected=viewRef.current.opponent;
+      if(selected===null)return;
+      const lineup=groupedMatchupLayout(seatRef.current,selected,relationsRef.current);
       const heightScale=h/(2*TCG_MAT_HEIGHT);
-      // Allied mats share the bottom half, side-by-side with the same
-      // orientation. Both arrows and relationship controls remain in frame.
-      const arrowsWidth=ally?2*TCG_MAT_WIDTH+ALLY_MAT_GAP+2*19:TCG_MAT_WIDTH+2*19;
+      // Keep ALL persistent Sword enemies in the opposing row, plus
+      // all Shield allies alongside the viewer, fully within the frame.
+      const arrowsWidth=lineup.columns*TCG_MAT_WIDTH+
+        (lineup.columns-1)*ALLY_MAT_GAP+2*19;
       const widthScale=Math.max(80,w-24)/arrowsWidth;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
