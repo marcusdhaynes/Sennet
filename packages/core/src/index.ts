@@ -329,7 +329,7 @@ export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number
  * Returns null when the card is beyond a small edge tolerance.
  * Logic is fully deterministic: the network transmits only drop coordinates.
  */
-export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false):TcgSnapLocation|null {
+export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false,snapMergedSeat?:number):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   let best:TcgSnapLocation|null=null,dist=Infinity,centerDist=Infinity;
   for(let seat=0;seat<SEATS;seat++){
@@ -338,7 +338,10 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
       const anchor=tcgMatLocal(cell.x,cell.y,seat);
       // A combined pocket is freeform by default. Do not accidentally
       // snap into a neighboring side pocket from inside the merged area.
-      if(cell.column===1&&cell.lastRow>cell.row&&!snapMerged){
+      // A player's merged snapping preference applies ONLY to that
+      // player's mat, even when pieces are dragged onto an opponent's mat.
+      const seatMaySnap=snapMerged&&(snapMergedSeat===undefined||snapMergedSeat===seat);
+      if(cell.column===1&&cell.lastRow>cell.row&&!seatMaySnap){
         if(Math.abs(local.x-anchor.x)<=cell.width/2&&
            Math.abs(local.y-anchor.y)<=cell.height/2)return null;
         continue;
@@ -514,7 +517,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
       const snapEligible=state.kind==='tcg'&&obj.kind!=='board';
-      const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true):null;
+      const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
+        Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
+          ?Number(p.snapMergedSeat):undefined):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
@@ -535,7 +540,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const cards=cardStackMembers(state,obj.id);
       const requestedX=clamp(finite(p.x,obj.x),0,BOARD_W);
       const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true):null;
+      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true,
+        Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
+          ?Number(p.snapMergedSeat):undefined):null;
       const dx=(snapped?.x??requestedX)-obj.x;
       const dy=(snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
