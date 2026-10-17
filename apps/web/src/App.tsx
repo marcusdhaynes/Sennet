@@ -30,10 +30,25 @@ const STACK_HOLD_DEFAULT_MS=1000;
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
 const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
 const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
-const PLAYMAT_KEY='sennet.playmat.appearance.v1';
-function storedPlaymatAppearance():PlaymatAppearance{
-  try{return normalizePlaymatAppearance(JSON.parse(localStorage.getItem(PLAYMAT_KEY)||'null'));}
-  catch{return defaultPlaymatAppearance();}
+const LEGACY_PLAYMAT_KEY='sennet.playmat.appearance.v1';
+const PLAYMAT_KEY_PREFIX='sennet.playmat.appearance.v2.';
+const scopedPlaymatKey=(playerId:string)=>PLAYMAT_KEY_PREFIX+encodeURIComponent(playerId);
+function storedPlaymatAppearance(playerId:string):PlaymatAppearance{
+  try{
+    const own=localStorage.getItem(scopedPlaymatKey(playerId));
+    if(own!==null)return normalizePlaymatAppearance(JSON.parse(own));
+    // One-time migration: attach the earlier browser-wide appearance to
+    // the player identity already established on this installation.
+    // Remove the old key so subsequent identities do not inherit it.
+    const legacy=localStorage.getItem(LEGACY_PLAYMAT_KEY);
+    if(legacy!==null){
+      const migrated=normalizePlaymatAppearance(JSON.parse(legacy));
+      localStorage.setItem(scopedPlaymatKey(playerId),JSON.stringify(migrated));
+      localStorage.removeItem(LEGACY_PLAYMAT_KEY);
+      return migrated;
+    }
+  }catch{/* Storage missing or damaged; use built-in look. */}
+  return defaultPlaymatAppearance();
 }
 const MERGE_OPACITY_DEFAULT=.16;
 const MERGE_DELAY_DEFAULT=250;
@@ -90,7 +105,10 @@ export default function App(){
   const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
   const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
   const [mergeHoverMs,setMergeHoverMs]=useState(storedMergeHoverMs);
-  const [playmat,setPlaymat]=useState<PlaymatAppearance>(storedPlaymatAppearance);
+  // Resolve identity before reading appearance. One player's saved playmat
+  // can never be loaded as the default for another player identity.
+  const actor=useMemo(localActor,[]);
+  const [playmat,setPlaymat]=useState<PlaymatAppearance>(()=>storedPlaymatAppearance(actor));
   const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
@@ -113,7 +131,6 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const connection=useRef<RoomConnection|null>(null);
-  const actor=useMemo(localActor,[]);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
   const viewedGame=replayAt===null?game:replay(initial,history.slice(0,replayIndex+1));
@@ -161,9 +178,9 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
-    try{localStorage.setItem(PLAYMAT_KEY,JSON.stringify(playmat));}
+    try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
     catch{inform('Not enough browser storage to save this playmat image. Try a smaller image.');}
-  },[playmat]);
+  },[actor,playmat]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
@@ -244,12 +261,12 @@ export default function App(){
           const old=game.objects.find(o=>o.id===id);
           if(old&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat)){
             for(const card of cardStackMembers(game,id))takeAction('DELETE',{id:card.id});
-          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged});
+          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
         onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
           if(old&&['card','token'].includes(old.kind)&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat))takeAction('DELETE',{id});
-          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged});
+          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }} readonly={replayAt!==null}/>
     </div>
     <PersonalDrawer activeBook={book} openBook={setBook} seatView={seatView}/>
