@@ -148,7 +148,7 @@ function drawTcgMats(
       .roundRect(-TCG_MAT_WIDTH/2-4,backingTop,TCG_MAT_WIDTH+8,
         backingBottom-backingTop,duel?7:12)
       .fill({color:0x101e1a,alpha:.82})
-      .stroke({color:0x8d7855,width:1,alpha:.46}));
+      .stroke({color:0x466059,width:1,alpha:.46}));
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
     // remain four separate single-card rectangles.
