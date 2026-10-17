@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -713,4 +713,48 @@ test('personal merged snapping never applies to other players\' merged center se
   assert.ok(Math.hypot(self.x-(a.x+8),self.y-(a.y+6))>2,'Local merged section uses user setting');
   const other=tcgMatCells(1).find(z=>z.column===0&&z.row===2);
   assert.ok(tcgSnapPoint(other.x+3,other.y+3,state.centerMerges,true,0),'Unmerged sections always snap');
+});
+
+test('Sword and Shield are mutually exclusive and toggle per opponent',()=>{
+  assert.equal(toggleOpponentRelation(null,'enemy'),'enemy');
+  assert.equal(toggleOpponentRelation('enemy','enemy'),null);
+  assert.equal(toggleOpponentRelation(null,'ally'),'ally');
+  assert.equal(toggleOpponentRelation('ally','ally'),null);
+  assert.equal(toggleOpponentRelation('enemy','ally'),'ally');
+  assert.equal(toggleOpponentRelation('ally','enemy'),'enemy');
+  const bySeat=new Map();
+  bySeat.set(2,toggleOpponentRelation(bySeat.get(2)??null,'enemy'));
+  bySeat.set(5,toggleOpponentRelation(bySeat.get(5)??null,'ally'));
+  bySeat.set(2,toggleOpponentRelation(bySeat.get(2)??null,'enemy'));
+  assert.equal(bySeat.get(2),null);
+  assert.equal(bySeat.get(5),'ally');
+});
+
+test('Shield aligns ally beside viewer and facing the same direction at every seat',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const rotation=viewerTableRotation(viewer);
+    const project=(p)=>{
+      const dx=p.x-BOARD_CENTER,dy=p.y-BOARD_CENTER;
+      return {x:Math.cos(rotation)*dx-Math.sin(rotation)*dy,
+        y:Math.sin(rotation)*dx+Math.cos(rotation)*dy};
+    };
+    for(let other=0;other<12;other++){
+      if(other===viewer)continue;
+      const layout=alliedMatLayout(viewer,other);
+      const a=project(layout.player),b=project(layout.opponent);
+      assert.ok(Math.abs(a.y-TCG_MAT_HEIGHT/2)<1e-8,'Viewer remains at lower half');
+      assert.ok(Math.abs(b.y-a.y)<1e-8,'Both players occupy same screen side');
+      assert.ok(Math.abs(a.x+(TCG_MAT_WIDTH+ALLY_MAT_GAP)/2)<1e-8);
+      assert.ok(Math.abs(b.x-(TCG_MAT_WIDTH+ALLY_MAT_GAP)/2)<1e-8);
+      assert.ok(b.x-a.x>=TCG_MAT_WIDTH,'Playmats must not overlap');
+      const viewerRotation=tcgMatOrigin(viewer).angle+layout.player.rotation+rotation;
+      const allyRotation=tcgMatOrigin(other).angle+layout.opponent.rotation+rotation;
+      const normalized=(value)=>Math.atan2(Math.sin(value),Math.cos(value));
+      assert.ok(Math.abs(normalized(viewerRotation))<1e-8,'Viewer upright');
+      assert.ok(Math.abs(normalized(allyRotation))<1e-8,'Ally faces same direction');
+      const enemy=opposingMatLayout(viewer,other);
+      const enemyPoint=project(enemy.opponent);
+      assert.ok(enemyPoint.y<0,'Enemy remains on opposite side');
+    }
+  }
 });
