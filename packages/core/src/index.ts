@@ -77,6 +77,66 @@ export const TCG_MAT = {
   centerCards:7,gap:4,rows:4,columns:3,
   snapOutside:26,outerRadius:1580
 } as const;
+export type PlaymatTexture='none'|'matte'|'sandy'|'glossy'|'matte-glossy';
+export interface PlaymatSectionStyle {
+  imageId:string;texture:PlaymatTexture;textureOpacity:number;
+  innerShadow:boolean;shadowOpacity:number;innerBevel:boolean;
+  outerBevel:boolean;bevelOpacity:number;
+}
+export interface PlaymatAppearance {
+  sections:PlaymatSectionStyle[];
+  images:Record<string,string>;
+  selectedSections:number[];
+  snapMerged:boolean;
+}
+export const DEFAULT_PLAYMAT_SECTION_STYLE:PlaymatSectionStyle={
+  imageId:'',texture:'matte-glossy',textureOpacity:.18,
+  innerShadow:true,shadowOpacity:.25,innerBevel:true,
+  outerBevel:false,bevelOpacity:.25
+};
+export function defaultPlaymatAppearance():PlaymatAppearance {
+  return {
+    sections:Array.from({length:12},()=>({...DEFAULT_PLAYMAT_SECTION_STYLE})),
+    images:{},selectedSections:Array.from({length:12},(_,i)=>i),
+    snapMerged:false
+  };
+}
+/** Browser preferences are untrusted JSON; always validate on load. */
+export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
+  const defaults=defaultPlaymatAppearance();
+  if(!value||typeof value!=='object')return defaults;
+  const input=value as Partial<PlaymatAppearance>;
+  const textures:PlaymatTexture[]=['none','matte','sandy','glossy','matte-glossy'];
+  const images:Record<string,string>={};
+  if(input.images&&typeof input.images==='object'&&!Array.isArray(input.images)){
+    for(const [key,url] of Object.entries(input.images).slice(0,24)){
+      if(!/^bg_[a-z0-9_-]{4,80}$/i.test(key)||typeof url!=='string'||url.length>2000000)continue;
+      if(/^(https?:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(url))images[key]=url;
+    }
+  }
+  const sections=defaults.sections.map((original,i)=>{
+    const raw=Array.isArray(input.sections)?input.sections[i]:null;
+    if(!raw||typeof raw!=='object')return original;
+    const section=raw as Partial<PlaymatSectionStyle>;
+    const opacity=(v:unknown,fallback:number)=>typeof v==='number'&&Number.isFinite(v)
+      ?Math.min(1,Math.max(0,v)):fallback;
+    return {
+      imageId:typeof section.imageId==='string'&&images[section.imageId]?section.imageId:'',
+      texture:textures.includes(section.texture as PlaymatTexture)?section.texture!:original.texture,
+      textureOpacity:opacity(section.textureOpacity,original.textureOpacity),
+      innerShadow:typeof section.innerShadow==='boolean'?section.innerShadow:original.innerShadow,
+      shadowOpacity:opacity(section.shadowOpacity,original.shadowOpacity),
+      innerBevel:typeof section.innerBevel==='boolean'?section.innerBevel:original.innerBevel,
+      outerBevel:typeof section.outerBevel==='boolean'?section.outerBevel:original.outerBevel,
+      bevelOpacity:opacity(section.bevelOpacity,original.bevelOpacity)
+    };
+  });
+  const selectedSections=Array.isArray(input.selectedSections)
+    ?[...new Set(input.selectedSections.filter((n):n is number=>typeof n==='number'&&Number.isInteger(n)&&n>=0&&n<12))].sort((a,b)=>a-b)
+    :defaults.selectedSections;
+  return {sections,images,selectedSections,snapMerged:input.snapMerged===true};
+}
+export function playmatSectionIndex(row:number,column:number):number {return row*3+column;}
 export const TCG_MAT_WIDTH=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
 export const TCG_MAT_HEIGHT=TCG_MAT.rowHeight*TCG_MAT.rows+TCG_MAT.gap*(TCG_MAT.rows-1);
 export interface TcgMatCell {
@@ -222,13 +282,20 @@ export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number
  * Returns null when the card is beyond a small edge tolerance.
  * Logic is fully deterministic: the network transmits only drop coordinates.
  */
-export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[]):TcgSnapLocation|null {
+export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   let best:TcgSnapLocation|null=null,dist=Infinity,centerDist=Infinity;
   for(let seat=0;seat<SEATS;seat++){
     const local=tcgMatLocal(x,y,seat);
     for(const cell of tcgMatRegions(seat,merged)){
       const anchor=tcgMatLocal(cell.x,cell.y,seat);
+      // A combined pocket is freeform by default. Do not accidentally
+      // snap into a neighboring side pocket from inside the merged area.
+      if(cell.column===1&&cell.lastRow>cell.row&&!snapMerged){
+        if(Math.abs(local.x-anchor.x)<=cell.width/2&&
+           Math.abs(local.y-anchor.y)<=cell.height/2)return null;
+        continue;
+      }
       const dx=Math.max(0,Math.abs(local.x-anchor.x)-cell.width/2);
       const dy=Math.max(0,Math.abs(local.y-anchor.y)-cell.height/2);
       const distance=Math.hypot(dx,dy);
@@ -399,7 +466,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'MOVE': if(obj){
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y,state.centerMerges):null;
+      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
@@ -420,7 +487,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const cards=cardStackMembers(state,obj.id);
       const requestedX=clamp(finite(p.x,obj.x),0,BOARD_W);
       const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges):null;
+      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true):null;
       const dx=(snapped?.x??requestedX)-obj.x;
       const dy=(snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
