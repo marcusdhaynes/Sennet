@@ -1357,7 +1357,7 @@ test('PLAY 01-03 and HAND have 13 anchors: the seven originals plus six between 
         const move=applyCommand(game,c('MOVE',{id:'hero-a',x:point.x,y:point.y}));
         const moved=move.objects.find(o=>o.id==='hero-a');
         assert.ok(Math.hypot(moved.x-snap.x,moved.y-snap.y)<1e-8);
-        assert.match(move.message,/position 3\\.5/);
+        assert.ok(move.message.endsWith('position 3.5'));
         assert.deepEqual(replay(game,[c('MOVE',{id:'hero-a',x:point.x,y:point.y})])
           .objects.find(o=>o.id==='hero-a').x,moved.x);
       }
