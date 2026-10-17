@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -998,20 +998,60 @@ test('Eye is exactly one-on-one for EVERY opponent, even with all other seats cl
       assert.deepEqual([...eye.mats.keys()].sort((a,b)=>a-b),
         [viewer,opponent].sort((a,b)=>a-b));
       const relation=relations[opponent];
-      if(relation==='ally'){
-        assert.deepEqual(eye.allySeats,[opponent]);
-        assert.deepEqual(eye.enemySeats,[]);
-        assert.equal(eye.columns,2);
-      }else{
-        assert.deepEqual(eye.enemySeats,[opponent]);
-        assert.deepEqual(eye.allySeats,[]);
-        assert.equal(eye.columns,1);
-      }
+      assert.deepEqual(eye.enemySeats,[opponent],
+        'Eye must ALWAYS place the selected seat opposite the viewer');
+      assert.deepEqual(eye.allySeats,[]);
+      assert.equal(eye.columns,1);
+      assert.deepEqual(eye.mats.get(opponent),
+        opposingMatLayout(viewer,opponent).opponent,
+        'An Ally must face the player from the opposite side in Eye');
+      assert.deepEqual(eye.mats.get(viewer),
+        opposingMatLayout(viewer,opponent).player);
       const castle=groupedMatchupLayout(viewer,null,relations);
       assert.equal(castle.mats.has(opponent),relation==='enemy'||relation==='ally');
       for(const other of rivals.filter(seat=>seat!==opponent)){
         assert.equal(eye.mats.has(other),false,
           'Other classified seats cannot appear in Eye view');
+      }
+    }
+  }
+});
+
+test('Eye ignores Sword/Shield for facing, while Castle alone puts allies beside viewer',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    for(let opponent=0;opponent<12;opponent++){
+      if(opponent===viewer)continue;
+      const base=oneOnOneMatchupLayout(viewer,opponent,{});
+      for(const relation of ['enemy','ally',null]){
+        const relations={[opponent]:relation};
+        const eye=oneOnOneMatchupLayout(viewer,opponent,relations);
+        assert.deepEqual([...eye.mats.keys()],[opponent,viewer]);
+        assert.deepEqual(eye.enemySeats,[opponent]);
+        assert.deepEqual(eye.allySeats,[]);
+        assert.deepEqual([...eye.mats], [...base.mats],
+          'Switching between Ally/Enemy/unclassified must not move Eye opponent');
+        assert.equal(opponentAcrossDivider('eye',relation),true,
+          'Eye controls/arrow facing must remain on opposite side');
+        assert.equal(opponentAcrossDivider('castle',relation),relation!=='ally');
+        const castle=groupedMatchupLayout(viewer,null,relations);
+        if(relation==='ally'){
+          assert.deepEqual(castle.allySeats,[opponent]);
+          assert.deepEqual(castle.enemySeats,[]);
+          const rotate=viewerTableRotation(viewer);
+          const project=(p)=>{
+            const x=p.x-BOARD_CENTER,y=p.y-BOARD_CENTER;
+            return {y:x*Math.sin(rotate)+y*Math.cos(rotate)};
+          };
+          assert.ok(Math.abs(project(castle.mats.get(opponent)).y-
+            project(castle.mats.get(viewer)).y)<1e-8,
+            'Castle ally shares the player side');
+        }else if(relation==='enemy'){
+          assert.deepEqual(castle.enemySeats,[opponent]);
+          assert.deepEqual(castle.allySeats,[]);
+        }else{
+          assert.equal(castle.mats.has(opponent),false,
+            'Unclassified opponents must not appear in Castle');
+        }
       }
     }
   }
