@@ -77,9 +77,11 @@ export const TCG_MAT = {
   centerCards:7,gap:4,rows:4,columns:3,
   snapOutside:26,outerRadius:1580
 } as const;
-export type PlaymatTexture='none'|'matte'|'sandy'|'glossy'|'matte-glossy';
+export type PlaymatTextureKind='matte'|'sandy'|'glossy';
+export interface PlaymatTextureSetting {enabled:boolean;opacity:number}
+export type PlaymatTextureLayers=Record<PlaymatTextureKind,PlaymatTextureSetting>;
 export interface PlaymatSectionStyle {
-  imageId:string;texture:PlaymatTexture;textureOpacity:number;
+  imageId:string;textureLayers:PlaymatTextureLayers;
   innerShadow:boolean;shadowOpacity:number;innerBevel:boolean;
   outerBevel:boolean;bevelOpacity:number;
 }
@@ -90,23 +92,35 @@ export interface PlaymatAppearance {
   snapMerged:boolean;
 }
 export const DEFAULT_PLAYMAT_SECTION_STYLE:PlaymatSectionStyle={
-  imageId:'',texture:'matte-glossy',textureOpacity:.18,
+  imageId:'',
+  textureLayers:{
+    matte:{enabled:true,opacity:.18},
+    sandy:{enabled:false,opacity:.18},
+    glossy:{enabled:true,opacity:.18}
+  },
   innerShadow:true,shadowOpacity:.25,innerBevel:true,
   outerBevel:false,bevelOpacity:.25
 };
 export function defaultPlaymatAppearance():PlaymatAppearance {
   return {
-    sections:Array.from({length:12},()=>({...DEFAULT_PLAYMAT_SECTION_STYLE})),
+    sections:Array.from({length:12},()=>({
+      ...DEFAULT_PLAYMAT_SECTION_STYLE,
+      textureLayers:{
+        matte:{...DEFAULT_PLAYMAT_SECTION_STYLE.textureLayers.matte},
+        sandy:{...DEFAULT_PLAYMAT_SECTION_STYLE.textureLayers.sandy},
+        glossy:{...DEFAULT_PLAYMAT_SECTION_STYLE.textureLayers.glossy}
+      }
+    })),
     images:{},selectedSections:Array.from({length:12},(_,i)=>i),
     snapMerged:false
   };
 }
-/** Browser preferences are untrusted JSON; always validate on load. */
+/** Persisted preferences can be old-format data or untrusted imported JSON.
+ * Migrate existing texture dropdown selections without losing their opacity. */
 export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
   const defaults=defaultPlaymatAppearance();
   if(!value||typeof value!=='object')return defaults;
   const input=value as Partial<PlaymatAppearance>;
-  const textures:PlaymatTexture[]=['none','matte','sandy','glossy','matte-glossy'];
   const images:Record<string,string>={};
   if(input.images&&typeof input.images==='object'&&!Array.isArray(input.images)){
     for(const [key,url] of Object.entries(input.images).slice(0,24)){
@@ -114,21 +128,38 @@ export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
       if(/^(https?:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(url))images[key]=url;
     }
   }
+  const opacity=(v:unknown,fallback:number)=>typeof v==='number'&&Number.isFinite(v)
+    ?Math.min(1,Math.max(0,v)):fallback;
+  const kinds:PlaymatTextureKind[]=['matte','sandy','glossy'];
   const sections=defaults.sections.map((original,i)=>{
     const raw=Array.isArray(input.sections)?input.sections[i]:null;
     if(!raw||typeof raw!=='object')return original;
-    const section=raw as Partial<PlaymatSectionStyle>;
-    const opacity=(v:unknown,fallback:number)=>typeof v==='number'&&Number.isFinite(v)
-      ?Math.min(1,Math.max(0,v)):fallback;
+    const legacy=raw as Partial<PlaymatSectionStyle>&{texture?:unknown;textureOpacity?:unknown};
+    const oldTexture=typeof legacy.texture==='string'?legacy.texture:null;
+    const validLegacy=['none','matte','sandy','glossy','matte-glossy'].includes(oldTexture??'');
+    const oldOpacity=opacity(legacy.textureOpacity,.18);
+    const textureLayers={} as PlaymatTextureLayers;
+    for(const key of kinds){
+      const previous=original.textureLayers[key];
+      const candidate=legacy.textureLayers?.[key];
+      const isObject=candidate!==null&&typeof candidate==='object';
+      const priorEnabled=validLegacy
+        ?(oldTexture===key||(oldTexture==='matte-glossy'&&(key==='matte'||key==='glossy')))
+        :previous.enabled;
+      textureLayers[key]={
+        enabled:isObject&&typeof candidate.enabled==='boolean'?candidate.enabled:priorEnabled,
+        opacity:isObject?opacity(candidate.opacity,validLegacy?oldOpacity:previous.opacity)
+          :validLegacy?oldOpacity:previous.opacity
+      };
+    }
     return {
-      imageId:typeof section.imageId==='string'&&images[section.imageId]?section.imageId:'',
-      texture:textures.includes(section.texture as PlaymatTexture)?section.texture!:original.texture,
-      textureOpacity:opacity(section.textureOpacity,original.textureOpacity),
-      innerShadow:typeof section.innerShadow==='boolean'?section.innerShadow:original.innerShadow,
-      shadowOpacity:opacity(section.shadowOpacity,original.shadowOpacity),
-      innerBevel:typeof section.innerBevel==='boolean'?section.innerBevel:original.innerBevel,
-      outerBevel:typeof section.outerBevel==='boolean'?section.outerBevel:original.outerBevel,
-      bevelOpacity:opacity(section.bevelOpacity,original.bevelOpacity)
+      imageId:typeof legacy.imageId==='string'&&images[legacy.imageId]?legacy.imageId:'',
+      textureLayers,
+      innerShadow:typeof legacy.innerShadow==='boolean'?legacy.innerShadow:original.innerShadow,
+      shadowOpacity:opacity(legacy.shadowOpacity,original.shadowOpacity),
+      innerBevel:typeof legacy.innerBevel==='boolean'?legacy.innerBevel:original.innerBevel,
+      outerBevel:typeof legacy.outerBevel==='boolean'?legacy.outerBevel:original.outerBevel,
+      bevelOpacity:opacity(legacy.bevelOpacity,original.bevelOpacity)
     };
   });
   const selectedSections=Array.isArray(input.selectedSections)
