@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -755,6 +755,66 @@ test('Shield aligns ally beside viewer and facing the same direction at every se
       const enemy=opposingMatLayout(viewer,other);
       const enemyPoint=project(enemy.opponent);
       assert.ok(enemyPoint.y<0,'Enemy remains on opposite side');
+    }
+  }
+});
+
+test('every Sword enemy remains across from the player, including when an ally is selected',()=>{
+  const norm=n=>Math.atan2(Math.sin(n),Math.cos(n));
+  for(let viewer=0;viewer<12;viewer++){
+    const boardRotation=viewerTableRotation(viewer);
+    const project=point=>{
+      const x=point.x-BOARD_CENTER,y=point.y-BOARD_CENTER;
+      return {x:x*Math.cos(boardRotation)-y*Math.sin(boardRotation),
+        y:x*Math.sin(boardRotation)+y*Math.cos(boardRotation)};
+    };
+    const rivals=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
+    const relations=Object.fromEntries(rivals.map((seat,index)=>
+      [seat,index%3===0?'ally':index%3===1?'enemy':null]));
+    for(const selected of rivals){
+      const layout=groupedMatchupLayout(viewer,selected,relations);
+      assert.ok(layout.mats.has(viewer));
+      assert.ok(layout.mats.has(selected));
+      const all=[viewer,...layout.enemySeats,...layout.allySeats];
+      assert.equal(new Set(all).size,all.length);
+      assert.equal(layout.columns,Math.max(layout.enemySeats.length,layout.allySeats.length+1));
+      const own=project(layout.mats.get(viewer));
+      assert.ok(Math.abs(own.y-TCG_MAT_HEIGHT/2)<1e-8);
+      for(const enemy of layout.enemySeats){
+        const target=layout.mats.get(enemy);
+        const {y}=project(target);
+        assert.ok(Math.abs(y+TCG_MAT_HEIGHT/2)<1e-8,'Swords always on opposing half');
+        const angle=tcgMatOrigin(enemy).angle+target.rotation+boardRotation;
+        assert.ok(Math.abs(norm(angle-Math.PI))<1e-8,'Sword enemy faces player');
+      }
+      for(const ally of layout.allySeats){
+        const target=layout.mats.get(ally);
+        const {y}=project(target);
+        assert.ok(Math.abs(y-TCG_MAT_HEIGHT/2)<1e-8,'Shields beside viewer');
+        const angle=tcgMatOrigin(ally).angle+target.rotation+boardRotation;
+        assert.ok(Math.abs(norm(angle))<1e-8,'Shields face same direction');
+      }
+      for(const side of [layout.enemySeats,[viewer,...layout.allySeats]]){
+        const xs=side.map(seat=>project(layout.mats.get(seat)).x).sort((a,b)=>a-b);
+        for(let i=1;i<xs.length;i++){
+          assert.ok(xs[i]-xs[i-1]>=TCG_MAT_WIDTH+ALLY_MAT_GAP-1e-8,
+            'Mats on the same side must not overlap');
+        }
+      }
+    }
+  }
+});
+
+test('enemy/neutral matchup placement never inherits former ally position',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    for(let opposite=0;opposite<12;opposite++){
+      if(viewer===opposite)continue;
+      const original=opposingMatLayout(viewer,opposite);
+      assert.deepEqual(matchupMatLayout(viewer,opposite,'enemy'),original);
+      assert.deepEqual(matchupMatLayout(viewer,opposite,null),original);
+      assert.deepEqual(matchupMatLayout(viewer,opposite,'ally'),alliedMatLayout(viewer,opposite));
+      const afterAlly=matchupMatLayout(viewer,opposite,'enemy');
+      assert.deepEqual(afterAlly,original,'Sword restores exactly original opposing coordinates');
     }
   }
 });
