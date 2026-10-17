@@ -85,9 +85,12 @@ export interface PlaymatSectionStyle {
   innerShadow:boolean;shadowOpacity:number;innerBevel:boolean;
   outerBevel:boolean;bevelOpacity:number;
 }
+export type PlaymatImageMode='repeat'|'span';
 export interface PlaymatAppearance {
   sections:PlaymatSectionStyle[];
   images:Record<string,string>;
+  imageMode:PlaymatImageMode;
+  spanningImageId:string;
   selectedSections:number[];
   snapMerged:boolean;
 }
@@ -111,7 +114,7 @@ export function defaultPlaymatAppearance():PlaymatAppearance {
         glossy:{...DEFAULT_PLAYMAT_SECTION_STYLE.textureLayers.glossy}
       }
     })),
-    images:{},selectedSections:Array.from({length:12},(_,i)=>i),
+    images:{},imageMode:'repeat',spanningImageId:'',selectedSections:Array.from({length:12},(_,i)=>i),
     snapMerged:false
   };
 }
@@ -165,7 +168,10 @@ export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
   const selectedSections=Array.isArray(input.selectedSections)
     ?[...new Set(input.selectedSections.filter((n):n is number=>typeof n==='number'&&Number.isInteger(n)&&n>=0&&n<12))].sort((a,b)=>a-b)
     :defaults.selectedSections;
-  return {sections,images,selectedSections,snapMerged:input.snapMerged===true};
+  const imageMode=input.imageMode==='span'?'span':'repeat';
+  const spanningImageId=typeof input.spanningImageId==='string'&&images[input.spanningImageId]
+    ?input.spanningImageId:'';
+  return {sections,images,imageMode,spanningImageId,selectedSections,snapMerged:input.snapMerged===true};
 }
 export function playmatSectionIndex(row:number,column:number):number {return row*3+column;}
 export const TCG_MAT_WIDTH=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
