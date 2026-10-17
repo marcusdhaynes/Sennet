@@ -431,20 +431,23 @@ export function groupedMatchupLayout(
     columns:Math.max(enemySeats.length,bottomSeats.length)
   };
 }
-/** A strict Eye matchup: exactly the viewer and ONE selected opponent.
- * The selected seat uses its personal Ally/Enemy orientation, but the
- * relationship status of every OTHER seat is irrelevant here.
- * Castle is the only mode that uses the full grouped-matchup layout.
+/** Eye ALWAYS shows exactly the viewer and the selected opponent on
+ * opposite sides of the divider, regardless of Sword/Shield status.
+ * Only Castle distributes marked allies beside the player.
  */
 export function oneOnOneMatchupLayout(
   viewerSeat:number,opponentSeat:number,
-  relations:Readonly<Record<number,OpponentRelation>>
+  _relations:Readonly<Record<number,OpponentRelation>>
 ):ReturnType<typeof groupedMatchupLayout>{
-  const relation=relations[opponentSeat]??null;
-  return groupedMatchupLayout(
-    viewerSeat,opponentSeat,
-    relation===null?{}:{[opponentSeat]:relation}
-  );
+  return groupedMatchupLayout(viewerSeat,opponentSeat,{});
+}
+/** Eye ignores Sword/Shield classification for visual facing; Castle
+ * alone puts allies on the viewer's side of the divider.
+ */
+export function opponentAcrossDivider(
+  mode:'eye'|'castle',relation:OpponentRelation
+):boolean{
+  return mode==='eye'||relation!=='ally';
 }
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
