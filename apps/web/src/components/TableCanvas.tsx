@@ -79,20 +79,31 @@ function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
     outside.eventMode='none';mat.addChild(outside);
   }
 }
-function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,h:number,url:string){
+/** The image is ALWAYS inserted directly above the base fill and below
+ * procedural textures, the grid, shadows, bevels and text—even if the asset
+ * loads after those layers were built. Repeat uses the current pocket's crop.
+ * Span uses ONE shared mat-wide crop, masked individually by each pocket.
+ */
+function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,h:number,url:string,span:boolean){
   Assets.load(url).then(texture=>{
-    if(mat.destroyed||base.destroyed)return;
+    if(mat.destroyed||base.destroyed||!texture.width||!texture.height)return;
     const sprite=new Sprite(texture);
     sprite.eventMode='none';
-    // Cover the section and crop the excess using a rounded mask.
-    const scale=Math.max((w-4)/texture.width,(h-4)/texture.height);
+    const targetX=span?-TCG_MAT_WIDTH/2:x+2;
+    const targetY=span?-TCG_MAT_HEIGHT/2:y+2;
+    const targetW=span?TCG_MAT_WIDTH:w-4;
+    const targetH=span?TCG_MAT_HEIGHT:h-4;
+    const scale=Math.max(targetW/texture.width,targetH/texture.height);
     sprite.width=texture.width*scale;sprite.height=texture.height*scale;
-    sprite.position.set(x+w/2-sprite.width/2,y+h/2-sprite.height/2);
+    sprite.position.set(targetX+(targetW-sprite.width)/2,targetY+(targetH-sprite.height)/2);
     const mask=new Graphics().roundRect(x+2,y+2,w-4,h-4,6).fill(0xffffff);
     mask.eventMode='none';
+    // Never append the sprite: asynchronous loading must not put a picture
+    // on top of the matte/gravel/gloss, shadow, bevel or label overlays.
     mat.addChildAt(sprite,mat.getChildIndex(base)+1);
-    mat.addChild(mask);sprite.mask=mask;
-  }).catch(()=>{/* Preserve procedural finish when remote image cannot load. */});
+    mat.addChild(mask);
+    sprite.mask=mask;
+  }).catch(()=>{/* Preserve the procedural finish if a remote asset is blocked. */});
 }
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
@@ -147,8 +158,10 @@ function drawTcgMats(
         .roundRect(x+2,y+2,w-4,h-4,6).fill({color:accent,alpha:merged?.13:.055})
         .stroke({color:0x071915,width:1.8,alpha:.90});
       base.eventMode='none';mat.addChild(base);
-      const image=playmat.images[section.imageId];
-      if(image)addPlaymatImage(mat,base,x,y,w,h,image);
+      const spanImage=playmat.imageMode==='span';
+      const imageId=spanImage?playmat.spanningImageId:section.imageId;
+      const image=playmat.images[imageId];
+      if(image)addPlaymatImage(mat,base,x,y,w,h,image,spanImage);
       addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column);
       const grid=new Graphics();
       for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
