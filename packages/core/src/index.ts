@@ -313,35 +313,38 @@ export type OpponentRelation='enemy'|'ally'|null;
  * An inset beyond the hit radius keeps controls away from the dividing
  * line (for allies) and from viewport clipping (for enemies).
  */
-/** Eye and Castle are the viewer's ONLY view buttons. While the
- * battlefield divider is visible, their complete 19-unit hit circles
- * remain on its upper side, never crossing into the allied half.
- * Outside battlefield modes they keep the established top-border position.
+/** All view and relationship buttons sit immediately above the BOTTOM
+ * border of their respective playmats, with their full hit circles inside
+ * the mat. The two buttons in each group are evenly spaced around X=0.
+ *
+ * An enemy mat is rotated 180° toward the viewer, so its screen-left and
+ * screen-right positions are mirrored. The buttons still occupy its own
+ * bottom edge, never another player's mat.
  */
-export const VIEW_BUTTON_RADIUS=16;
-export const VIEW_BUTTON_HIT_RADIUS=19;
-export const VIEW_BUTTON_CASTLE_OFFSET=42;
-export const VIEW_BUTTON_DIVIDER_CLEARANCE=5;
-export function viewButtonPosition(
-  control:'eye'|'castle',battlefield:boolean
-):{x:number;y:number}{
+export const PLAYMAT_BOTTOM_BUTTON_RADIUS=16;
+export const PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS=19;
+export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
+export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_MAT_HEIGHT/2-PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
+export const VIEW_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
+export const VIEW_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
+export const VIEW_BUTTON_CASTLE_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
+export function viewButtonPosition(control:'eye'|'castle'):{
+  x:number;y:number
+}{
   return {
-    x:control==='castle'?VIEW_BUTTON_CASTLE_OFFSET:0,
-    y:-TCG_MAT_HEIGHT/2-
-      (battlefield?VIEW_BUTTON_HIT_RADIUS+VIEW_BUTTON_DIVIDER_CLEARANCE:0)
+    x:control==='eye'?-PLAYMAT_BOTTOM_BUTTON_OFFSET:PLAYMAT_BOTTOM_BUTTON_OFFSET,
+    y:PLAYMAT_BOTTOM_BUTTON_Y
   };
 }
-export const OPPONENT_RELATION_BUTTON_OFFSET=22;
-export const OPPONENT_RELATION_BUTTON_RADIUS=16;
-export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=19;
-export const OPPONENT_RELATION_BUTTON_INSET=OPPONENT_RELATION_BUTTON_HIT_RADIUS+5;
+export const OPPONENT_RELATION_BUTTON_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
+export const OPPONENT_RELATION_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
+export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
+export const OPPONENT_RELATION_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
 export function opponentRelationButtonPosition(choice:'enemy'|'ally',enemySide=false){
-  const screenX=choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET;
+  const localX=choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET;
   return {
-    x:enemySide?-screenX:screenX,
-    y:enemySide
-      ?TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET
-      :-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET
+    x:enemySide?-localX:localX,
+    y:PLAYMAT_BOTTOM_BUTTON_Y
   };
 }
 /** Only one role can be active for an opponent; activating it again clears it. */
