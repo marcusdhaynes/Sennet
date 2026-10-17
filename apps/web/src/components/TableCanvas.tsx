@@ -344,7 +344,7 @@ function createPiece(o:TableObject,isSelected:boolean){
  * A 250ms dwell opens them; after leaving, wait one second before closing.
  * Re-entering cancels the pending retraction.
  */
-function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;seat:number}){
+function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';name:string;seat:number;idleOpacity:number}){
   const [shown,setShown]=useState(false);
   const [pinned,setPinned]=useState(false);
   const hovered=useRef(false);
@@ -388,6 +388,7 @@ function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;
   const displayName=name.trim()||('Player '+(seat+1));
   return <div
     className={'opponent-seat-tab '+side+(shown?' expanded':'')}
+    style={{opacity:shown?1:idleOpacity}}
     onPointerDown={event=>event.stopPropagation()}
     onPointerEnter={scheduleHover} onPointerLeave={leave}>
     <button type="button" className="opponent-seat-tab-button"
@@ -947,10 +948,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent} side="top"
-        seat={eyeView.opponent}
+        idleOpacity={mergeOpacity} seat={eyeView.opponent}
         name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
       <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
-        name={playerName||'YOU'}/>
+        idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
     </>}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
       <span>Choose an opponent's mat or seat</span>
