@@ -570,3 +570,16 @@ test('unmerged spaces always snap and appearance defaults are independent and no
   assert.equal(safe.sections[1].imageId,'');
   assert.equal(safe.snapMerged,false);
 });
+
+test('TCG card, token, miniature and die pieces snap to unmerged mat spaces',()=>{
+  const state=createGame('tcg');
+  const cell=tcgMatCells(0).find(c=>c.row===1&&c.column===2);
+  for(const kind of ['card','token','miniature','die','tile','deck']){
+    const obj={id:'snap-test',kind,name:'Snap Test',x:1000,y:1000,
+      rotation:0,faceUp:true,color:'#eeeeee',zone:'TABLE',order:200};
+    const start={...state,objects:[...state.objects,obj]};
+    const moved=applyCommand(start,c('MOVE',{id:'snap-test',x:cell.x+4,y:cell.y-7})).objects.find(o=>o.id==='snap-test');
+    assert.equal(moved.matSeat,0,kind+' should occupy selected mat');
+    assert.ok(Math.hypot(moved.x-cell.x,moved.y-cell.y)<1e-6,kind+' should snap to slot center');
+  }
+});
