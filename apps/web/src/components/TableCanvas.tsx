@@ -277,13 +277,12 @@ function drawTcgMats(
       }
     }
 
-    // Circular eye tool lives at the TOP of the local mat.
+    // Eye and Castle sit evenly centered just inside the BOTTOM mat border.
     if(seat===viewerSeat){
       const eye=new Container();
-      // In Castle/Opponent views the entire hit circle is ABOVE the
-      // strict divider; in the full-table view retain the original
-      // centered-on-the-top-border placement.
-      const eyePosition=viewButtonPosition('eye',seatLayers!==null);
+      // Same location in every view. Entire hit circle rests inside
+      // the mat above its own bottom border, never straddling the edge.
+      const eyePosition=viewButtonPosition('eye');
       eye.position.set(eyePosition.x,eyePosition.y);
       eye.eventMode='static';
       eye.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
@@ -333,7 +332,7 @@ function drawTcgMats(
       // Same size as the eye and merge controls. Castle switches to the
       // classified-only battlefield, excluding every unmarked opponent.
       const castle=new Container();
-      const castlePosition=viewButtonPosition('castle',seatLayers!==null);
+      const castlePosition=viewButtonPosition('castle');
       castle.position.set(castlePosition.x,castlePosition.y);
       castle.eventMode='static';
       castle.cursor='pointer';
@@ -373,8 +372,9 @@ function drawTcgMats(
           const active=relations[seat]===choice;
           const button=new Container();
           const enemySide=relations[seat]!=='ally';
-          // Enemy mats face 180°, so their upper SCREEN edge is local +Y.
-          // Keep the icons completely above the central dividing line.
+          // The bottom edge is local +Y for every mat. Enemies face 180°
+          // toward us, so their bottom border appears at the screen top.
+          // Mirror X so Sword and Shield retain their screen-side order.
           const position=opponentRelationButtonPosition(choice,enemySide);
           button.position.set(position.x,position.y);
           button.eventMode='static';
