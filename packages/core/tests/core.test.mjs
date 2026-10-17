@@ -960,7 +960,7 @@ test('all four buttons sit evenly centered just above each playmat bottom border
 test('view and relationship button hit circles remain inside their own playmat bottom edge for every seat and orientation',()=>{
   for(let viewer=0;viewer<12;viewer++){
     const boardRotation=viewerTableRotation(viewer);
-    const others=Array.from({length:12},(_,seat)=>seat).filter(seat!==viewer);
+    const others=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
     const relations={
       [others[0]]:'ally',[others[1]]:'enemy',
       [others[2]]:'ally',[others[3]]:'enemy'
