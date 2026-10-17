@@ -858,7 +858,7 @@ test('all controls use the owning mat orientation and enemies remain above divid
     const relations=Object.fromEntries(others.map((seat,index)=>
       [seat,index%3===0?'enemy':index%3===1?'ally':null]));
     for(const selected of others){
-      const layout=groupedMatchupLayout(viewer,selected,relations);
+      const layout=groupedMatchupLayout(viewer,selected,relations,BATTLEFIELD_PLAYMAT_PADDING);
       const boardRotation=viewerTableRotation(viewer);
       for(const [seat,target] of layout.mats){
         const angle=tcgMatOrigin(seat).angle+target.rotation+boardRotation;
