@@ -370,7 +370,7 @@ export function matchupMatLayout(
  * This transforms visuals only; canonical tabletop positions never change.
  */
 export function groupedMatchupLayout(
-  viewerSeat:number,selectedSeat:number,relations:Readonly<Record<number,OpponentRelation>>
+  viewerSeat:number,selectedSeat:number|null,relations:Readonly<Record<number,OpponentRelation>>
 ):{mats:Map<number,OpposingMatLayout['player']>;enemySeats:number[];allySeats:number[];columns:number} {
   const seats=Array.from({length:SEATS},(_,seat)=>seat)
     .filter(seat=>seat!==viewerSeat);
