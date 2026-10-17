@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_INSET,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,VIEW_BUTTON_DIVIDER_CLEARANCE,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_INSET,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -819,14 +819,14 @@ test('enemy/neutral matchup placement never inherits former ally position',()=>{
   }
 });
 
-test('Sword and Shield share each other player top-row border, centered as a nonoverlapping pair',()=>{
+test('Sword and Shield sit evenly centered immediately above each opponent mat bottom border',()=>{
   const sword=opponentRelationButtonPosition('enemy');
   const shield=opponentRelationButtonPosition('ally');
   assert.equal((sword.x+shield.x)/2,0,'The pair must be horizontally centered');
   assert.equal(sword.x,-OPPONENT_RELATION_BUTTON_OFFSET);
   assert.equal(shield.x,OPPONENT_RELATION_BUTTON_OFFSET);
-  assert.equal(sword.y,-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET);
-  assert.equal(shield.y,-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET);
+  assert.equal(sword.y,TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET);
+  assert.equal(shield.y,TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET);
   assert.equal(OPPONENT_RELATION_BUTTON_RADIUS,16);
   assert.ok(shield.x-sword.x>=2*OPPONENT_RELATION_BUTTON_HIT_RADIUS,
     'Both controls must remain independently clickable');
@@ -885,7 +885,7 @@ test('a strict horizontal divider isolates enemy buttons above from ally buttons
       }
     }
   }
-  assert.ok(OPPONENT_RELATION_BUTTON_INSET>OPPONENT_RELATION_BUTTON_HIT_RADIUS);
+  assert.ok(OPPONENT_RELATION_BUTTON_INSET>=OPPONENT_RELATION_BUTTON_HIT_RADIUS);
   const enemySword=opponentRelationButtonPosition('enemy',true);
   const enemyShield=opponentRelationButtonPosition('ally',true);
   assert.equal(enemySword.y,TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET);
@@ -931,53 +931,61 @@ test('Castle view with no classifications shows only own playmat',()=>{
   }
 });
 
-test('Eye and Castle view controls stay wholly above the divider in Opponent and Castle views',()=>{
-  const eye=viewButtonPosition('eye',true);
-  const castle=viewButtonPosition('castle',true);
-  assert.equal(eye.x,0);
-  assert.equal(castle.x,VIEW_BUTTON_CASTLE_OFFSET);
-  assert.equal(eye.y,castle.y,'Both view buttons align along the divider');
+test('all four buttons sit evenly centered just above each playmat bottom border',()=>{
+  const eye=viewButtonPosition('eye');
+  const castle=viewButtonPosition('castle');
+  const sword=opponentRelationButtonPosition('enemy');
+  const shield=opponentRelationButtonPosition('ally');
+  assert.equal((eye.x+castle.x)/2,0,'Eye and Castle pair centered');
+  assert.equal((sword.x+shield.x)/2,0,'Sword and Shield pair centered');
+  assert.equal(eye.x,-PLAYMAT_BOTTOM_BUTTON_OFFSET);
+  assert.equal(castle.x,PLAYMAT_BOTTOM_BUTTON_OFFSET);
+  assert.equal(castle.x-eye.x,2*PLAYMAT_BOTTOM_BUTTON_OFFSET);
+  assert.equal(castle.x-eye.x,VIEW_BUTTON_CASTLE_OFFSET*2);
+  assert.equal(eye.y,castle.y);
+  assert.equal(eye.y,sword.y);
+  assert.equal(eye.y,shield.y);
+  assert.equal(eye.y,PLAYMAT_BOTTOM_BUTTON_Y);
+  assert.equal(PLAYMAT_BOTTOM_BUTTON_Y+VIEW_BUTTON_HIT_RADIUS,TCG_MAT_HEIGHT/2);
+  assert.equal(VIEW_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_RADIUS);
+  assert.equal(VIEW_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
   assert.equal(VIEW_BUTTON_RADIUS,16);
   assert.equal(VIEW_BUTTON_HIT_RADIUS,19);
-  assert.equal(eye.y+VIEW_BUTTON_HIT_RADIUS,
-    -TCG_MAT_HEIGHT/2-VIEW_BUTTON_DIVIDER_CLEARANCE);
-  assert.ok(VIEW_BUTTON_DIVIDER_CLEARANCE>0);
-  assert.ok(castle.x-eye.x>VIEW_BUTTON_HIT_RADIUS*2,
-    'Button hit areas must not collide');
-  for(let viewer=0;viewer<12;viewer++){
-    const boardRotation=viewerTableRotation(viewer);
-    const others=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
-    const relations={
-      [others[0]]:'ally',
-      [others[1]]:'enemy',
-      [others[2]]:'ally',
-      [others[3]]:'enemy'
-    };
-    for(const selected of [null,...others]){
-      const lineup=groupedMatchupLayout(viewer,selected,relations);
-      const own= lineup.mats.get(viewer);
-      assert.ok(own);
-      const angle=tcgMatOrigin(viewer).angle+own.rotation+boardRotation;
-      for(const control of ['eye','castle']){
-        const button=viewButtonPosition(control,true);
-        const dx=own.x-BOARD_CENTER,dy=own.y-BOARD_CENTER;
-        const centerY=dx*Math.sin(boardRotation)+dy*Math.cos(boardRotation);
-        const rotatedY=button.x*Math.sin(angle)+button.y*Math.cos(angle);
-        const topSideY=centerY+rotatedY;
-        assert.ok(topSideY+VIEW_BUTTON_HIT_RADIUS<=-VIEW_BUTTON_DIVIDER_CLEARANCE+1e-7,
-          `Viewer ${viewer}, ${control}: entire view hit circle must remain above divider`);
-      }
-    }
-  }
+  assert.ok(castle.x-eye.x>2*VIEW_BUTTON_HIT_RADIUS,
+    'View button clickable areas must not overlap');
+  assert.ok(shield.x-sword.x>2*OPPONENT_RELATION_BUTTON_HIT_RADIUS,
+    'Relationship clickable areas must not overlap');
 });
 
-test('Eye and Castle retain their original mat-border positions outside battlefield mode',()=>{
-  for(const control of ['eye','castle']){
-    const normal=viewButtonPosition(control,false);
-    assert.equal(normal.y,-TCG_MAT_HEIGHT/2);
-    assert.equal(normal.x,control==='eye'?0:VIEW_BUTTON_CASTLE_OFFSET);
-    const duel=viewButtonPosition(control,true);
-    assert.ok(duel.y<normal.y-VIEW_BUTTON_HIT_RADIUS,
-      'Entering battlefield mode moves full hit circle to upper half');
+test('view and relationship button hit circles remain inside their own playmat bottom edge for every seat and orientation',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const boardRotation=viewerTableRotation(viewer);
+    const others=Array.from({length:12},(_,seat)=>seat).filter(seat!==viewer);
+    const relations={
+      [others[0]]:'ally',[others[1]]:'enemy',
+      [others[2]]:'ally',[others[3]]:'enemy'
+    };
+    for(const selected of [null,...others]){
+      const layout=groupedMatchupLayout(viewer,selected,relations);
+      for(const [seat,target] of layout.mats){
+        const angle=tcgMatOrigin(seat).angle+target.rotation+boardRotation;
+        const controls=seat===viewer
+          ?[viewButtonPosition('eye'),viewButtonPosition('castle')]
+          :[opponentRelationButtonPosition('enemy',relations[seat]!=='ally'),
+             opponentRelationButtonPosition('ally',relations[seat]!=='ally')];
+        for(const control of controls){
+          const radius=VIEW_BUTTON_HIT_RADIUS;
+          assert.equal(control.y+radius,TCG_MAT_HEIGHT/2);
+          const rotatedX=control.x*Math.cos(angle)-control.y*Math.sin(angle);
+          const rotatedY=control.x*Math.sin(angle)+control.y*Math.cos(angle);
+          const backToLocalY=rotatedY*Math.cos(angle)-rotatedX*Math.sin(angle);
+          assert.ok(Math.abs(backToLocalY-control.y)<1e-8,
+            'Rotating an opponent mat must not dislodge bottom-border controls');
+          assert.ok(control.y-radius>=-TCG_MAT_HEIGHT/2);
+          assert.ok(Math.abs(control.x)+radius<=TCG_MAT_WIDTH/2,
+            'Entire hit area must fit within its own playmat');
+        }
+      }
+    }
   }
 });
