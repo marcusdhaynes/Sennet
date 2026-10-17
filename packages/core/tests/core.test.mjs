@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1055,4 +1055,91 @@ test('Eye ignores Sword/Shield for facing, while Castle alone puts allies beside
       }
     }
   }
+});
+
+test('Eye and Castle reserve equal safety padding for complete Hand-circle visibility at all seats',()=>{
+  const p=BATTLEFIELD_PLAYMAT_PADDING;
+  assert.equal(p,VIEW_BUTTON_HIT_RADIUS+3);
+  assert.equal(p,OPPONENT_RELATION_BUTTON_HIT_RADIUS+3);
+  const spin=(v,angle)=>({
+    x:v.x*Math.cos(angle)-v.y*Math.sin(angle),
+    y:v.x*Math.sin(angle)+v.y*Math.cos(angle)
+  });
+  for(let viewer=0;viewer<12;viewer++){
+    const orientation=viewerTableRotation(viewer);
+    const other=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
+    for(const mode of ['eye','castle']){
+      const relationScenarios=[
+        {},Object.fromEntries(other.map(seat=>[seat,'ally'])),
+        Object.fromEntries(other.map(seat=>[seat,'enemy'])),
+        Object.fromEntries(other.map((seat,i)=>[seat,i%2===0?'enemy':'ally']))
+      ];
+      for(const relations of relationScenarios){
+        for(const targetSeat of (mode==='eye'?other:[null])){
+          const line=mode==='eye'
+            ?oneOnOneMatchupLayout(viewer,targetSeat,relations,p)
+            :groupedMatchupLayout(viewer,null,relations,p);
+          const bounds=battlefieldFitBounds(line.columns,p);
+          assert.ok(bounds.width>=TCG_MAT_WIDTH+2*p);
+          assert.equal(bounds.height,2*TCG_MAT_HEIGHT+4*p);
+          const projected=[...line.mats].map(([seat,pos])=>{
+            const midpoint=spin({x:pos.x-BOARD_CENTER,y:pos.y-BOARD_CENTER},orientation);
+            const rotation=tcgMatOrigin(seat).angle+pos.rotation+orientation;
+            assert.ok(Math.abs(Math.sin(rotation))<1e-8,'Mats must face up or down');
+            return {seat,x:midpoint.x,y:midpoint.y,rotation};
+          });
+          for(const mat of projected){
+            const rectLeft=mat.x-TCG_MAT_WIDTH/2;
+            const rectRight=mat.x+TCG_MAT_WIDTH/2;
+            const rectTop=mat.y-TCG_MAT_HEIGHT/2;
+            const rectBottom=mat.y+TCG_MAT_HEIGHT/2;
+            assert.ok(rectLeft>=-bounds.width/2+p-1e-7);
+            assert.ok(rectRight<=bounds.width/2-p+1e-7);
+            assert.ok(rectTop>=-bounds.height/2+p-1e-7);
+            assert.ok(rectBottom<=bounds.height/2-p+1e-7);
+            // Include Hand circles, opponent side-arrow circles and
+            // any 4-unit backing trim in the visible framebuffer.
+            const circleY=mat.y+Math.cos(mat.rotation)*TCG_HAND_BOTTOM_LINE_Y;
+            assert.ok(circleY-VIEW_BUTTON_HIT_RADIUS>=-bounds.height/2-1e-7);
+            assert.ok(circleY+VIEW_BUTTON_HIT_RADIUS<=bounds.height/2+1e-7);
+            assert.ok(mat.x-TCG_MAT_WIDTH/2-VIEW_BUTTON_HIT_RADIUS>=-bounds.width/2-1e-7);
+            assert.ok(mat.x+TCG_MAT_WIDTH/2+VIEW_BUTTON_HIT_RADIUS<=bounds.width/2+1e-7);
+          }
+          // Every pair of mats on the same side must have at least
+          // 2 x padding between their neighboring left/right edges.
+          const top=projected.filter(pos=>pos.y<0).sort((a,b)=>a.x-b.x);
+          const bottom=projected.filter(pos=>pos.y>0).sort((a,b)=>a.x-b.x);
+          for(const group of [top,bottom]){
+            for(let i=1;i<group.length;i++){
+              const gap=group[i].x-group[i-1].x-TCG_MAT_WIDTH;
+              assert.ok(gap>=2*p-1e-7,'Each neighboring mat gets equal lateral padding');
+            }
+          }
+          for(const [w,h] of [[320,620],[400,760],[1080,720],[1920,1080],[2560,720]]){
+            const scale=Math.min(w/bounds.width,h/bounds.height);
+            // Every button hit-circle fits the final framebuffer.
+            for(const mat of projected){
+              const outerY=Math.abs(mat.y)+TCG_MAT_HEIGHT/2+VIEW_BUTTON_HIT_RADIUS;
+              const outerX=Math.abs(mat.x)+TCG_MAT_WIDTH/2+VIEW_BUTTON_HIT_RADIUS;
+              assert.ok(outerY*scale<=h/2+1e-7);
+              assert.ok(outerX*scale<=w/2+1e-7);
+            }
+          }
+        }
+      }
+    }
+  }
+});
+
+test('battlefield padding adds only the minimal required radius-plus-clearance around each mat',()=>{
+  const p=BATTLEFIELD_PLAYMAT_PADDING;
+  const one=battlefieldFitBounds(1);
+  const six=battlefieldFitBounds(6);
+  assert.equal(one.width,TCG_MAT_WIDTH+2*p);
+  assert.equal(one.height,2*TCG_MAT_HEIGHT+4*p);
+  assert.equal(six.height,one.height);
+  assert.equal(six.width,6*TCG_MAT_WIDTH+5*Math.max(ALLY_MAT_GAP,2*p)+2*p);
+  assert.equal((one.width-TCG_MAT_WIDTH)/2,p);
+  assert.equal((one.height-2*TCG_MAT_HEIGHT)/4,p);
+  assert.ok(p-VIEW_BUTTON_RADIUS>=3);
 });
