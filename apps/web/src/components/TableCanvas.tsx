@@ -939,12 +939,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const key=(event:KeyboardEvent)=>{
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
-      // Keyboard reset and +/- cannot bypass the opponent-view camera lock.
-      // The eye button remains the explicit way to leave this view.
-      if(viewRef.current.kind==='versus'){
-        if(['0','+','=','-'].includes(event.key))event.preventDefault();
-        return;
-      }
       if(currentKind.current==='tcg'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
         const key=event.key.toLowerCase();
         if(key==='d'){event.preventDefault();callbacks.current.onDrawMat();return;}
@@ -952,6 +946,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         if(card&&(key==='t'||key==='f')){
           event.preventDefault();callbacks.current.onCardAction(card.id,key==='t'?'tap':'flip');return;
         }
+      }
+      // Keyboard reset and +/- cannot bypass the opponent-view camera lock.
+      // The eye button remains the explicit way to leave this view.
+      if(viewRef.current.kind==='versus'){
+        if(['0','+','=','-'].includes(event.key))event.preventDefault();
+        return;
       }
       if(event.key==='0'){reset();}
       if(event.key==='+'||event.key==='='){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1.25);}
