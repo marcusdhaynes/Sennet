@@ -1220,6 +1220,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       relationsRef.current=next;
       setRelations(next);
       if(selected.kind==='castle'){
+        const foes=Array.from({length:12},(_,s)=>s)
+          .filter(s=>s!==seatRef.current&&next[s]==='enemy');
+        const previousEnemy=selected.castleSelectedEnemy??null;
+        const validEnemy=previousEnemy!==null&&foes.includes(previousEnemy)
+          ?previousEnemy:foes[0]??null;
         if(selected.castleMode==='focus'){
           let ally=selected.castleFocusedAlly??null;
           let enemy=selected.castleFocusedEnemy??null;
@@ -1239,17 +1244,20 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
               lastCastleAlly.current,'right',next);
             lastCastleAlly.current=selectedAlly;
             selectView({kind:'castle',opponent:selectedAlly,
+              castleSelectedEnemy:validEnemy,
               castleMode:preferredCastleMode.current});
           }else{
             const selectedAlly=nextCastleAllySeat(seatRef.current,
               ally??selected.opponent,'right',next);
             selectView({...selected,opponent:ally??selectedAlly,
+              castleSelectedEnemy:enemy??validEnemy,
               castleFocusedAlly:ally,castleFocusedEnemy:enemy});
           }
         }else{
           const ally=nextCastleAllySeat(seatRef.current,selected.opponent,'right',next);
           lastCastleAlly.current=ally;
-          if(selected.opponent!==ally)selectView({...selected,opponent:ally});
+          if(selected.opponent!==ally||selected.castleSelectedEnemy!==validEnemy)
+            selectView({...selected,opponent:ally,castleSelectedEnemy:validEnemy});
         }
       }
       // The clicked mat may relocate from one side to the other; keep
@@ -1296,8 +1304,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         const ally=nextCastleAllySeat(seatRef.current,lastCastleAlly.current,
           'right',relationsRef.current);
         lastCastleAlly.current=ally;
+        const enemy=Array.from({length:12},(_,s)=>s)
+          .find(s=>s!==seatRef.current&&relationsRef.current[s]==='enemy')??null;
         selectView({kind:'castle',opponent:ally,castleMode:preferredCastleMode.current,
-          castleSelectedEnemy:null});
+          castleSelectedEnemy:enemy});
         requestAnimationFrame(()=>focusOpponent.current());
       }
     };
