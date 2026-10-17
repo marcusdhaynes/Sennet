@@ -118,6 +118,27 @@ export function centerMergeKey(seat:number,boundary:number):number {
   return seat*3+boundary;
 }
 export interface TcgMatRegion extends TcgMatCell {lastRow:number}
+export const TCG_ZONE_LABELS = [
+  ['LOCATIONS','PLAY 03','LEADERS'],
+  ['RESERVE','PLAY 02','DECK'],
+  ['WAIT','PLAY 01','DISCARD'],
+  ['RESOURCE','HAND','REMOVE']
+] as const;
+export const TCG_ROW_COLORS = [0x00f5ff,0x00ff87,0xffd700,0xff006e] as const;
+export function tcgRegionLabel(row:number,column:number,lastRow=row):string {
+  if(column!==1||row===lastRow)return TCG_ZONE_LABELS[row]?.[column]??'';
+  if(row===0&&lastRow===2)return 'TOTAL BATTLEFIELD';
+  if(row===0&&lastRow===1)return 'ZONE 02+03';
+  if(row===1&&lastRow===2)return 'ZONE 01+02';
+  return TCG_ZONE_LABELS.slice(row,lastRow+1).map(labels=>labels[1]).join(' + ');
+}
+/** Destructive drop targets use the actual pocket, never the outside snap margin. */
+export function isTcgRemoveDrop(x:number,y:number,seat:number):boolean {
+  if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+  const cell=tcgMatCells(seat).find(c=>c.row===3&&c.column===2)!;
+  const point=tcgMatLocal(x,y,seat),center=tcgMatLocal(cell.x,cell.y,seat);
+  return Math.abs(point.x-center.x)<=cell.width/2&&Math.abs(point.y-center.y)<=cell.height/2;
+}
 /** Render and snap to contiguous merged center-row groups. Side rows remain separate. */
 export function tcgMatRegions(seat:number,merged:readonly number[]=[]):TcgMatRegion[] {
   const cells=tcgMatCells(seat);
@@ -259,8 +280,8 @@ export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameSt
     sandbox: shared,
     boardgame: [object('game-board','board','Checkered board',500,330,'#ad9879',{locked:true}), ...Array.from({length:8},(_,i)=>object(`pawn-${i}`,'token',`Piece ${i+1}`,370+i*37,300,i%2?'#bf9d70':'#86b6a8'))],
     tcg: [
-      ...deck('alpha',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===3&&c.column===0)!.x,tcgMatCells(0).find(c=>c.row===3&&c.column===0)!.y)!,matSeat:0})),
-      ...deck('beta',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===3&&c.column===0)!.x,tcgMatCells(6).find(c=>c.row===3&&c.column===0)!.y)!,matSeat:6})),
+      ...deck('alpha',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:0})),
+      ...deck('beta',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:6})),
       object('hero-a','card','Guardian',500,330,'#6baaa6',{...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:0}),
       object('hero-b','card','Invoker',500,330,'#ba8ab6',{...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:6})
     ],
@@ -346,6 +367,13 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
       return 'You can only merge sections on your own mat';
   }
+  if(command.type==='DRAW'&&command.payload.matSeat!==undefined){
+    const seat=command.payload.matSeat;
+    if(state.kind!=='tcg'||typeof seat!=='number'||!Number.isInteger(seat)||seat<0||seat>=SEATS)
+      return 'Invalid draw mat';
+    if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
+      return 'You can only draw from your own mat';
+  }
   if (command.type === 'ADD' && state.objects.length >= 1000) return 'Maximum objects reached';
   if (command.type === 'ADD' && (!command.payload.object || typeof command.payload.object !== 'object' || Array.isArray(command.payload.object))) return 'Invalid object';
   if (command.type === 'ADD' && (typeof (command.payload.object as Record<string,unknown>).id !== 'string' || !String((command.payload.object as Record<string,unknown>).id).trim())) return 'Object ID required for deterministic replay';
@@ -413,13 +441,19 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'CLONE':if(obj){objects.push({...obj,id:textValue(p.newId||createId(),80),x:clamp(obj.x+45,0,BOARD_W),y:clamp(obj.y+40,0,BOARD_H)});message=`Duplicated ${obj.name}`;}break;
     case 'ROLL':if(obj){const n=obj.sides||6;const rng=prng(finite(p.seed,1));obj.value=1+Math.floor(rng()*n);message=`Rolled ${obj.name}: ${obj.value}`;}break;
     case 'DRAW':{
-      const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix)))).sort((a,b)=>a.order-b.order);
+      const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix))) &&
+        (p.matSeat===undefined||(o.matSeat===p.matSeat&&(!o.owner||o.owner===command.actor)))).sort((a,b)=>a.order-b.order);
       const card=available[0];if(!card) throw new Error('No cards in that deck');
       card.zone='HAND';card.owner=command.actor;card.faceUp=false;
-      const handCount=objects.filter(o=>o.zone==='HAND'&&o.owner===command.actor).length;
-      const seat=state.players.find(player=>player.id===command.actor)?.seat??0;
-      const handPosition=tcgMatWorld(((handCount-1)%7-3)*69,TCG_MAT_HEIGHT/2+100,seat);
-      card.x=handPosition.x;card.y=handPosition.y;delete card.matSeat;
+      const handCount=objects.filter(o=>o.zone==='HAND'&&o.owner===command.actor&&(p.matSeat===undefined||o.matSeat===p.matSeat)).length;
+      const seat=typeof p.matSeat==='number'?p.matSeat:state.players.find(player=>player.id===command.actor)?.seat??0;
+      const handPosition=p.matSeat===undefined
+        ?tcgMatWorld(((handCount-1)%7-3)*69,TCG_MAT_HEIGHT/2+100,seat)
+        :(()=>{const hand=tcgMatCells(seat).find(c=>c.row===3&&c.column===1)!;
+          const local=tcgMatLocal(hand.x,hand.y,seat);
+          return tcgMatWorld(local.x+((handCount-1)%7-3)*(TCG_MAT.cardWidth+2),local.y,seat);})();
+      card.x=handPosition.x;card.y=handPosition.y;
+      if(p.matSeat===undefined)delete card.matSeat;else card.matSeat=seat;
       message=`${command.actor.slice(0,8)} drew a card`;break;
     }
     case 'SHUFFLE':{

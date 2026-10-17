@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -52,15 +52,27 @@ function drawTcgMats(
       const x=dx*cos+dy*sin-cell.width/2;
       const y=-dx*sin+dy*cos-cell.height/2;
       const w=cell.width,h=cell.height;
+      const merged=cell.column===1&&cell.lastRow>cell.row;
+      const accent=TCG_ROW_COLORS[merged&&cell.row===0&&cell.lastRow===2?1:cell.row];
       mat.addChild(new Graphics()
-        .roundRect(x,y,w,h,8).fill({color:0x0d2622,alpha:.98})
-          .stroke({color:0x988d72,width:1.5,alpha:.76})
-        .roundRect(x+2,y+2,w-4,h-4,6).fill({color:0x1b3935,alpha:.94})
+        .roundRect(x,y,w,h,8).fill({color:0x00050a,alpha:.98})
+          .stroke({color:accent,width:merged?2:1,alpha:merged?.7:.3})
+        .roundRect(x+2,y+2,w-4,h-4,6).fill({color:accent,alpha:merged?.13:.055})
           .stroke({color:0x071915,width:1.8,alpha:.90})
         .roundRect(x+5,y+5,w-10,h-10,5).stroke({color:0x9bb5a2,width:1,alpha:.14})
         .moveTo(x+8,y+4).lineTo(x+w-8,y+4).stroke({color:0x020c0a,alpha:.55,width:2})
         .moveTo(x+4,y+8).lineTo(x+4,y+h-8).stroke({color:0x06140f,alpha:.48,width:2})
-        .moveTo(x+8,y+h-4).lineTo(x+w-8,y+h-4).stroke({color:0xd4c9a5,alpha:.22,width:1.5}));
+        .moveTo(x+8,y+h-4).lineTo(x+w-8,y+h-4).stroke({color:0xd4c9a5,alpha:.22,width:1.5}));      const grid=new Graphics();
+      for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
+      for(let gy=y+10;gy<y+h-5;gy+=10)grid.moveTo(x+5,gy).lineTo(x+w-5,gy);
+      grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});grid.eventMode='none';mat.addChild(grid);
+      const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
+      text.style.fontFamily='Orbitron, '+FONT;
+      text.alpha=merged?1:.6;text.eventMode='none';
+      if(cell.column!==1){text.rotation=-Math.PI/2;text.position.set(x+w/2,y+h/2);}
+      else if(merged){text.position.set(x+w/2,y+h/2);}
+      else{text.anchor.x=0;text.position.set(x+12,y+h/2);}
+      mat.addChild(text);
     }
     // Boundary line is precisely as wide as this player's playmat.
     mat.addChild(new Graphics().moveTo(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
@@ -406,7 +418,7 @@ function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';
 }
 
 type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
@@ -417,6 +429,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const focusOpponent=useRef<()=>void>(()=>{});
   const resetCamera=useRef<()=>void>(()=>{});
   const duelLayers=useRef<Map<number,Container>|null>(null);
+  const selectedRef=useRef(selected);selectedRef.current=selected;
   const mount=useRef<HTMLDivElement>(null);
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
@@ -430,7 +443,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const activeFocusAnimation=useRef<number|null>(null);
   const controlPointer=useRef<number|null>(null);
   const hoverTimers=useRef(new Set<number>());
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onMergeCenter,onViewChange};
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onCardAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onCardAction,onMergeCenter,onViewChange};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
@@ -583,6 +596,18 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         });
       }
     }
+    if(state.kind==='tcg'&&!readonly){
+      const cell=tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!;
+      const center=tcgMatLocal(cell.x,cell.y,seat);
+      const point=tcgMatWorld(center.x+cell.width/2-7,center.y-cell.height/2+7,seat);
+      const draw=new Container();draw.position.set(point.x,point.y);draw.rotation=cell.angle;
+      draw.eventMode='static';draw.cursor='pointer';draw.hitArea=new Circle(0,0,13);
+      draw.addChild(new Graphics().circle(0,0,10).fill({color:0x00050a,alpha:.95}).stroke({color:0x00ff87,width:1}));
+      draw.addChild(label('↓',16,0x00ff87,'bold'));
+      draw.on('pointerdown',e=>{e.stopPropagation();controlPointer.current=e.pointerId;});
+      draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
+      (seatGroups?.get(seat)??board).addChild(draw);
+    }
     // Rendering on state change intentionally reconstructs a small scene. Large games will use
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
@@ -591,7 +616,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
-      if(hint&&!hint.destroyed)hint.clear();
+      if(hint&&!hint.destroyed){hint.clear();hint.removeChildren().forEach(child=>child.destroy());}
     };
     const discard=(restore=true)=>{
       const d=drag.current;
@@ -638,14 +663,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
         if(hint.parent!==parent)parent.addChild(hint);
-        hint.clear();
+        hint.clear();hint.removeChildren().forEach(child=>child.destroy());
         const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges):null;
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
+          const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
           hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
           hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
-            .fill({color:0xc7d8ac,alpha:.18})
-            .stroke({color:0xf6daa2,width:2.4,alpha:.9});
+            .fill({color:remove?0xff3b30:0xc7d8ac,alpha:.18})
+            .stroke({color:remove?0xff3b30:0xf6daa2,width:2.4,alpha:.9});
+          if(remove){const text=label('RELEASE TO REMOVE',7,0xff6b61,'bold');text.rotation=-Math.PI/2;hint.addChild(text);}
         }
       }
     };
@@ -917,6 +944,14 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(viewRef.current.kind==='versus'){
         if(['0','+','=','-'].includes(event.key))event.preventDefault();
         return;
+      }
+      if(currentKind.current==='tcg'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
+        const key=event.key.toLowerCase();
+        if(key==='d'){event.preventDefault();callbacks.current.onDrawMat();return;}
+        const card=currentState.current.objects.find(o=>o.id===selectedRef.current&&o.kind==='card');
+        if(card&&(key==='t'||key==='f')){
+          event.preventDefault();callbacks.current.onCardAction(card.id,key==='t'?'tap':'flip');return;
+        }
       }
       if(event.key==='0'){reset();}
       if(event.key==='+'||event.key==='='){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1.25);}

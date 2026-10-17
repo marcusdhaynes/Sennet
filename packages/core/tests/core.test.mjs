@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -474,4 +474,62 @@ test('opposing mats project to distinct halves with actual slot edges meeting at
       assert.ok(Math.abs((leftArrowX+rightArrowX)/2-remote.cx)<1e-8);
     }
   }
+});
+
+test('original playmat labels retain hand and side pockets through every merge',()=>{
+  assert.deepEqual(TCG_ZONE_LABELS,[['LOCATIONS','PLAY 03','LEADERS'],['RESERVE','PLAY 02','DECK'],['WAIT','PLAY 01','DISCARD'],['RESOURCE','HAND','REMOVE']]);
+  assert.deepEqual(TCG_ROW_COLORS,[0x00f5ff,0x00ff87,0xffd700,0xff006e]);
+  assert.equal(tcgRegionLabel(0,1,1),'ZONE 02+03');
+  assert.equal(tcgRegionLabel(1,1,2),'ZONE 01+02');
+  assert.equal(tcgRegionLabel(0,1,2),'TOTAL BATTLEFIELD');
+  assert.match(tcgRegionLabel(0,1,3),/HAND/);
+  for(let seat=0;seat<12;seat++)for(let mask=0;mask<8;mask++){
+    const merged=[0,1,2].filter(b=>mask&(1<<b)).map(b=>centerMergeKey(seat,b));
+    for(const region of tcgMatRegions(seat,merged)){
+      assert.ok(tcgRegionLabel(region.row,region.column,region.lastRow));
+      if(region.column!==1)assert.equal(region.row,region.lastRow);
+    }
+  }
+});
+
+test('REMOVE accepts only exact pocket bounds on each rotated seat, never snap margins or neighboring mats',()=>{
+  for(let seat=0;seat<12;seat++){
+    for(const cell of tcgMatCells(seat))assert.equal(isTcgRemoveDrop(cell.x,cell.y,seat),cell.row===3&&cell.column===2);
+    const cell=tcgMatCells(seat).find(c=>c.row===3&&c.column===2);
+    const local=tcgMatLocal(cell.x,cell.y,seat);
+    const outside=tcgMatWorld(local.x+cell.width/2+1,local.y,seat);
+    assert.equal(isTcgRemoveDrop(outside.x,outside.y,seat),false);
+    assert.equal(isTcgRemoveDrop(cell.x,cell.y,(seat+1)%12),false);
+  }
+  assert.equal(isTcgRemoveDrop(NaN,0,0),false);
+});
+
+test('mat draw uses that seat deck and HAND, retains privacy, and replays with flip, tap and removal',()=>{
+  const start=createGame('tcg');
+  for(const seat of [0,6]){
+    const deck=start.objects.filter(o=>o.zone==='DECK'&&o.matSeat===seat);
+    const pocket=tcgMatCells(seat).find(c=>c.row===1&&c.column===2);
+    assert.ok(deck.every(o=>o.x===pocket.x&&o.y===pocket.y));
+    const commands=[c('DRAW',{matSeat:seat},'local')];
+    const drawn=applyCommand(start,commands[0]);
+    const card=drawn.objects.find(o=>o.id===deck[0].id);
+    assert.equal(card.zone,'HAND');assert.equal(card.matSeat,seat);assert.equal(card.owner,'local');
+    assert.equal(card.faceUp,false);
+    const hand=tcgSnapPoint(card.x,card.y);
+    assert.equal(hand.seat,seat);assert.equal(hand.row,3);assert.equal(hand.column,1);
+    assert.equal(drawn.objects.filter(o=>o.zone==='DECK'&&o.matSeat===(seat===0?6:0)).length,12);
+    assert.equal(projectForActor(drawn,'other').objects.find(o=>o.id===card.id).name,'Hidden card');
+    commands.push(c('ROTATE',{id:card.id,degrees:90},'local'),c('FLIP',{id:card.id},'local'),c('DELETE',{id:card.id},'local'));
+    assert.deepEqual(replay(start,commands),commands.reduce((state,command)=>applyCommand(state,command),start));
+    assert.ok(!replay(start,commands).objects.some(o=>o.id===card.id));
+  }
+});
+
+test('mat draw rejects invalid seats, another player mat, empty decks and owned cards',()=>{
+  const state={...createGame('tcg'),players:[{id:'P1',seat:0,name:'P1',online:true}]};
+  for(const seat of [-1,12,1.5,'0'])assert.throws(()=>applyCommand(state,c('DRAW',{matSeat:seat})),/Invalid draw mat/);
+  assert.throws(()=>applyCommand(state,c('DRAW',{matSeat:6})),/own mat/);
+  assert.throws(()=>applyCommand({...state,players:[]},c('DRAW',{matSeat:2})),/No cards/);
+  const owned={...state,objects:state.objects.map(o=>o.matSeat===0?{...o,owner:'P2'}:o)};
+  assert.throws(()=>applyCommand(owned,c('DRAW',{matSeat:0})),/No cards/);
 });
