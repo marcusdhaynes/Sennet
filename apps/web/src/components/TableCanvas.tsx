@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -110,7 +110,7 @@ function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,
 function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,playmat:PlaymatAppearance,
-  opponentRelation:OpponentRelation,onToggleRelation:(choice:'enemy'|'ally')=>void,
+  onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,
   selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
@@ -328,19 +328,22 @@ function drawTcgMats(
       eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
       eye.on('pointercancel',()=>{pressedPointer=null;clear();});
       mat.addChild(eye);
-      // Relationship toggles belong to this viewer and the selected seat.
-      // No game commands or remote player state are changed.
-      if(seatLayers){
+    }
+    // Every other mat in Opponent Mode owns its own centered Sword and
+    // Shield controls. The Eye remains exclusive to the viewer's mat.
+    // These are local display choices, not multiplayer game commands.
+    if(seatLayers&&seat!==viewerSeat){
         for(const choice of ['enemy','ally'] as const){
           const isSword=choice==='enemy';
-          const active=opponentRelation===choice;
+          const active=relations[seat]===choice;
           const button=new Container();
-          button.position.set(isSword?-42:42,-TCG_MAT_HEIGHT/2);
+          const position=opponentRelationButtonPosition(choice);
+          button.position.set(position.x,position.y);
           button.eventMode='static';
           button.cursor='pointer';
-          button.hitArea=new Circle(0,0,19);
+          button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
           button.addChild(new Graphics()
-            .circle(0,0,16)
+            .circle(0,0,OPPONENT_RELATION_BUTTON_RADIUS)
             .fill({color:active?(isSword?0x78372d:0x245a4a):0x183a33,alpha:.97})
             .stroke({color:active?(isSword?0xf0b194:0xa4e6c5):0xe4cf9d,
               alpha:1,width:active?2.2:1.5}));
@@ -371,11 +374,10 @@ function drawTcgMats(
           });
           button.on('pointertap',e=>{
             e.stopPropagation();
-            onToggleRelation(choice);
+            onToggleRelation(seat,choice);
           });
           mat.addChild(button);
         }
-      }
     }
   }
 }
@@ -405,8 +407,8 @@ function makeDuelSeatLayers(
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
-  duelOpponent:number|null,relation:OpponentRelation,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  duelOpponent:number|null,
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
@@ -449,7 +451,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   }
   const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent,relations);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
-    relation,onToggleRelation,duelOpponent,relations,onMerge,
+    onToggleRelation,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
@@ -619,7 +621,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const eyeTapHandler=useRef<()=>void>(()=>{});
   const eyeHoldHandler=useRef<()=>void>(()=>{});
   const cycleOpponentHandler=useRef<(direction:'left'|'right')=>void>(()=>{});
-  const toggleRelationHandler=useRef<(choice:'enemy'|'ally')=>void>(()=>{});
+  const toggleRelationHandler=useRef<(targetSeat:number,choice:'enemy'|'ally')=>void>(()=>{});
   const focusOpponent=useRef<()=>void>(()=>{});
   const resetCamera=useRef<()=>void>(()=>{});
   const duelLayers=useRef<Map<number,Container>|null>(null);
@@ -716,9 +718,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       direction=>cycleOpponentHandler.current(direction),
-      choice=>toggleRelationHandler.current(choice),
+      (targetSeat,choice)=>toggleRelationHandler.current(targetSeat,choice),
       id=>{controlPointer.current=id;},hoverTimers.current,playmat,
-      eyeView.kind==='versus'?eyeView.opponent:null,selectedRelation,relations,250);
+      eyeView.kind==='versus'?eyeView.opponent:null,relations,250);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
@@ -987,13 +989,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // A newly selected seat can have a different ally/enemy layout.
       requestAnimationFrame(()=>focusOpponent.current());
     };
-    toggleRelationHandler.current=(choice)=>{
+    toggleRelationHandler.current=(targetSeat,choice)=>{
       const selected=viewRef.current;
-      if(selected.kind!=='versus'||selected.opponent===null)return;
+      if(selected.kind!=='versus'||targetSeat===seatRef.current||
+         !Number.isInteger(targetSeat)||targetSeat<0||targetSeat>=12)return;
       const next={...relationsRef.current};
-      next[selected.opponent]=toggleOpponentRelation(next[selected.opponent]??null,choice);
+      next[targetSeat]=toggleOpponentRelation(next[targetSeat]??null,choice);
       relationsRef.current=next;
       setRelations(next);
+      // The clicked mat may relocate from one side to the other; keep
+      // the locked camera framing every marked opponent and ally.
       requestAnimationFrame(()=>focusOpponent.current());
     };
     eyeTapHandler.current=()=>{
