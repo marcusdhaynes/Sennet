@@ -1309,21 +1309,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
-    {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
-      <div>
-        <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
-          side="top"
-          idleOpacity={mergeOpacity} seat={eyeView.opponent}
-          name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
-      </div>
-      <div>
-        <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
-          idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
-      </div>
-    </>}
-    {eyeView.kind==='castle'&&
-      <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
-        idleOpacity={mergeOpacity} name={playerName||'YOU'}/>}
+    {eyeView.kind==='versus'&&eyeView.opponent!==null&&
+      <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
+        side="top"
+        idleOpacity={mergeOpacity} seat={eyeView.opponent}
+        name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>}
+    {/* Our own name/seat tag lives in the unified book shelf outside
+        the canvas in ALL views. Do not create a duplicate bottom tag. */}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
       <span>Choose an opponent's mat or seat</span>
       <button type="button" onClick={()=>{selectView({kind:'overview',opponent:null});resetCamera.current();}}>Cancel</button>
