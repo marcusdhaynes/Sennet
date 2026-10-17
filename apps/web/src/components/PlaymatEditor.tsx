@@ -49,6 +49,9 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
       const clip=id+'-region-'+region.row+'-'+region.column;
       const merged=region.column===1&&region.lastRow>region.row;
       const matte=section.textureLayers.matte,sandy=section.textureLayers.sandy,glossy=section.textureLayers.glossy;
+      const spansImage=appearance.imageMode==='span';
+      const imageId=spansImage?appearance.spanningImageId:section.imageId;
+      const image=appearance.images[imageId];
       const textRotation=region.column===0?-90:region.column===2?90:0;
       return <g key={clip} pointerEvents="none">
         <defs><clipPath id={clip}><rect x={x+2} y={y+2} width={w-4} height={h-4} rx="6"/></clipPath></defs>
@@ -56,8 +59,11 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
           stroke={accent} strokeOpacity={merged?.7:.3} strokeWidth={merged?2:1}/>
         <rect x={x+2} y={y+2} width={w-4} height={h-4} rx="6" fill={accent} fillOpacity={merged?.13:.055}/>
         <g clipPath={'url(#'+clip+')'}>
-          {section.imageId&&appearance.images[section.imageId]&&
-            <image href={appearance.images[section.imageId]} x={x+2} y={y+2} width={w-4} height={h-4} preserveAspectRatio="xMidYMid slice"/>}
+          {image&&<image href={image}
+            x={spansImage?0:x+2} y={spansImage?0:y+2}
+            width={spansImage?TCG_MAT_WIDTH:w-4}
+            height={spansImage?TCG_MAT_HEIGHT:h-4}
+            preserveAspectRatio="xMidYMid slice"/>}
           {matte.enabled&&<rect x={x+4} y={y+4} width={w-8} height={h-8}
             fill={'url(#'+id+'-matte)'} opacity={matte.opacity*.32}/>}
           {sandy.enabled&&<rect x={x+4} y={y+4} width={w-8} height={h-8}
@@ -122,6 +128,10 @@ export default function PlaymatEditor({appearance,setAppearance,merges,seat,info
   const selected=appearance.selectedSections;
   const sample=appearance.sections[selected[0]??0];
   const canEdit=selected.length>0;
+  const canApplyImage=appearance.imageMode==='span'||canEdit;
+  const anySectionImage=selected.some(index=>Boolean(appearance.sections[index].imageId));
+  const currentImage=appearance.imageMode==='span'
+    ?Boolean(appearance.spanningImageId):anySectionImage;
   const toggleSection=(index:number)=>{
     setAppearance(prev=>({...prev,selectedSections:prev.selectedSections.includes(index)
       ?prev.selectedSections.filter(n=>n!==index)
@@ -138,19 +148,53 @@ export default function PlaymatEditor({appearance,setAppearance,merges,seat,info
         textureLayers:{...style.textureLayers,[key]:{...style.textureLayers[key],...patch}}
       }:style)}));
   };
+  const setImageMode=(mode:'repeat'|'span')=>{
+    setAppearance(prev=>{
+      if(prev.imageMode===mode)return prev;
+      if(mode==='span'){
+        // Reuse the active repeat image so switching modes shows an immediate
+        // result instead of going blank. Per-section images stay preserved.
+        const firstImage=prev.spanningImageId||
+          prev.selectedSections.map(i=>prev.sections[i].imageId).find(Boolean)||
+          prev.sections.map(section=>section.imageId).find(Boolean)||'';
+        return {...prev,imageMode:mode,spanningImageId:firstImage};
+      }
+      // Retain custom per-section images. If none exist yet, start by
+      // repeating the spanning image on each of the twelve sections.
+      const anyRepeat=prev.sections.some(section=>Boolean(section.imageId));
+      return {...prev,imageMode:mode,sections:!anyRepeat&&prev.spanningImageId
+        ?prev.sections.map(section=>({...section,imageId:prev.spanningImageId}))
+        :prev.sections};
+    });
+  };
   const applyImage=(source:string)=>{
     const image=source.trim();
-    if(!canEdit){inform('Select At Least One Section.');return;}
+    if(!canApplyImage){inform('Select At Least One Section.');return;}
     if(!/^(https?:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(image)){
       inform('Use a PNG, JPEG or WebP Image, or a Direct HTTPS Image URL.');return;
     }
     if(image.length>2000000){inform('Image Is Too Large for Local Storage.');return;}
     setAppearance(prev=>{
       const id='bg_'+Math.random().toString(36).slice(2,15);
-      const sections=prev.sections.map((style,i)=>prev.selectedSections.includes(i)?{...style,imageId:id}:style);
-      const wanted=new Set(sections.map(style=>style.imageId));
+      const spanningImageId=prev.imageMode==='span'?id:prev.spanningImageId;
+      const sections=prev.imageMode==='repeat'
+        ?prev.sections.map((style,i)=>prev.selectedSections.includes(i)?{...style,imageId:id}:style)
+        :prev.sections;
+      // The spanning image and old repeat configurations are independent.
+      const wanted=new Set([...sections.map(style=>style.imageId),spanningImageId]);
       const images=Object.fromEntries(Object.entries({...prev.images,[id]:image}).filter(([key])=>wanted.has(key)));
-      return {...prev,sections,images};
+      return {...prev,sections,spanningImageId,images};
+    });
+  };
+  const removeImage=()=>{
+    setAppearance(prev=>{
+      const spanningImageId=prev.imageMode==='span'?'':prev.spanningImageId;
+      const sections=prev.imageMode==='repeat'
+        ?prev.sections.map((style,i)=>prev.selectedSections.includes(i)?{...style,imageId:''}:style)
+        :prev.sections;
+      const wanted=new Set([...sections.map(style=>style.imageId),spanningImageId]);
+      return {...prev,sections,spanningImageId,
+        images:Object.fromEntries(Object.entries(prev.images).filter(([key])=>wanted.has(key)))};
     });
   };
   const upload=async(file:File|undefined)=>{
@@ -194,20 +238,30 @@ export default function PlaymatEditor({appearance,setAppearance,merges,seat,info
         <div className="mat-pane-bar mat-preview-hint">Click Sections To Customize · Preview Updates Instantly</div>
         <div className="mat-inline-image">
           <h3>Background Image</h3>
+          <div className="mat-image-modes" role="group" aria-label="Background Image Layout">
+            <button type="button" aria-pressed={appearance.imageMode==='repeat'}
+              className={appearance.imageMode==='repeat'?'selected':''}
+              onClick={()=>setImageMode('repeat')}>Repeat Per Section</button>
+            <button type="button" aria-pressed={appearance.imageMode==='span'}
+              className={appearance.imageMode==='span'?'selected':''}
+              onClick={()=>setImageMode('span')}>Span Entire Playmat</button>
+          </div>
           <div className="mat-input-row">
             <input value={url} type="url" placeholder="Image URL" aria-label="Background Image URL"
               onChange={e=>setUrl(e.target.value)}/>
-            <button disabled={!canEdit||!url.trim()} onClick={()=>applyImage(url)}>Apply</button>
+            <button disabled={!canApplyImage||!url.trim()} onClick={()=>applyImage(url)}>Apply</button>
           </div>
           <div className="mat-input-row">
             <label className="mat-upload-control">
               {busy?'Processing…':'Upload Image'}
-              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={!canEdit||busy}
+              <input type="file" accept="image/png,image/jpeg,image/webp" disabled={!canApplyImage||busy}
                 onChange={e=>{void upload(e.target.files?.[0]);e.target.value='';}}/>
             </label>
-            <button disabled={!canEdit||!selected.some(i=>appearance.sections[i].imageId)}
-              onClick={()=>edit({imageId:''})}>Remove Image</button>
+            <button disabled={!currentImage} onClick={removeImage}>Remove Image</button>
           </div>
+          <span className="mat-image-hint">{appearance.imageMode==='span'
+            ?'One Continuous Image Across All 12 Sections'
+            :'Repeat The Image Within Each Selected Section'} · Textures &amp; Effects Always On Top</span>
         </div>
       </section>
       <div className="mat-editor-controls">
