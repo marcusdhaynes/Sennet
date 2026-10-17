@@ -553,7 +553,11 @@ test('unmerged spaces always snap and appearance defaults are independent and no
   const cfg=defaultPlaymatAppearance();
   assert.equal(cfg.sections.length,12);
   assert.equal(cfg.snapMerged,false);
-  assert.equal(cfg.sections[0].texture,'matte-glossy');
+  assert.equal(cfg.sections[0].textureLayers.matte.enabled,true);
+  assert.equal(cfg.sections[0].textureLayers.glossy.enabled,true);
+  assert.equal(cfg.sections[0].textureLayers.sandy.enabled,false);
+  assert.equal(cfg.sections[0].textureLayers.matte.opacity,.18);
+  assert.notEqual(cfg.sections[0].textureLayers,cfg.sections[1].textureLayers);
   assert.ok(cfg.sections[0].innerShadow&&cfg.sections[0].innerBevel);
   assert.equal(playmatSectionIndex(3,2),11);
   const first=tcgMatCells(0).find(cell=>cell.row===2&&cell.column===1);
@@ -561,12 +565,21 @@ test('unmerged spaces always snap and appearance defaults are independent and no
   assert.ok(tcgSnapPoint(pt.x,pt.y,[],false));
   const input={...cfg,images:{bg_abcde:'data:image/png;base64,aGVsbG8=',fake:'javascript:bad'},
     selectedSections:[5,5,-1,12,2],
-    sections:[{...cfg.sections[0],imageId:'fake',shadowOpacity:77,texture:'unreal'}]};
+    sections:[{...cfg.sections[0],imageId:'fake',shadowOpacity:77,
+      textureLayers:{
+        matte:{enabled:true,opacity:7},
+        sandy:{enabled:true,opacity:.43},
+        glossy:{enabled:false,opacity:-5}
+      }}]};
   const safe=normalizePlaymatAppearance(input);
   assert.deepEqual(safe.selectedSections,[2,5]);
   assert.equal(safe.sections[0].imageId,'');
   assert.equal(safe.sections[0].shadowOpacity,1);
-  assert.equal(safe.sections[0].texture,'matte-glossy');
+  assert.equal(safe.sections[0].textureLayers.matte.opacity,1);
+  assert.equal(safe.sections[0].textureLayers.sandy.opacity,.43);
+  assert.equal(safe.sections[0].textureLayers.sandy.enabled,true);
+  assert.equal(safe.sections[0].textureLayers.glossy.enabled,false);
+  assert.equal(safe.sections[0].textureLayers.glossy.opacity,0);
   assert.equal(safe.sections[1].imageId,'');
   assert.equal(safe.snapMerged,false);
 });
@@ -582,4 +595,40 @@ test('TCG card, token, miniature and die pieces snap to unmerged mat spaces',()=
     assert.equal(moved.matSeat,0,kind+' should occupy selected mat');
     assert.ok(Math.hypot(moved.x-cell.x,moved.y-cell.y)<1e-6,kind+' should snap to slot center');
   }
+});
+
+test('legacy single-texture settings migrate to independent matte, sandy and glossy controls',()=>{
+  const input=defaultPlaymatAppearance();
+  const old=[
+    {texture:'matte-glossy',textureOpacity:.23},
+    {texture:'sandy',textureOpacity:.72},
+    {texture:'none',textureOpacity:.4},
+    {texture:'glossy',textureOpacity:.58}
+  ];
+  const migrated=normalizePlaymatAppearance({...input,sections:old});
+  for(const [index,kind] of ['matte-glossy','sandy','none','glossy'].entries()){
+    const layers=migrated.sections[index].textureLayers;
+    assert.equal(layers.matte.enabled,kind==='matte-glossy');
+    assert.equal(layers.sandy.enabled,kind==='sandy');
+    assert.equal(layers.glossy.enabled,kind==='glossy'||kind==='matte-glossy');
+    for(const layer of Object.values(layers))assert.equal(layer.opacity,old[index].textureOpacity);
+  }
+  const updated=defaultPlaymatAppearance();
+  updated.sections[3].textureLayers.matte.enabled=false;
+  assert.equal(updated.sections[2].textureLayers.matte.enabled,true);
+  assert.deepEqual(normalizePlaymatAppearance(updated),updated);
+});
+
+test('multi-texture opacity sanitizes invalid values without disabling valid textures',()=>{
+  const input={...defaultPlaymatAppearance(),sections:[
+    {textureLayers:{
+      matte:{enabled:false,opacity:-4},
+      sandy:{enabled:true,opacity:5},
+      glossy:{enabled:true,opacity:Infinity}
+    }},
+  ]};
+  const layers=normalizePlaymatAppearance(input).sections[0].textureLayers;
+  assert.deepEqual(layers.matte,{enabled:false,opacity:0});
+  assert.deepEqual(layers.sandy,{enabled:true,opacity:1});
+  assert.deepEqual(layers.glossy,{enabled:true,opacity:.18});
 });
