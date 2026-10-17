@@ -306,15 +306,24 @@ export function opposingMatLayout(viewerSeat:number,opponentSeat:number):Opposin
   };
 }
 export type OpponentRelation='enemy'|'ally'|null;
-/** Relation buttons are equal-size merge-style circles centered as a pair
- * on the upper border of every other player's first row. */
+/** Opponent controls stay fully inside their own half of the battlefield.
+ * Enemy mats face 180° toward the viewer, so the physical screen-TOP is
+ * their local BOTTOM edge. Mirror X too: Sword stays on the screen-left,
+ * Shield on the screen-right, even for an upside-down opponent mat.
+ * An inset beyond the hit radius keeps controls away from the dividing
+ * line (for allies) and from viewport clipping (for enemies).
+ */
 export const OPPONENT_RELATION_BUTTON_OFFSET=22;
 export const OPPONENT_RELATION_BUTTON_RADIUS=16;
 export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=19;
-export function opponentRelationButtonPosition(choice:'enemy'|'ally'){
+export const OPPONENT_RELATION_BUTTON_INSET=OPPONENT_RELATION_BUTTON_HIT_RADIUS+5;
+export function opponentRelationButtonPosition(choice:'enemy'|'ally',enemySide=false){
+  const screenX=choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET;
   return {
-    x:choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET,
-    y:-TCG_MAT_HEIGHT/2
+    x:enemySide?-screenX:screenX,
+    y:enemySide
+      ?TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET
+      :-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET
   };
 }
 /** Only one role can be active for an opponent; activating it again clears it. */
