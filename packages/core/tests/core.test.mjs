@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,castleIndependentFocusLayout,castleAllySeats,nextCastleAllySeat,nextCastleFocusedSeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,castleIndependentFocusLayout,castleArrowsVisible,castleAllySeats,nextCastleAllySeat,nextCastleFocusedSeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1541,6 +1541,110 @@ test('Castle focus permits choosing another mat independently and ignores stale 
     castleGridLayout(viewer,changed,'all',2,viewport).mats.get(viewer));
   assert.equal(nextCastleFocusedSeat(viewer,1,'right',relations),2);
   assert.equal(nextCastleFocusedSeat(viewer,3,'right',relations),4);
+});
+
+test('Castle hold switches BOTH ally and enemy halves together from All and independent focus',()=>{
+  const screens=[
+    {width:320,height:620},{width:800,height:600},
+    {width:1920,height:1080},{width:2560,height:720}
+  ];
+  for(let viewer=0;viewer<12;viewer++)for(const screen of screens){
+    const seats=Array.from({length:12},(_,seat)=>seat).filter(s=>s!==viewer);
+    const allies=seats.filter((_,i)=>i%2===0);
+    const enemies=seats.filter((_,i)=>i%2===1);
+    const relations=Object.fromEntries([
+      ...allies.map(s=>[s,'ally']),
+      ...enemies.map(s=>[s,'enemy'])
+    ]);
+    const show=(mode,focus={ally:null,enemy:null},a=allies[0],e=enemies[0])=>
+      castleIndependentFocusLayout(viewer,relations,mode,a,focus,
+        screen,BATTLEFIELD_PLAYMAT_PADDING,e);
+    const all=show('all');
+    const bothFocused=show('all',{ally:allies[2],enemy:enemies[2]});
+    assert.equal(all.mats.size,12);
+    assert.equal(bothFocused.mats.size,3);
+    // After holding from All or focused All: one full-size participant
+    // ON EACH SIDE, NOT an enemy grid with only the ally focused.
+    const single=show('single',{ally:null,enemy:null},
+      allies[2],enemies[2]);
+    assert.deepEqual([...single.mats.keys()].sort((a,b)=>a-b),
+      [viewer,allies[2],enemies[2]].sort((a,b)=>a-b));
+    assert.equal(single.mats.get(allies[2]).scale,1);
+    assert.equal(single.mats.get(enemies[2]).scale,1);
+    assert.deepEqual(single.mats.get(viewer),all.mats.get(viewer));
+    assert.equal(single.cameraScale,all.cameraScale);
+    for(const seat of [...allies,...enemies]){
+      const isSelected=seat===allies[2]||seat===enemies[2];
+      assert.equal(single.mats.has(seat),isSelected);
+      assert.equal(castleArrowsVisible(viewer,seat,'single','single',
+        allies[2],enemies[2],{ally:null,enemy:null},relations),isSelected);
+    }
+    // The following hold switches BOTH sides back to the full grids.
+    const backToAll=show('all',{ally:null,enemy:null},allies[2],enemies[2]);
+    assert.deepEqual([...backToAll.mats.keys()].sort((a,b)=>a-b),
+      [...all.mats.keys()].sort((a,b)=>a-b));
+    assert.deepEqual(backToAll.mats.get(viewer),single.mats.get(viewer));
+    assert.ok([...allies,...enemies].every(seat=>
+      !castleArrowsVisible(viewer,seat,'all','all',allies[2],
+        enemies[2],{ally:null,enemy:null},relations)));
+    // A missing role must not invent a phantom mat.
+    const noEnemy=Object.fromEntries(allies.map(s=>[s,'ally']));
+    const alone=castleIndependentFocusLayout(viewer,noEnemy,'single',
+      allies[0],{ally:null,enemy:null},screen,
+      BATTLEFIELD_PLAYMAT_PADDING,enemies[0]);
+    assert.equal(alone.mats.size,2);
+    assert.ok(alone.mats.has(allies[0]));
+  }
+});
+
+test('Arrow visibility and cycling work independently after focusing Ally, Enemy, or both',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const seats=Array.from({length:12},(_,i)=>i).filter(s=>s!==viewer);
+    const allies=seats.filter((_,i)=>i%2===0);
+    const enemies=seats.filter((_,i)=>i%2===1);
+    const relations=Object.fromEntries([
+      ...allies.map(s=>[s,'ally']),...enemies.map(s=>[s,'enemy'])
+    ]);
+    const a=allies[0],e=enemies[0];
+    const visible=(seat,base,focus)=>castleArrowsVisible(
+      viewer,seat,'focus',base,a,e,focus,relations);
+    assert.ok(visible(a,'all',{ally:a,enemy:null}),
+      'Clicking Ally exposes its arrows even while Enemies remain All');
+    assert.ok(!visible(e,'all',{ally:a,enemy:null}),
+      'Unfocused Enemy grid must not display singled-out arrows');
+    assert.ok(visible(e,'all',{ally:null,enemy:e}),
+      'Clicking Enemy exposes its arrows even while Allies remain All');
+    assert.ok(!visible(a,'all',{ally:null,enemy:e}));
+    assert.ok(visible(a,'all',{ally:a,enemy:e}));
+    assert.ok(visible(e,'all',{ally:a,enemy:e}));
+    assert.ok(visible(a,'single',{ally:null,enemy:e}),
+      'Unfocused Ally in Single retains arrows after Enemy click');
+    assert.ok(visible(e,'single',{ally:a,enemy:null}),
+      'Unfocused Enemy in Single retains arrows after Ally click');
+    for(const roleSeats of [allies,enemies]){
+      for(const [i,seat] of roleSeats.entries()){
+        for(const [dir,offset] of [['left',-1],['right',1]]){
+          const next=nextCastleFocusedSeat(viewer,seat,dir,relations);
+          assert.equal(next,roleSeats[(i+offset+roleSeats.length)%roleSeats.length]);
+          const focus=relations[seat]==='ally'
+            ?{ally:next,enemy:e}:{ally:a,enemy:next};
+          const base='all';
+          assert.ok(visible(next,base,focus),
+            'The target of each arrow remains interactive in focus');
+          const frame=castleIndependentFocusLayout(viewer,relations,base,
+            a,focus,{width:1920,height:1080},
+            BATTLEFIELD_PLAYMAT_PADDING,e);
+          assert.ok(frame.mats.has(next));
+          assert.equal(frame.mats.get(next).scale,1);
+          assert.equal(frame.mats.size,3);
+        }
+      }
+    }
+    assert.equal(castleArrowsVisible(viewer,viewer,'single','single',a,e,
+      {ally:null,enemy:null},relations),false);
+    assert.equal(castleArrowsVisible(viewer,12,'single','single',a,e,
+      {ally:null,enemy:null},relations),false);
+  }
 });
 
 test('Gaps choose nearest row, and exact slot positions beat middle-zone midpoint',()=>{
