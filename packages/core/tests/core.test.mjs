@@ -927,7 +927,7 @@ test('Eye, Castle, Sword and Shield are centered ON the actual bottom line of HA
   assert.ok(hand,'The bottom middle pocket must be HAND');
   const local=tcgMatLocal(hand.x,hand.y,0);
   const handBottom=local.y+hand.height/2;
-  assert.equal(handBottom,TCG_HAND_BOTTOM_LINE_Y);
+  assert.ok(Math.abs(handBottom-TCG_HAND_BOTTOM_LINE_Y)<1e-8);
   assert.equal(handBottom,TCG_MAT_HEIGHT/2);
   const pairs=[
     [viewButtonPosition('eye'),viewButtonPosition('castle')],
@@ -937,7 +937,7 @@ test('Eye, Castle, Sword and Shield are centered ON the actual bottom line of HA
     assert.equal(left.y,handBottom,'Circle CENTER, not its edge, must sit on the line');
     assert.equal(right.y,handBottom,'Circle CENTER, not its edge, must sit on the line');
     assert.equal(left.x,-right.x,'Pair evenly centered above Hand midpoint');
-    assert.equal((left.x+right.x)/2,local.x);
+    assert.ok(Math.abs((left.x+right.x)/2-local.x)<1e-8);
     assert.equal(left.x,-PLAYMAT_BOTTOM_BUTTON_OFFSET);
     assert.equal(right.x,PLAYMAT_BOTTOM_BUTTON_OFFSET);
     assert.ok(right.x-left.x>=2*VIEW_BUTTON_HIT_RADIUS);
@@ -970,7 +970,8 @@ test('every seat anchors button centers to its own Hand lower boundary, includin
         const centerDy=(target.x-BOARD_CENTER)*Math.sin(rotation)+
           (target.y-BOARD_CENTER)*Math.cos(rotation);
         for(const button of buttons){
-          assert.equal(button.y,localBottom,'Player-perspective HAND bottom, not screen bottom');
+          assert.ok(Math.abs(button.y-localBottom)<1e-8,
+            'Player-perspective HAND bottom, not screen bottom');
           const actualScreenY=centerDy+button.x*Math.sin(angle)+button.y*Math.cos(angle);
           const expectedScreenY=centerDy+localBottom*Math.cos(angle);
           assert.ok(Math.abs(actualScreenY-expectedScreenY)<1e-8);
