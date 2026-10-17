@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_INSET,opponentRelationButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -825,8 +825,8 @@ test('Sword and Shield share each other player top-row border, centered as a non
   assert.equal((sword.x+shield.x)/2,0,'The pair must be horizontally centered');
   assert.equal(sword.x,-OPPONENT_RELATION_BUTTON_OFFSET);
   assert.equal(shield.x,OPPONENT_RELATION_BUTTON_OFFSET);
-  assert.equal(sword.y,-TCG_MAT_HEIGHT/2);
-  assert.equal(shield.y,-TCG_MAT_HEIGHT/2);
+  assert.equal(sword.y,-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET);
+  assert.equal(shield.y,-TCG_MAT_HEIGHT/2+OPPONENT_RELATION_BUTTON_INSET);
   assert.equal(OPPONENT_RELATION_BUTTON_RADIUS,16);
   assert.ok(shield.x-sword.x>=2*OPPONENT_RELATION_BUTTON_HIT_RADIUS,
     'Both controls must remain independently clickable');
@@ -845,4 +845,51 @@ test('Sword and Shield share each other player top-row border, centered as a non
       }
     }
   }
+});
+
+test('a strict horizontal divider isolates enemy buttons above from ally buttons below at every seat',()=>{
+  const project=(point,rotation)=>{
+    const dx=point.x-BOARD_CENTER,dy=point.y-BOARD_CENTER;
+    return {
+      x:dx*Math.cos(rotation)-dy*Math.sin(rotation),
+      y:dx*Math.sin(rotation)+dy*Math.cos(rotation)
+    };
+  };
+  for(let viewer=0;viewer<12;viewer++){
+    const others=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
+    const relations=Object.fromEntries(others.map((seat,index)=>
+      [seat,index%3===0?'enemy':index%3===1?'ally':null]));
+    for(const selected of others){
+      const layout=groupedMatchupLayout(viewer,selected,relations);
+      const boardRotation=viewerTableRotation(viewer);
+      for(const [seat,target] of layout.mats){
+        const isOwner=seat===viewer;
+        const enemySide=!isOwner&&relations[seat]!=='ally';
+        if(isOwner)continue;
+        const center=project({x:target.x,y:target.y},boardRotation);
+        const angle=tcgMatOrigin(seat).angle+target.rotation+boardRotation;
+        for(const choice of ['enemy','ally']){
+          const control=opponentRelationButtonPosition(choice,enemySide);
+          const screenY=center.y+
+            control.x*Math.sin(angle)+control.y*Math.cos(angle);
+          const screenX=center.x+
+            control.x*Math.cos(angle)-control.y*Math.sin(angle);
+          assert.ok(enemySide
+            ?screenY+OPPONENT_RELATION_BUTTON_HIT_RADIUS<0
+            :screenY-OPPONENT_RELATION_BUTTON_HIT_RADIUS>0,
+            'Entire control hit area stays on its player\'s side of the divide');
+          assert.ok(enemySide?screenY<0:screenY>0);
+          if(choice==='enemy')assert.ok(screenX<center.x,'Sword always screen-left');
+          else assert.ok(screenX>center.x,'Shield always screen-right');
+        }
+      }
+    }
+  }
+  assert.ok(OPPONENT_RELATION_BUTTON_INSET>OPPONENT_RELATION_BUTTON_HIT_RADIUS);
+  const enemySword=opponentRelationButtonPosition('enemy',true);
+  const enemyShield=opponentRelationButtonPosition('ally',true);
+  assert.equal(enemySword.y,TCG_MAT_HEIGHT/2-OPPONENT_RELATION_BUTTON_INSET);
+  assert.equal(enemyShield.y,enemySword.y);
+  assert.equal(enemySword.x,-enemyShield.x);
+  assert.equal(enemySword.x,OPPONENT_RELATION_BUTTON_OFFSET);
 });
