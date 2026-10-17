@@ -595,6 +595,44 @@ export function castleGridLayout(
   },false);
   return {mats,allySeats:allies,enemySeats,selectedAlly:active,cameraScale};
 }
+/** Each side of Castle All can independently show its complete grid or
+ * one focused mat. Focusing an Ally leaves the entire Enemy grid untouched,
+ * and vice versa. With both sides focused exactly three mats remain:
+ * viewer + one Ally + one Enemy. Focus is local presentation only.
+ *
+ * Invalid or stale role selections are ignored so a switched/cleared
+ * Sword/Shield relationship cannot make a player appear on the wrong side.
+ */
+export interface CastleSideFocus{
+  ally:number|null;
+  enemy:number|null;
+}
+export function castleIndependentFocusLayout(
+  viewerSeat:number,
+  relations:Readonly<Record<number,OpponentRelation>>,
+  mode:CastleMode,selectedAlly:number|null,
+  focused:Readonly<CastleSideFocus>,
+  viewport:{width:number;height:number},
+  padding=BATTLEFIELD_PLAYMAT_PADDING
+):ReturnType<typeof castleGridLayout>{
+  const ally=focused.ally!==null&&focused.ally!==viewerSeat&&
+    relations[focused.ally]==='ally'?focused.ally:null;
+  const enemy=focused.enemy!==null&&focused.enemy!==viewerSeat&&
+    relations[focused.enemy]==='enemy'?focused.enemy:null;
+  if(ally===null&&enemy===null)
+    return castleGridLayout(viewerSeat,relations,mode,selectedAlly,viewport,padding);
+  const displayed:Record<number,OpponentRelation>={};
+  for(let seat=0;seat<SEATS;seat++){
+    if(seat===viewerSeat)continue;
+    const role=relations[seat];
+    if(role==='ally'&&(ally===null||seat===ally)||
+       role==='enemy'&&(enemy===null||seat===enemy)){
+      displayed[seat]=role;
+    }
+  }
+  return castleGridLayout(viewerSeat,displayed,mode,
+    ally??selectedAlly,viewport,padding);
+}
 /** Focus a marked Castle ally or enemy in isolation without changing the
  * all/single preference. Reuses the same locked Castle camera and the same
  * full-size left-aligned viewer mat, regardless of the chosen opponent.
