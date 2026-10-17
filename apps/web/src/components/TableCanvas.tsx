@@ -254,7 +254,7 @@ function drawTcgMats(
     // rotated mat, positive local X appears on the LEFT of the screen.
     // Left = seat number decrement (counter-clockwise in full-table view).
     // Right = seat number increment (clockwise), always skipping our seat.
-    if(seatLayers&&seat===selectedOpponent){
+    if(seatLayers&&seat===selectedOpponent&&(!castleActive||castleMode==='single')){
       const allyHere=castleActive&&relations[seat]==='ally';
       for(const direction of ['left','right'] as const){
         const left=direction==='left';
