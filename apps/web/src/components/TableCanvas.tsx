@@ -916,7 +916,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const animateTo=(zoom:number,panX:number,panY:number)=>{
       const w=host.clientWidth,h=host.clientHeight;
-      const targetZoom=clampTableZoom(zoom);
+      // Locked opponent mode may need to show up to twelve mats at once.
+      // Permit a below-normal fit scale ONLY there; the standard camera
+      // retains its strict 100% full-table minimum zoom.
+      const targetZoom=viewRef.current.kind==='versus'
+        ?Math.min(48,Math.max(.12,Number.isFinite(zoom)?zoom:1))
+        :clampTableZoom(zoom);
       const bounded=clampTablePan(panX,panY,targetZoom,w,h);
       const from={...camera.current};
       interruptFocus();
