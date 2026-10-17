@@ -666,7 +666,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           const eligible=members.length>=2&&members.every(o=>!o.locked&&
             (state.kind!=='tcg'||!o.owner||o.owner===(state.players.length?actorId:'local')));
           const active:ActiveDrag={
-            id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind==='card',
+            id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board',
             x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
             whole:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
