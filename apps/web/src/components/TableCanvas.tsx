@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -444,8 +444,8 @@ function makeDuelSeatLayers(
   const layers=new Map<number,Container>();
   // Eye: exactly one other mat. Castle: every explicitly marked seat.
   const layout=castleActive
-    ?groupedMatchupLayout(viewerSeat,null,relations)
-    :oneOnOneMatchupLayout(viewerSeat,opponentSeat!,relations);
+    ?groupedMatchupLayout(viewerSeat,null,relations,BATTLEFIELD_PLAYMAT_PADDING)
+    :oneOnOneMatchupLayout(viewerSeat,opponentSeat!,relations,BATTLEFIELD_PLAYMAT_PADDING);
   // Render the viewer last so Eye/Castle controls stay on top.
   const order=[...layout.mats.keys()].filter(seat=>seat!==viewerSeat);
   order.push(viewerSeat);
@@ -752,7 +752,17 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         }
       };
       updateView.current=rescale;
-      resizeObserver=new ResizeObserver(rescale);resizeObserver.observe(mount.current!);rescale();
+      resizeObserver=new ResizeObserver(()=>{
+        const oldW=lastWidth,oldH=lastHeight;
+        rescale();
+        // Preserve complete Hand-circle visibility after viewport resizing,
+        // not just when Eye/Castle is initially activated.
+        if((lastWidth!==oldW||lastHeight!==oldH)&&
+          (viewRef.current.kind==='versus'||viewRef.current.kind==='castle')){
+          requestAnimationFrame(()=>focusOpponent.current());
+        }
+      });
+      resizeObserver.observe(mount.current!);rescale();
     })().catch(err=>console.error('PixiJS initialization failed',err));
     return()=>{disposed=true;resizeObserver?.disconnect();cancelActiveDrag.current();
       for(const timer of hoverTimers.current)window.clearTimeout(timer);
@@ -1029,14 +1039,14 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const selected=viewRef.current.opponent;
       if(selected===null&&viewRef.current.kind!=='castle')return;
       const lineup=viewRef.current.kind==='castle'
-        ?groupedMatchupLayout(seatRef.current,null,relationsRef.current)
-        :oneOnOneMatchupLayout(seatRef.current,selected!,relationsRef.current);
-      const heightScale=h/(2*TCG_MAT_HEIGHT);
-      // Eye frames just two playmats, while Castle frames ALL classified
-      // opponents and allies. Both preserve the locked camera.
-      const arrowsWidth=lineup.columns*TCG_MAT_WIDTH+
-        (lineup.columns-1)*ALLY_MAT_GAP+2*19;
-      const widthScale=Math.max(80,w-24)/arrowsWidth;
+        ?groupedMatchupLayout(seatRef.current,null,relationsRef.current,BATTLEFIELD_PLAYMAT_PADDING)
+        :oneOnOneMatchupLayout(seatRef.current,selected!,relationsRef.current,BATTLEFIELD_PLAYMAT_PADDING);
+      // Account for the FULL Hand-circle hit radius, plus a minimal
+      // 3-unit safety clearance, equally on all four sides of each mat.
+      // This also gives both battlefield halves breathing room at the divider.
+      const bounds=battlefieldFitBounds(lineup.columns);
+      const heightScale=h/bounds.height;
+      const widthScale=w/bounds.width;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
     cycleOpponentHandler.current=(direction)=>{
