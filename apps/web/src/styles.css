@@ -140,9 +140,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 
-/* The compact PLAYER 01/name tab and the books share ONE continuous
-   drawer surface. Click its number/name button to expand or collapse;
-   hover never opens/closes it. No separate panel, caret, or furniture. */
+/* Gold tag stays at the TOP of a drawer that rises and widens from the bottom. */
 .player-hub{
   position:absolute;
   z-index:9;
@@ -181,11 +179,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   align-items:center;
   justify-content:center;
   width:100%;
-  min-height:26px;
-  padding:3px 8px;
+  min-height:0;
+  padding:2px 8px;
   background:#b79968;
   border-bottom:1px solid #dfc995;
-  font:700 11px/1.1 'DM Sans',system-ui,sans-serif;
+  font:700 11px/1 'DM Sans',system-ui,sans-serif;
   letter-spacing:.12em;
   color:#172b26;
 }
@@ -194,8 +192,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .player-hub-name{
   display:block;
   max-width:100%;
-  padding:5px 10px 7px;
+  padding:6px 10px 2px;
+  background:linear-gradient(165deg,#25493e,#1b3830);
+  color:#f1e4c9;
   font:700 15px/1.1 'Cormorant Garamond',Georgia,serif;
+  text-align:center;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -209,7 +210,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   transition:max-height .28s cubic-bezier(.18,.84,.22,1),opacity .2s ease,visibility .28s;
 }
 .player-hub.is-open .player-hub-content{
-  max-height:186px;
+  max-height:215px;
   opacity:1;
   visibility:visible;
   pointer-events:auto;
@@ -246,7 +247,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(max-width:390px){
   .player-hub-books{gap:7px;min-height:139px;padding:8px 5px}
   .player-hub .table-book{width:clamp(65px,22vw,84px);height:clamp(86px,29vw,111px)}
-  .player-hub.is-open .player-hub-content{max-height:165px}
+  .player-hub.is-open .player-hub-content{max-height:185px}
 }
 @media(prefers-reduced-motion:reduce){
   .player-hub,.player-hub-content,.player-hub .table-book{transition:none}
