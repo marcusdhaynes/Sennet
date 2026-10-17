@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -157,12 +157,18 @@ function drawTcgMats(
       const y=-dx*sin+dy*cos-cell.height/2;
       const w=cell.width,h=cell.height;
       const merged=cell.column===1&&cell.lastRow>cell.row;
+      const isCenterColumn=cell.column===1;
       const accent=TCG_ROW_COLORS[merged&&cell.row===0&&cell.lastRow===2?1:cell.row];
       const section=seatPlaymat.sections[playmatSectionIndex(cell.row,cell.column)];
       const base=new Graphics()
         .roundRect(x,y,w,h,8).fill({color:0x00050a,alpha:.98})
-        .stroke({color:accent,width:merged?2:1,alpha:merged?.7:.3})
-        .roundRect(x+2,y+2,w-4,h-4,6).fill({color:accent,alpha:merged?.13:.055})
+        // Only the CENTER battlefield/Hand pockets retain colored lines.
+        // Side (outer) columns use a subdued neutral border, not yellow.
+        .stroke({color:isCenterColumn?accent:0x253d36,
+          width:merged?2:1,alpha:isCenterColumn?(merged?.7:.3):.32})
+        .roundRect(x+2,y+2,w-4,h-4,6)
+        .fill({color:isCenterColumn?accent:0x253d36,
+          alpha:isCenterColumn?(merged?.13:.055):.025})
         .stroke({color:0x071915,width:1.8,alpha:.90});
       base.eventMode='none';mat.addChild(base);
       const spanImage=seatPlaymat.imageMode==='span';
@@ -170,10 +176,15 @@ function drawTcgMats(
       const image=seatPlaymat.images[imageId];
       if(image)addPlaymatImage(mat,base,x,y,w,h,image,spanImage);
       addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column);
-      const grid=new Graphics();
-      for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
-      for(let gy=y+10;gy<y+h-5;gy+=10)grid.moveTo(x+5,gy).lineTo(x+w-5,gy);
-      grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});grid.eventMode='none';mat.addChild(grid);
+      // Remove colored grid lines from both OUTER columns. Keep the
+      // colored guide lines in the middle playing area unchanged.
+      if(isCenterColumn){
+        const grid=new Graphics();
+        for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
+        for(let gy=y+10;gy<y+h-5;gy+=10)grid.moveTo(x+5,gy).lineTo(x+w-5,gy);
+        grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});
+        grid.eventMode='none';mat.addChild(grid);
+      }
       const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
       text.alpha=merged?1:.6;text.eventMode='none';
@@ -184,10 +195,8 @@ function drawTcgMats(
       if(cell.column===2)text.rotation=Math.PI/2;
       mat.addChild(text);
     }
-    // Boundary line is precisely as wide as this player's playmat.
-    mat.addChild(new Graphics().moveTo(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
-      .lineTo(TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2+12)
-      .stroke({color:0xbda47b,width:2,alpha:.83}));
+    // No separate gold/yellow outer border beneath the mat: only the
+    // central playing area keeps its colored guide lines.
 
     // Three lightweight hover-to-arm controls sit in the center-column
     // gutters. A merge keeps its control (shown as minus) for reversal.
@@ -427,12 +436,14 @@ function drawTcgMats(
  */
 function makeDuelSeatLayers(
   board:Container,viewerSeat:number,opponentSeat:number|null,
-  relations:Readonly<Record<number,OpponentRelation>>
+  relations:Readonly<Record<number,OpponentRelation>>,castleActive:boolean
 ){
   const layers=new Map<number,Container>();
-  const layout=groupedMatchupLayout(viewerSeat,opponentSeat,relations);
-  // Render every marked enemy on the opposing side even while viewing
-  // an ally. Render the viewer last so their eye controls stay on top.
+  // Eye: exactly one other mat. Castle: every explicitly marked seat.
+  const layout=castleActive
+    ?groupedMatchupLayout(viewerSeat,null,relations)
+    :oneOnOneMatchupLayout(viewerSeat,opponentSeat!,relations);
+  // Render the viewer last so Eye/Castle controls stay on top.
   const order=[...layout.mats.keys()].filter(seat=>seat!==viewerSeat);
   order.push(viewerSeat);
   for(const which of order){
@@ -491,7 +502,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       .stroke({color:0x112d2b,width:4}));
   }
   const layers=duelOpponent===null&&!castleActive
-    ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations);
+    ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
     onToggleRelation,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,castleActive,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
@@ -1016,10 +1027,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // half-overhanging navigation circles centered ON the mat borders.
       const selected=viewRef.current.opponent;
       if(selected===null&&viewRef.current.kind!=='castle')return;
-      const lineup=groupedMatchupLayout(seatRef.current,selected,relationsRef.current);
+      const lineup=viewRef.current.kind==='castle'
+        ?groupedMatchupLayout(seatRef.current,null,relationsRef.current)
+        :oneOnOneMatchupLayout(seatRef.current,selected!,relationsRef.current);
       const heightScale=h/(2*TCG_MAT_HEIGHT);
-      // Keep ALL persistent Sword enemies in the opposing row, plus
-      // all Shield allies alongside the viewer, fully within the frame.
+      // Eye frames just two playmats, while Castle frames ALL classified
+      // opponents and allies. Both preserve the locked camera.
       const arrowsWidth=lineup.columns*TCG_MAT_WIDTH+
         (lineup.columns-1)*ALLY_MAT_GAP+2*19;
       const widthScale=Math.max(80,w-24)/arrowsWidth;
