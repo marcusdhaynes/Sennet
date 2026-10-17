@@ -459,6 +459,115 @@ export function groupedMatchupLayout(
     columns:Math.max(enemySeats.length,bottomSeats.length)
   };
 }
+/** Castle is viewer-local: Single displays exactly one Shield-marked
+ * ally; All lays them out to the right without ever shrinking or shifting
+ * the viewer's left-hand mat. Enemy mats remain across the central divide.
+ * World positions are screen-relative after viewerTableRotation(), so this
+ * geometry is independent of which of the twelve seats is occupied.
+ */
+export type CastleMode='single'|'all';
+export function castleAllySeats(
+  viewerSeat:number,relations:Readonly<Record<number,OpponentRelation>>
+):number[]{
+  return Array.from({length:SEATS},(_,seat)=>seat)
+    .filter(seat=>seat!==viewerSeat&&relations[seat]==='ally');
+}
+export function nextCastleAllySeat(
+  viewerSeat:number,current:number|null,
+  direction:'left'|'right',relations:Readonly<Record<number,OpponentRelation>>
+):number|null{
+  const allies=castleAllySeats(viewerSeat,relations);
+  if(!allies.length)return null;
+  if(current===null||!allies.includes(current))return allies[0];
+  const next=(allies.indexOf(current)+(direction==='right'?1:-1)+allies.length)%allies.length;
+  return allies[next];
+}
+export interface CastleMatPlacement {x:number;y:number;rotation:number;scale:number}
+export function castleGridLayout(
+  viewerSeat:number,relations:Readonly<Record<number,OpponentRelation>>,
+  mode:CastleMode,selectedAlly:number|null,
+  viewport:{width:number;height:number},
+  padding=BATTLEFIELD_PLAYMAT_PADDING
+):{
+  mats:Map<number,CastleMatPlacement>;allySeats:number[];enemySeats:number[];
+  selectedAlly:number|null;cameraScale:number
+}{
+  const pad=Math.max(0,padding);
+  const width=Math.max(1,viewport.width),height=Math.max(1,viewport.height);
+  const cameraScale=Math.min(
+    height/(2*TCG_MAT_HEIGHT+4*pad),
+    width/(2*TCG_MAT_WIDTH+6*pad)
+  );
+  const visibleW=width/cameraScale,visibleH=height/cameraScale;
+  const rotation=viewerTableRotation(viewerSeat);
+  const cos=Math.cos(rotation),sin=Math.sin(rotation);
+  // Convert stable screen-up/down coordinates to world coordinates before
+  // the board's rotation is applied. Never introduce a viewport pan.
+  const world=(x:number,y:number)=>({
+    x:BOARD_CENTER+x*cos+y*sin,
+    y:BOARD_CENTER-x*sin+y*cos
+  });
+  const mats=new Map<number,CastleMatPlacement>();
+  const allies=castleAllySeats(viewerSeat,relations);
+  const enemySeats=Array.from({length:SEATS},(_,seat)=>seat)
+    .filter(seat=>seat!==viewerSeat&&relations[seat]==='enemy');
+  const active=selectedAlly!==null&&allies.includes(selectedAlly)
+    ?selectedAlly:allies[0]??null;
+  // The viewer is always full-size, at precisely the same left edge and
+  // vertical midpoint for Single, All, and any ally/enemy count.
+  const viewerLeft=-visibleW/2+pad;
+  const viewerCenter=world(viewerLeft+TCG_MAT_WIDTH/2,visibleH/4);
+  mats.set(viewerSeat,{...viewerCenter,rotation:0,scale:1});
+  const gap=2*pad;
+  const grid=(
+    seats:readonly number[],rect:{left:number;right:number;top:number;bottom:number},
+    enemy:boolean
+  )=>{
+    if(!seats.length)return;
+    const areaW=rect.right-rect.left,areaH=rect.bottom-rect.top;
+    // Explore all row/column shapes and maximize an UNIFORM ally scale.
+    // The specified 2*padding spacing is kept even for tiny ally mats.
+    let bestCols=1,bestRows=seats.length,bestScale=0;
+    for(let cols=1;cols<=seats.length;cols++){
+      const rows=Math.ceil(seats.length/cols);
+      const availableW=areaW-(cols-1)*gap;
+      const availableH=areaH-(rows-1)*gap;
+      if(availableW<=0||availableH<=0)continue;
+      const scale=Math.min(1,
+        availableW/(cols*TCG_MAT_WIDTH),
+        availableH/(rows*TCG_MAT_HEIGHT));
+      if(scale>bestScale+1e-9||
+        (Math.abs(scale-bestScale)<=1e-9&&rows<bestRows)){
+        bestScale=scale;bestCols=cols;bestRows=rows;
+      }
+    }
+    // Extreme narrow screens: still keep all mats in view with positive size.
+    const s=Math.max(0.000001,bestScale);
+    const cellW=TCG_MAT_WIDTH*s,cellH=TCG_MAT_HEIGHT*s;
+    const totalH=bestRows*cellH+(bestRows-1)*gap;
+    for(let index=0;index<seats.length;index++){
+      const row=Math.floor(index/bestCols),col=index%bestCols;
+      const entries=Math.min(bestCols,seats.length-row*bestCols);
+      const rowWidth=entries*cellW+(entries-1)*gap;
+      const x=(rect.left+rect.right-rowWidth)/2+col*(cellW+gap)+cellW/2;
+      const y=(rect.top+rect.bottom-totalH)/2+row*(cellH+gap)+cellH/2;
+      const seat=seats[index];
+      mats.set(seat,{...world(x,y),
+        rotation:(viewerSeat+(enemy?6:0)-seat)*Math.PI/6,scale:s});
+    }
+  };
+  grid(enemySeats,{
+    left:-visibleW/2+pad,right:visibleW/2-pad,
+    top:-visibleH/2+pad,bottom:-pad
+  },true);
+  const drawnAllies=mode==='single'?(active===null?[]:[active]):allies;
+  grid(drawnAllies,{
+    left:viewerLeft+TCG_MAT_WIDTH+gap,
+    right:visibleW/2-pad,
+    top:pad,bottom:visibleH/2-pad
+  },false);
+  return {mats,allySeats:allies,enemySeats,selectedAlly:active,cameraScale};
+}
 /** Eye ALWAYS shows exactly the viewer and the selected opponent on
  * opposite sides of the divider, regardless of Sword/Shield status.
  * Only Castle distributes marked allies beside the player.
