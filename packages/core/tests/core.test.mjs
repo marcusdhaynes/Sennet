@@ -1191,7 +1191,8 @@ test('Gaps choose nearest row, and exact slot positions beat middle-zone midpoin
     const left=cells.find(c=>c.row===1&&c.column===0);
     const leftCenter=tcgMatLocal(left.x,left.y,seat);
     const gapMid=leftCenter.x+left.width/2+TCG_MAT.gap/2;
-    const middle=tcgSnapPoint(...Object.values(tcgMatWorld(gapMid,a.y,seat)));
+    const midDrop=tcgMatWorld(gapMid,a.y,seat);
+    const middle=tcgSnapPoint(midDrop.x,midDrop.y);
     assert.equal(middle.seat,seat);
     assert.equal(middle.row,1);
     assert.equal(middle.column,1,'closest slot beats distant middle-zone center');
@@ -1213,8 +1214,9 @@ test('Unmerged nearest-zone snapping is deterministic for MOVE and does not chan
     const game=applyCommand(starting,action);
     const card=game.objects.find(o=>o.id==='hero-a');
     assert.equal(card.matSeat,predicted.seat);
-    assert.equal(card.row,predicted.row);
-    assert.equal(card.slot,predicted.slot);
+    const rechecked=tcgSnapPoint(card.x,card.y);
+    assert.equal(rechecked.row,predicted.row);
+    assert.equal(rechecked.slot,predicted.slot);
     assert.ok(Math.hypot(card.x-predicted.x,card.y-predicted.y)<1e-6);
     assert.deepEqual(game,replay(starting,[action]));
   }
