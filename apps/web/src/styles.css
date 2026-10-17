@@ -229,6 +229,139 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .personal-drawer,.books-layer .table-book{transition:none}
 }
 
+/* One unified name/seat tag and retractable book shelf.
+   The old seat furniture, floating books, and separate trigger are replaced
+   by this single responsive control, visible in every tabletop mode. */
+.player-hub{
+  position:absolute;
+  z-index:9;
+  bottom:0;
+  left:50%;
+  width:min(410px,calc(100% - 24px));
+  transform:translateX(-50%);
+  pointer-events:none;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+}
+.player-hub-tab{
+  position:relative;
+  z-index:2;
+  width:min(148px,100%);
+  padding:0;
+  margin:0;
+  background:linear-gradient(165deg,#25493e,#172e29);
+  border:1px solid #bb9e6b;
+  border-radius:8px 8px 0 0;
+  box-shadow:0 -5px 16px #0008;
+  color:#f1e4c9;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  cursor:pointer;
+  pointer-events:auto;
+  touch-action:manipulation;
+}
+.player-hub-tab:hover,.player-hub-tab:focus-visible{
+  outline:1px solid #ead19b;
+  box-shadow:0 -5px 21px #c4a46b66;
+}
+.player-hub-grip{
+  width:100%;
+  height:16px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:#b79968;
+  border-bottom:1px solid #dfc995;
+  font:700 14px/1 'DM Sans',system-ui,sans-serif;
+  color:#172b26;
+  border-radius:7px 7px 0 0;
+}
+.player-hub-identity{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  min-height:35px;
+  padding:3px 8px;
+  width:100%;
+}
+.player-hub-name{
+  font:700 14px/1.1 'Cormorant Garamond',Georgia,serif;
+  white-space:nowrap;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.player-hub-seat{
+  font:700 8px/1.25 'DM Sans',system-ui,sans-serif;
+  letter-spacing:.19em;
+  color:#d6b983;
+}
+.player-hub-panel{
+  position:relative;
+  z-index:1;
+  width:100%;
+  min-height:172px;
+  padding:17px 12px 12px;
+  margin-bottom:-1px;
+  background:linear-gradient(165deg,#142c26,#24443b 50%,#142b26);
+  border:2px solid #997d54;
+  border-top:9px solid #b49363;
+  border-radius:12px 12px 8px 8px;
+  box-shadow:0 -14px 36px #000a,inset 0 0 0 2px #ceaa6d36;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transform:translateY(16px) scale(.96);
+  transform-origin:bottom center;
+  transition:opacity .22s ease,transform .34s cubic-bezier(.16,1,.3,1),visibility .22s ease;
+}
+.player-hub.is-open .player-hub-panel{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+  transform:translateY(0) scale(1);
+}
+.player-hub-books{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:clamp(9px,3.5vw,20px);
+  width:100%;
+  min-height:139px;
+  pointer-events:auto;
+}
+.player-hub .table-book{
+  width:clamp(68px,21vw,104px);
+  height:clamp(89px,27vw,133px);
+  flex:none;
+  transform:none;
+  margin:0;
+  touch-action:manipulation;
+  transition:transform .2s ease,filter .2s ease;
+}
+.player-hub .table-book:nth-child(n){transform:none}
+.player-hub .table-book:hover,.player-hub .table-book:focus-visible,
+.player-hub .table-book.opened{
+  transform:translateY(-5px) scale(1.035);
+  filter:brightness(1.12);
+}
+.player-hub .book-title{font-size:clamp(17px,4vw,25px)}
+.player-hub .book-subtitle{font-size:clamp(6px,1.6vw,9px)}
+.player-hub .book-ornament{font-size:clamp(11px,3vw,20px)}
+.player-hub .book-number{font-size:clamp(7px,1.6vw,10px)}
+@media(max-width:390px){
+  .player-hub-panel{padding:13px 8px 9px;min-height:154px}
+  .player-hub-books{gap:8px;min-height:128px}
+  .player-hub .table-book{width:clamp(66px,22vw,85px);height:clamp(87px,29vw,112px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .player-hub-panel,.player-hub .table-book{transition:none}
+}
+
 /* Selection guide does not block the tabletop: the next click may land
    anywhere on an opponent's mat, including directly over a card. */
 .opponent-target-prompt{
