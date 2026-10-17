@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1142,4 +1142,107 @@ test('battlefield padding adds only the minimal required radius-plus-clearance a
   assert.equal((one.width-TCG_MAT_WIDTH)/2,p);
   assert.equal((one.height-2*TCG_MAT_HEIGHT)/4,p);
   assert.ok(p-VIEW_BUTTON_RADIUS>=3);
+});
+
+test('Unmerged center rows snap to the nearest of seven slots in their nearest row for every player',()=>{
+  for(let seat=0;seat<12;seat++){
+    for(let row=0;row<4;row++){
+      const zone=tcgMatCells(seat).find(c=>c.row===row&&c.column===1);
+      const center=tcgMatLocal(zone.x,zone.y,seat);
+      const step=zone.width/TCG_MAT.centerCards;
+      for(let slot=0;slot<TCG_MAT.centerCards;slot++){
+        const x=center.x+(slot-3)*step;
+        for(const [offsetX,offsetY] of [[0,0],[-12,-17],[12,17]]){
+          const drop=tcgMatWorld(x+offsetX,center.y+offsetY,seat);
+          const snapped=tcgSnapPoint(drop.x,drop.y,[]);
+          assert.ok(snapped,'unmerged slot should always snap');
+          assert.equal(snapped.seat,seat);
+          assert.equal(snapped.row,row,'must not jump into another row');
+          assert.equal(snapped.column,1,'must stay in the middle play area');
+          assert.equal(snapped.slot,slot,'must pick nearest of seven spots');
+          const anchor=tcgMatLocal(snapped.x,snapped.y,seat);
+          assert.ok(Math.abs(anchor.x-x)<1e-8,'correct slot X');
+          assert.ok(Math.abs(anchor.y-center.y)<1e-8,'correct row Y');
+        }
+      }
+    }
+  }
+});
+
+test('Gaps choose nearest row, and exact slot positions beat middle-zone midpoint',()=>{
+  for(let seat=0;seat<12;seat++){
+    const cells=tcgMatCells(seat);
+    const center=cells.find(c=>c.row===1&&c.column===1);
+    const next=cells.find(c=>c.row===2&&c.column===1);
+    const a=tcgMatLocal(center.x,center.y,seat);
+    const b=tcgMatLocal(next.x,next.y,seat);
+    const boundary=(a.y+b.y)/2;
+    for(const [y,row] of [[boundary-0.6,1],[boundary+0.6,2]]){
+      const point=tcgMatWorld(a.x,y,seat);
+      const snap=tcgSnapPoint(point.x,point.y);
+      assert.equal(snap.seat,seat);
+      assert.equal(snap.row,row,'nearest unmerged play row wins in gutter');
+      assert.equal(snap.slot,3);
+    }
+
+    // Between the left pocket and wide center there is a four-unit gap.
+    // Both zone borders are equidistant at its midpoint, but the actual
+    // FIRST center-card spot is closer than the side pocket's center.
+    const left=cells.find(c=>c.row===1&&c.column===0);
+    const leftCenter=tcgMatLocal(left.x,left.y,seat);
+    const gapMid=leftCenter.x+left.width/2+TCG_MAT.gap/2;
+    const middle=tcgSnapPoint(...Object.values(tcgMatWorld(gapMid,a.y,seat)));
+    assert.equal(middle.seat,seat);
+    assert.equal(middle.row,1);
+    assert.equal(middle.column,1,'closest slot beats distant middle-zone center');
+    assert.equal(middle.slot,0);
+    const closerToSide=tcgMatWorld(gapMid-1,a.y,seat);
+    assert.equal(tcgSnapPoint(closerToSide.x,closerToSide.y).column,0,
+      'small movement toward left pocket selects its own slot');
+  }
+});
+
+test('Unmerged nearest-zone snapping is deterministic for MOVE and does not change merged freeform rules',()=>{
+  const starting=createGame('tcg');
+  for(let seat=0;seat<12;seat++){
+    const zone=tcgMatCells(seat).find(c=>c.row===1&&c.column===1);
+    const local=tcgMatLocal(zone.x,zone.y,seat);
+    const drop=tcgMatWorld(local.x+2*(zone.width/7),local.y+11,seat);
+    const predicted=tcgSnapPoint(drop.x,drop.y);
+    const action=c('MOVE',{id:'hero-a',x:drop.x,y:drop.y});
+    const game=applyCommand(starting,action);
+    const card=game.objects.find(o=>o.id==='hero-a');
+    assert.equal(card.matSeat,predicted.seat);
+    assert.equal(card.row,predicted.row);
+    assert.equal(card.slot,predicted.slot);
+    assert.ok(Math.hypot(card.x-predicted.x,card.y-predicted.y)<1e-6);
+    assert.deepEqual(game,replay(starting,[action]));
+  }
+  const joined=centerMergeKey(0,1);
+  const loc=tcgMatCells(0).find(c=>c.column===1&&c.row===2);
+  assert.equal(tcgSnapPoint(loc.x,loc.y,[joined]),null,
+    'Merged play areas remain freeform without opt-in');
+  const optIn=tcgSnapPoint(loc.x,loc.y,[joined],true,0);
+  assert.ok(optIn&&optIn.column===1&&optIn.row===1);
+  assert.equal(tcgSnapPoint(loc.x,loc.y,[joined],true,5),null,
+    'Another seat cannot enable snapping on this mat');
+});
+
+test('Sword backgrounds are red and Shield backgrounds blue, bright and distinct when active',()=>{
+  const sword=OPPONENT_RELATION_COLORS.enemy;
+  const shield=OPPONENT_RELATION_COLORS.ally;
+  const rgb=value=>({r:(value>>16)&255,g:(value>>8)&255,b:value&255});
+  const brightness=value=>{const c=rgb(value);return .2126*c.r+.7152*c.g+.0722*c.b;};
+  for(const state of ['idle','active']){
+    const red=rgb(sword[state]),blue=rgb(shield[state]);
+    assert.ok(red.r>red.g*1.45&&red.r>red.b*1.2,
+      'Sword background must read as red');
+    assert.ok(blue.b>blue.r*1.4&&blue.b>blue.g*1.1,
+      'Shield background must read as blue');
+    assert.notEqual(sword[state],shield[state],'roles must stay visibly distinct');
+  }
+  assert.ok(brightness(sword.active)>brightness(sword.idle)*1.45);
+  assert.ok(brightness(shield.active)>brightness(shield.idle)*1.45);
+  assert.notEqual(sword.outlineActive,sword.outlineIdle);
+  assert.notEqual(shield.outlineActive,shield.outlineIdle);
 });
