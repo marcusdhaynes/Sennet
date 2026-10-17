@@ -525,9 +525,8 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     chair.addChild(new Graphics().roundRect(-112,-48,224,96,19)
       .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
       .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
-    const nickname=mine?'YOU':player?.name||'';
-    const seatText=label(nickname?nickname.slice(0,10):String(i+1),
-      nickname?37:41,mine?0x263a32:0xe7e0c9,'bold');
+    const seatText=label('Player '+String(i+1).padStart(2,'0'),
+      29,mine?0x263a32:0xe7e0c9,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);
@@ -584,7 +583,7 @@ function createPiece(o:TableObject,isSelected:boolean){
  * A 250ms dwell opens them; after leaving, wait one second before closing.
  * Re-entering cancels the pending retraction.
  */
-function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';name:string;seat:number;idleOpacity:number}){
+function RetractableSeatLabel({side,seat,idleOpacity}:{side:'top'|'bottom';seat:number;idleOpacity:number}){
   const [shown,setShown]=useState(false);
   const [pinned,setPinned]=useState(false);
   const hovered=useRef(false);
@@ -625,19 +624,18 @@ function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';
       setPinned(true);setShown(true);
     }
   };
-  const displayName=name.trim()||('Player '+(seat+1));
+  const displayName='Player '+String(seat+1).padStart(2,'0');
   return <div
     className={'opponent-seat-tab '+side+(shown?' expanded':'')}
     style={{opacity:shown?1:idleOpacity}}
     onPointerDown={event=>event.stopPropagation()}
     onPointerEnter={scheduleHover} onPointerLeave={leave}>
     <button type="button" className="opponent-seat-tab-button"
-      aria-label={displayName+', seat '+(seat+1)+'. Hover to reveal or click to pin.'}
+      aria-label={displayName+'. Hover to reveal or click to pin.'}
       aria-expanded={shown} aria-pressed={pinned}
       onClick={toggle}>
       <span className="opponent-seat-tab-label">
         <span className="opponent-seat-tab-title">{displayName}</span>
-        <span className="opponent-seat-tab-number">SEAT {seat+1}</span>
         <span className="opponent-seat-tab-pin">{pinned?'PINNED':'CLICK TO PIN'}</span>
       </span>
       <span className="opponent-seat-tab-grip" aria-hidden="true">{side==='top'?'⌄':'⌃'}</span>
@@ -1312,8 +1310,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
         side="top"
-        idleOpacity={mergeOpacity} seat={eyeView.opponent}
-        name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>}
+        idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
     {/* Our own name/seat tag lives in the unified book shelf outside
         the canvas in ALL views. Do not create a duplicate bottom tag. */}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
