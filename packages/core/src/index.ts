@@ -313,18 +313,25 @@ export type OpponentRelation='enemy'|'ally'|null;
  * An inset beyond the hit radius keeps controls away from the dividing
  * line (for allies) and from viewport clipping (for enemies).
  */
-/** All view and relationship buttons rest just inside the SCREEN-BOTTOM
- * border of their respective mats. Both buttons in each pair are centered
- * evenly about the mat's horizontal midpoint and stay fully clickable.
+/** Every control circle is CENTERED ON THE BOTTOM BOUNDARY OF THE HAND
+ * SECTION (row 4, middle column), measured in that playmat owner's local
+ * coordinate system. This is the physical row's bottom border, NOT an
+ * inset inside the mat, not the divider, and not the screen-bottom edge.
  *
- * Enemy mats are rotated 180° toward the viewer, so their screen-bottom
- * edge is local -Y rather than +Y. Mirror both axes for that layout.
+ * Enemy mats are rotated 180 degrees. Their Hand-bottom edge therefore
+ * appears along the screen-TOP, correctly following that opponent's own
+ * perspective. All pairs share the same symmetrical horizontal spacing.
  */
 export const PLAYMAT_BOTTOM_BUTTON_RADIUS=16;
 export const PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS=19;
 export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
-export const PLAYMAT_BOTTOM_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS+5;
-export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_MAT_HEIGHT/2-PLAYMAT_BOTTOM_BUTTON_INSET;
+// Row 3 (zero-indexed) is HAND. Anchor to its actual geometry, not an
+// approximation based on the decorative backing or a viewport boundary.
+export const TCG_HAND_BOTTOM_LINE_Y=
+  -TCG_MAT_HEIGHT/2+
+  (TCG_MAT.rows-1)*(TCG_MAT.rowHeight+TCG_MAT.gap)+
+  TCG_MAT.rowHeight;
+export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_HAND_BOTTOM_LINE_Y;
 export const VIEW_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const VIEW_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
 export const VIEW_BUTTON_CASTLE_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
@@ -333,21 +340,18 @@ export function viewButtonPosition(control:'eye'|'castle'):{
 }{
   return {
     x:control==='eye'?-PLAYMAT_BOTTOM_BUTTON_OFFSET:PLAYMAT_BOTTOM_BUTTON_OFFSET,
-    y:PLAYMAT_BOTTOM_BUTTON_Y
+    y:TCG_HAND_BOTTOM_LINE_Y
   };
 }
 export const OPPONENT_RELATION_BUTTON_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
 export const OPPONENT_RELATION_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
-export const OPPONENT_RELATION_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_INSET;
-export function opponentRelationButtonPosition(choice:'enemy'|'ally',enemySide=false){
-  const localX=choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET;
+export function opponentRelationButtonPosition(choice:'enemy'|'ally',_enemySide=false){
   return {
-    x:enemySide?-localX:localX,
-    // An enemy's mat is rotated 180 degrees, so local -Y is the
-    // bottom edge ON SCREEN, just above the center divider.
-    y:enemySide?-TCG_MAT_HEIGHT/2+PLAYMAT_BOTTOM_BUTTON_INSET
-      :PLAYMAT_BOTTOM_BUTTON_Y
+    // This is from the MAT OWNER'S perspective. An enemy mat rotates
+    // naturally; do not invert coordinates based on the local viewer.
+    x:choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET,
+    y:TCG_HAND_BOTTOM_LINE_Y
   };
 }
 /** Only one role can be active for an opponent; activating it again clears it. */
