@@ -38,7 +38,7 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
       </pattern>
     </defs>
     <rect x={-4} y={-4} width={TCG_MAT_WIDTH+8} height={TCG_MAT_HEIGHT+8}
-      rx="12" fill="#101e1a" stroke="#8d7855" strokeOpacity=".46"/>
+      rx="12" fill="#101e1a" stroke="#466059" strokeOpacity=".46"/>
     {regions.map((region)=>{
       const local=tcgMatLocal(region.x,region.y,seat);
       const x=local.x+TCG_MAT_WIDTH/2-region.width/2;
