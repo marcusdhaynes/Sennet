@@ -337,7 +337,10 @@ function drawTcgMats(
           const isSword=choice==='enemy';
           const active=relations[seat]===choice;
           const button=new Container();
-          const position=opponentRelationButtonPosition(choice);
+          const enemySide=relations[seat]!=='ally';
+          // Enemy mats face 180°, so their upper SCREEN edge is local +Y.
+          // Keep the icons completely above the central dividing line.
+          const position=opponentRelationButtonPosition(choice,enemySide);
           button.position.set(position.x,position.y);
           button.eventMode='static';
           button.cursor='pointer';
@@ -366,6 +369,9 @@ function drawTcgMats(
             glyph.moveTo(0,-7).lineTo(0,8)
               .stroke({color:0xf4e4bd,alpha:.55,width:1.2});
           }
+          // Counter-rotate the glyphs so enemy Sword and Shield icons are
+          // upright to the viewer despite the enemy mat facing them.
+          if(enemySide)glyph.rotation=Math.PI;
           glyph.eventMode='none';button.addChild(glyph);
           button.on('pointerdown',e=>{
             if(e.button!==0)return;
@@ -1203,6 +1209,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
+      <div className="opponent-battle-divider" aria-hidden="true"/>
       <div className={selectedRelation==='ally'?'ally-identity ally-opponent':''}>
         <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
           side={selectedRelation==='ally'?'bottom':'top'}
