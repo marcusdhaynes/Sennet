@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatSectionIndex,type PlaymatSectionStyle,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import PersonalDrawer from './components/PersonalDrawer';
@@ -10,7 +10,7 @@ import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,remember
 
 type Book = 'sennet'|'games'|'settings';
 type GamePage = 'all'|'recent'|'library'|'tools';
-type SettingsPage = 'general'|'multiplayer'|'scripting';
+type SettingsPage = 'general'|'playmat'|'multiplayer'|'scripting';
 type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[]};
 const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
   {id:'sandbox',label:'Sandbox',description:'An open table with no rules.',symbol:'◈'},
@@ -29,6 +29,11 @@ const STACK_HOLD_DEFAULT_MS=1000;
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
 const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
 const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
+const PLAYMAT_KEY='sennet.playmat.appearance.v1';
+function storedPlaymatAppearance():PlaymatAppearance{
+  try{return normalizePlaymatAppearance(JSON.parse(localStorage.getItem(PLAYMAT_KEY)||'null'));}
+  catch{return defaultPlaymatAppearance();}
+}
 const MERGE_OPACITY_DEFAULT=.16;
 const MERGE_DELAY_DEFAULT=250;
 function storedPreference(key:string,fallback:number,min:number,max:number):number{
@@ -84,6 +89,9 @@ export default function App(){
   const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
   const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
   const [mergeHoverMs,setMergeHoverMs]=useState(storedMergeHoverMs);
+  const [playmat,setPlaymat]=useState<PlaymatAppearance>(storedPlaymatAppearance);
+  const [playmatImageUrl,setPlaymatImageUrl]=useState('');
+  const [playmatImageBusy,setPlaymatImageBusy]=useState(false);
   const [seatView,setSeatView]=useState<{x:number;y:number;scale:number}|null>(null);
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
@@ -110,6 +118,57 @@ export default function App(){
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
   const viewedGame=replayAt===null?game:replay(initial,history.slice(0,replayIndex+1));
+  const selectedPlaymatStyle=playmat.sections[playmat.selectedSections[0]??0];
+  const playmatSelectionCount=playmat.selectedSections.length;
+  function editPlaymatSections(patch:Partial<PlaymatSectionStyle>){
+    setPlaymat(previous=>({...previous,sections:previous.sections.map((style,i)=>
+      previous.selectedSections.includes(i)?{...style,...patch}:style)}));
+  }
+  function applyPlaymatBackground(source:string){
+    const url=source.trim();
+    if(!playmatSelectionCount){inform('Select one or more mat sections first.');return;}
+    if(!/^(https?:\/\/|data:image\/(png|jpeg|webp);base64,)/i.test(url)){
+      inform('Choose a PNG, JPEG or WebP image, or enter an http(s) image URL.');return;
+    }
+    if(url.length>2000000){inform('Image exceeds the saved appearance size limit.');return;}
+    setPlaymat(previous=>{
+      const id='bg_'+createId().replace(/[^a-z0-9_-]/gi,'').slice(0,35);
+      const images={...previous.images,[id]:url};
+      const sections=previous.sections.map((style,i)=>
+        previous.selectedSections.includes(i)?{...style,imageId:id}:style);
+      // Preserve only images that are still used by a section.
+      const used=new Set(sections.map(style=>style.imageId));
+      return {...previous,sections,images:Object.fromEntries(Object.entries(images).filter(([key])=>used.has(key)))};
+    });
+  }
+  async function uploadPlaymatImage(file:File|undefined){
+    if(!file)return;
+    if(!['image/png','image/jpeg','image/webp'].includes(file.type)){
+      inform('Upload a PNG, JPEG or WebP image.');return;
+    }
+    setPlaymatImageBusy(true);
+    try{
+      const objectUrl=URL.createObjectURL(file);
+      try{
+        const img=new Image();
+        await new Promise<void>((resolve,reject)=>{
+          img.onload=()=>resolve();img.onerror=()=>reject(new Error('Unable to decode the image.'));
+          img.src=objectUrl;
+        });
+        const maxDimension=1200,ratio=Math.min(1,maxDimension/Math.max(img.naturalWidth,img.naturalHeight));
+        const canvas=document.createElement('canvas');
+        canvas.width=Math.max(1,Math.round(img.naturalWidth*ratio));
+        canvas.height=Math.max(1,Math.round(img.naturalHeight*ratio));
+        const context=canvas.getContext('2d');
+        if(!context)throw new Error('Canvas is unavailable.');
+        context.drawImage(img,0,0,canvas.width,canvas.height);
+        const uri=canvas.toDataURL('image/jpeg',.76);
+        if(uri.length>1800000)throw new Error('Image is too large to save locally.');
+        applyPlaymatBackground(uri);
+      }finally{URL.revokeObjectURL(objectUrl);}
+    }catch(error){inform(error instanceof Error?error.message:String(error));}
+    finally{setPlaymatImageBusy(false);}
+  }
 
   function inform(message:string){setNotice(message);window.setTimeout(()=>setNotice(s=>s===message?'':s),4500);}
   function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next){
@@ -154,6 +213,10 @@ export default function App(){
   },[stackHoldMs]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
+  useEffect(()=>{
+    try{localStorage.setItem(PLAYMAT_KEY,JSON.stringify(playmat));}
+    catch{inform('Not enough browser storage to save this playmat image. Try a smaller image.');}
+  },[playmat]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
@@ -228,18 +291,18 @@ export default function App(){
           if(action==='flip')takeAction('FLIP',{id});
           else takeAction('ROTATE',{id,degrees:card.rotation%180>=90?-90:90});
         }}
-        stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs}
+        stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
           if(old&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat)){
             for(const card of cardStackMembers(game,id))takeAction('DELETE',{id:card.id});
-          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y});
+          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged});
         }}
         onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
           if(old&&['card','token'].includes(old.kind)&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat))takeAction('DELETE',{id});
-          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y});
+          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged});
         }} readonly={replayAt!==null}/>
     </div>
     <PersonalDrawer activeBook={book} openBook={setBook} seatView={seatView}/>
@@ -297,7 +360,7 @@ export default function App(){
             </>}
           </>}
           {book==='settings'&&<>
-            <Tabs items={[{id:'general',label:'General'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
+            <Tabs items={[{id:'general',label:'General'},{id:'playmat',label:'Playmat'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Seat {i+1}</option>)}</select></label></div>
               <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 to reset. Double-clicking does not change the zoom. The eye at the top of your TCG mat focuses it; hold for 0.25 seconds to choose an opponent. The opposing view places both mats on opposite sides of the divider without overlapping. The left and right circular arrows centered on the opponent's exact side borders between rows 2 and 3 cycle through opponents by their full-table seat positions: left counter-clockwise, right clockwise, skipping your seat. The opponent-view camera is locked: mouse/touchpad wheel, drag, pinch and zoom/reset shortcuts cannot pan or zoom. Cards and match controls remain interactive. The player areas fill the screen, and the eye remains merge-button-sized at the middle dividing line. Player names and seat numbers stay tucked behind the top and bottom screen edges: hover over a small, semi-transparent caret tab for 0.25 seconds to reveal its compact name/seat label. Tag transparency uses the merge-button setting. They stay open while hovered and retract 1 second after the pointer leaves, unless clicked to pin. Tap the eye again for the full table or hold it to return to your mat alone. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
@@ -331,6 +394,99 @@ export default function App(){
               </div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
+            </>}
+            {settingsPage==='playmat'&&<>
+              <div className="reader-heading"><div><h2>Playmat appearance</h2><p>Select the areas to customize. All changes are saved as your new defaults in this browser.</p></div></div>
+              <div className="reader-block">
+                <h3>Choose sections</h3>
+                <p>Click the diagram to select one or more sections. Appearance edits affect only the highlighted areas.</p>
+                <div className="mat-editor-grid" role="group" aria-label="Select playmat sections">
+                  {Array.from({length:4},(_,row)=>Array.from({length:3},(_,column)=>{
+                    const index=playmatSectionIndex(row,column);
+                    const active=playmat.selectedSections.includes(index);
+                    return <button type="button" key={index}
+                      className={'mat-editor-cell '+(column===1?'center':'side')+(active?' chosen':'')}
+                      aria-pressed={active}
+                      aria-label={`Row ${row+1}, ${['left','middle','right'][column]} section`}
+                      onClick={()=>setPlaymat(prev=>({...prev,selectedSections:active
+                        ?prev.selectedSections.filter(i=>i!==index)
+                        :[...prev.selectedSections,index].sort((a,b)=>a-b)}))}>
+                      <span>{column===1?`CENTER ${row+1}`:`${column===0?'LEFT':'RIGHT'} ${row+1}`}</span>
+                    </button>;
+                  }))}
+                </div>
+                <div className="tool-buttons"><button onClick={()=>setPlaymat(prev=>({...prev,selectedSections:Array.from({length:12},(_,i)=>i)}))}>Select all</button>
+                  <button onClick={()=>setPlaymat(prev=>({...prev,selectedSections:[]}))}>Clear selection</button></div>
+                <p>{playmatSelectionCount} of 12 sections selected.</p>
+              </div>
+              <div className="reader-block">
+                <h3>Background image</h3>
+                <p>Upload a picture or enter a direct image URL. The image is cropped inside each selected section and saved for this browser.</p>
+                <label>Image URL
+                  <input type="url" value={playmatImageUrl} placeholder="https://example.com/background.jpg"
+                    onChange={event=>setPlaymatImageUrl(event.target.value)}/>
+                </label>
+                <div className="tool-buttons">
+                  <button disabled={!playmatSelectionCount||!playmatImageUrl.trim()} onClick={()=>applyPlaymatBackground(playmatImageUrl)}>Apply URL</button>
+                  <button disabled={!playmatSelectionCount||!selectedPlaymatStyle.imageId} onClick={()=>editPlaymatSections({imageId:''})}>Clear image</button>
+                </div>
+                <label>Or upload a PNG, JPG or WebP
+                  <input type="file" accept="image/png,image/jpeg,image/webp" disabled={!playmatSelectionCount||playmatImageBusy}
+                    onChange={event=>{void uploadPlaymatImage(event.target.files?.[0]);event.target.value='';}}/>
+                </label>
+                <p>{playmatImageBusy?'Processing image…':'Uploads are resized and compressed to fit browser storage.'}</p>
+              </div>
+              <div className="reader-block">
+                <h3>Surface texture</h3>
+                <label>Texture
+                  <select value={selectedPlaymatStyle.texture} disabled={!playmatSelectionCount}
+                    onChange={e=>editPlaymatSections({texture:e.target.value as PlaymatSectionStyle['texture']})}>
+                    <option value="none">None</option>
+                    <option value="matte">Matte</option>
+                    <option value="sandy">Sandy / gravel</option>
+                    <option value="glossy">Glossy</option>
+                    <option value="matte-glossy">Matte + glossy</option>
+                  </select>
+                </label>
+                <label>Texture opacity — {Math.round(selectedPlaymatStyle.textureOpacity*100)}%
+                  <input type="range" min="0" max="1" step=".01" disabled={!playmatSelectionCount}
+                    value={selectedPlaymatStyle.textureOpacity}
+                    onChange={e=>editPlaymatSections({textureOpacity:Number(e.target.value)})}/>
+                </label>
+              </div>
+              <div className="reader-block">
+                <h3>Depth and borders</h3>
+                <label className="mat-editor-check"><input type="checkbox" checked={selectedPlaymatStyle.innerShadow}
+                  disabled={!playmatSelectionCount}
+                  onChange={e=>editPlaymatSections({innerShadow:e.target.checked})}/> Internal shadows</label>
+                <label>Inner shadow opacity — {Math.round(selectedPlaymatStyle.shadowOpacity*100)}%
+                  <input type="range" min="0" max="1" step=".01" disabled={!playmatSelectionCount}
+                    value={selectedPlaymatStyle.shadowOpacity}
+                    onChange={e=>editPlaymatSections({shadowOpacity:Number(e.target.value)})}/>
+                </label>
+                <label className="mat-editor-check"><input type="checkbox" checked={selectedPlaymatStyle.innerBevel}
+                  disabled={!playmatSelectionCount}
+                  onChange={e=>editPlaymatSections({innerBevel:e.target.checked})}/> Internal bevel</label>
+                <label className="mat-editor-check"><input type="checkbox" checked={selectedPlaymatStyle.outerBevel}
+                  disabled={!playmatSelectionCount}
+                  onChange={e=>editPlaymatSections({outerBevel:e.target.checked})}/> External bevel between and around sections</label>
+                <label>Bevel opacity — {Math.round(selectedPlaymatStyle.bevelOpacity*100)}%
+                  <input type="range" min="0" max="1" step=".01" disabled={!playmatSelectionCount}
+                    value={selectedPlaymatStyle.bevelOpacity}
+                    onChange={e=>editPlaymatSections({bevelOpacity:Number(e.target.value)})}/>
+                </label>
+              </div>
+              <div className="reader-block">
+                <h3>Card placement</h3>
+                <label className="mat-editor-check">
+                  <input type="checkbox" checked={playmat.snapMerged}
+                    onChange={e=>setPlaymat(prev=>({...prev,snapMerged:e.target.checked}))}/>
+                  Snap cards inside merged center sections
+                </label>
+                <p>Default: off. Individual, unmerged spaces always snap to their card positions. Merged sections allow free movement unless you turn this on.</p>
+                <div className="tool-buttons"><button onClick={()=>setPlaymat(defaultPlaymatAppearance())}>Restore factory appearance</button></div>
+                <p>Your selected layout, images, effects, and snapping choice automatically become your saved defaults for future games.</p>
+              </div>
             </>}
             {settingsPage==='multiplayer'&&<><div className="reader-heading"><div><h2>Multiplayer</h2><p>Join a room through a secure WebSocket relay. The public GitHub Pages site runs locally until a relay is configured.</p></div></div>
               <div className="reader-block"><div className="status-line">{isConnected?<Wifi size={16}/>:<WifiOff size={16}/>} {onlineStatus}</div><label>Server URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} placeholder="wss://your-sennet-relay.example"/></label><label>Room ID<input value={room} onChange={e=>setRoom(e.target.value)} placeholder="friends-table"/></label><div className="tool-buttons"><button onClick={joinRoom}><Wifi size={16}/> Join / Create</button><button onClick={disconnect}><WifiOff size={16}/> Disconnect</button><button onClick={()=>{const link=new URL(location.href);link.searchParams.set('room',room);navigator.clipboard?.writeText(link.href);inform('Invite link copied.');}}><Copy size={16}/> Copy invite</button></div></div>
