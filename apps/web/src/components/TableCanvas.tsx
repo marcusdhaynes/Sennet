@@ -625,10 +625,85 @@ function markHeldStack(piece:Container,count:number){
   const text=label(String(count)+' cards',14,0xffe5a0,'bold');
   text.position.set(0,-64);text.eventMode='none';piece.addChild(text);
 }
+/** Fixed-elevation, top-down 2.5D deck box. Every face is procedural:
+ * slight extrusion, contact shadow, inset lid, brushed edge, latch, and
+ * highlights. No perspective camera or network asset is required.
+ * The entire object turns as one sprite with its player's seat.
+ */
+function deckBoxArt(o:TableObject):Container{
+  const art=new Container();
+  const casing=rgb(o.color);
+  // Diffuse contact shadow falls down-right; the raised base is darker
+  // than the lid, giving the impression of thickness from directly above.
+  art.addChild(new Graphics()
+    .roundRect(-34+5,-45+12,68,94,11)
+    .fill({color:0x020908,alpha:.18})
+    .roundRect(-33+3,-45+9,67,94,10)
+    .fill({color:0x020908,alpha:.23})
+    .roundRect(-34,-41,68,94,10)
+    .fill(0x0c1917)
+    .stroke({color:0x101c19,width:1.5}));
+  // Dark edge of the box is visible below the beveled top shell.
+  art.addChild(new Graphics()
+    .roundRect(-34,-45,68,93,10)
+    .fill({color:0x18322e})
+    .stroke({color:0x081814,width:2})
+    .moveTo(-29,43).lineTo(28,43)
+    .stroke({color:0x53675b,alpha:.55,width:1.4})
+    .moveTo(31,-35).lineTo(31,37)
+    .stroke({color:0x020b0a,alpha:.6,width:4}));
+  // Soft leather/plastic lid, framed by a thin satin-brass perimeter.
+  art.addChild(new Graphics()
+    .roundRect(-32,-47,64,87,9)
+    .fill({color:casing})
+    .stroke({color:0xc4ae83,width:1.7,alpha:.85})
+    .roundRect(-28,-43,56,79,7)
+    .stroke({color:0xf7e3b6,width:1,alpha:.26})
+    .roundRect(-25,-39,50,71,6)
+    .fill({color:0x091c17,alpha:.26})
+    .stroke({color:0x0c2420,width:1.5,alpha:.6}));
+  // Top-left rim catches light; the far rim drops into shadow.
+  art.addChild(new Graphics()
+    .moveTo(-29,26).lineTo(-29,-37).quadraticCurveTo(-28,-43,-21,-43)
+    .lineTo(22,-43)
+    .stroke({color:0xf1e4c0,width:1.5,alpha:.44,cap:'round'})
+    .moveTo(28,-36).lineTo(28,30)
+    .stroke({color:0x020b0a,width:3,alpha:.45})
+    .moveTo(-22,35).lineTo(24,35)
+    .stroke({color:0x020c0b,width:2.2,alpha:.56}));
+  // Raised hinge/seam and a centered understated Sennet crest.
+  art.addChild(new Graphics()
+    .moveTo(-24,-23).lineTo(24,-23)
+    .stroke({color:0x020b09,width:2.5,alpha:.66})
+    .moveTo(-24,-25).lineTo(24,-25)
+    .stroke({color:0xe2cea2,width:1,alpha:.5})
+    .moveTo(0,-13).lineTo(13,0).lineTo(0,13).lineTo(-13,0).closePath()
+    .fill({color:0x0e2722,alpha:.52})
+    .stroke({color:0xc8ad79,width:1.3,alpha:.8})
+    .circle(-22,-35,1.2).circle(22,-35,1.2)
+    .fill({color:0xe5cc94,alpha:.74}));
+  const crest=label('S',17,0xe2c991,'bold');
+  crest.position.set(0,-1);crest.eventMode='none';art.addChild(crest);
+  // Short front magnetic pull-tab emphasizes this is a BOX, not a card.
+  art.addChild(new Graphics()
+    .roundRect(-13,33,26,10,3)
+    .fill(0x132420)
+    .stroke({color:0xa88d61,width:1.2})
+    .roundRect(-8,35,16,4,2)
+    .fill({color:0xceb384,alpha:.8})
+    .moveTo(-7,36).lineTo(7,36)
+    .stroke({color:0xfcdf9c,alpha:.32,width:1}));
+  return art;
+}
 function createPiece(o:TableObject,isSelected:boolean){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
   const shadow=new Graphics().ellipse(4,13,33,12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
-  if(o.kind==='board'){
+  if(o.kind==='deck-box'){
+    // Keep its clickable footprint precise; other tabletop pieces
+    // underneath or alongside remain selectable.
+    box.hitArea=new Rectangle(-38,-51,76,107);
+    box.addChild(deckBoxArt(o));
+  }else if(o.kind==='board'){
     box.addChild(new Graphics().roundRect(-155,-103,310,206,10).fill(0x362c22).stroke({color:0xcbb68c,width:4}));
     const face=new Graphics().roundRect(-148,-95,296,190,6).fill(rgb(o.color));
     for(let i=-140;i<148;i+=37)for(let j=-91;j<95;j+=37){face.rect(i,j,37,37).fill({color:0x151d18,alpha:(Math.round(i/37)+Math.round(j/37))%2===0?.2:.04});}
@@ -945,7 +1020,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           const eligible=members.length>=2&&members.every(o=>!o.locked&&
             (state.kind!=='tcg'||!o.owner||o.owner===(state.players.length?actorId:'local')));
           const active:ActiveDrag={
-            id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board',
+            id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board'&&obj.kind!=='deck-box',
             x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
             whole:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
