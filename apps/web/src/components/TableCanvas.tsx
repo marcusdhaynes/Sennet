@@ -937,9 +937,22 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
           hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
           hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
-            .fill({color:remove?0xff3b30:0xc7d8ac,alpha:.18})
-            .stroke({color:remove?0xff3b30:0xf6daa2,width:2.4,alpha:.9});
-          if(remove){const text=label('RELEASE TO REMOVE',7,0xff6b61,'bold');text.rotation=-Math.PI/2;hint.addChild(text);}
+            .fill({color:remove?0xff3b30:0xc7d8ac,alpha:.13})
+            .stroke({color:remove?0xff3b30:0xf6daa2,width:1.5,alpha:.75});
+          if(remove){
+            const text=label('RELEASE TO REMOVE',7,0xff6b61,'bold');
+            text.rotation=-Math.PI/2;hint.addChild(text);
+          }else{
+            // Show the precise snapped CARD SLOT in addition to the zone,
+            // so each unmerged row previews exactly where the card will land.
+            const dx=cell.x-zone.x,dy=cell.y-zone.y;
+            const cos=Math.cos(zone.angle),sin=Math.sin(zone.angle);
+            const sx=dx*cos+dy*sin,sy=-dx*sin+dy*cos;
+            hint.roundRect(sx-TCG_MAT.cardWidth/2,sy-TCG_MAT.cardHeight/2,
+              TCG_MAT.cardWidth,TCG_MAT.cardHeight,4)
+              .fill({color:0x83dfe7,alpha:.19})
+              .stroke({color:0xbafaff,width:2,alpha:.96});
+          }
         }
       }
     };
