@@ -358,6 +358,13 @@ export function viewButtonPosition(control:'eye'|'castle'):{
     y:TCG_HAND_BOTTOM_LINE_Y
   };
 }
+/** Shared visual colors: consistent inactive role identity, unmistakable
+ * vibrant selected states, and contrasting outlines.
+ */
+export const OPPONENT_RELATION_COLORS={
+  enemy:{idle:0x913044,active:0xff526d,outlineIdle:0xd18d99,outlineActive:0xffdfca},
+  ally:{idle:0x275d99,active:0x48b6ff,outlineIdle:0x92bfe8,outlineActive:0xd9f6ff}
+} as const;
 export const OPPONENT_RELATION_BUTTON_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
 export const OPPONENT_RELATION_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
@@ -487,41 +494,57 @@ export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number
   return null;
 }
 
-/** Closest rectangle test, then nearest card position in wide middle zone.
- * Returns null when the card is beyond a small edge tolerance.
- * Logic is fully deterministic: the network transmits only drop coordinates.
+/** Snap to the nearest valid play ZONE, then its nearest legal card SLOT.
+ * Unmerged middle zones expose 7 independent card anchors per row.
+ * Outside a pocket, ties in the gaps are decided by the actual nearest
+ * card spot—not the midpoint of a wide middle zone.
+ *
+ * Merged middle zones retain their existing freeform default unless
+ * their owner explicitly enabled snap-while-merged.
+ * The same pure function drives move commands and the drag preview.
  */
 export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false,snapMergedSeat?:number):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
-  let best:TcgSnapLocation|null=null,dist=Infinity,centerDist=Infinity;
+  let best:TcgSnapLocation|null=null;
+  let bestZoneDistance=Infinity,bestSpotDistance=Infinity;
+  const eps=1e-8;
   for(let seat=0;seat<SEATS;seat++){
     const local=tcgMatLocal(x,y,seat);
     for(const cell of tcgMatRegions(seat,merged)){
       const anchor=tcgMatLocal(cell.x,cell.y,seat);
-      // A combined pocket is freeform by default. Do not accidentally
-      // snap into a neighboring side pocket from inside the merged area.
-      // A player's merged snapping preference applies ONLY to that
-      // player's mat, even when pieces are dragged onto an opponent's mat.
+      const distanceX=Math.max(0,Math.abs(local.x-anchor.x)-cell.width/2);
+      const distanceY=Math.max(0,Math.abs(local.y-anchor.y)-cell.height/2);
+      const zoneDistance=Math.hypot(distanceX,distanceY);
       const seatMaySnap=snapMerged&&(snapMergedSeat===undefined||snapMergedSeat===seat);
       if(cell.column===1&&cell.lastRow>cell.row&&!seatMaySnap){
-        if(Math.abs(local.x-anchor.x)<=cell.width/2&&
-           Math.abs(local.y-anchor.y)<=cell.height/2)return null;
+        // Keep the ENTIRE merged battlefield freeform: a drop inside a
+        // joined pocket must not be stolen by any neighboring zone.
+        if(zoneDistance<=eps)return null;
         continue;
       }
-      const dx=Math.max(0,Math.abs(local.x-anchor.x)-cell.width/2);
-      const dy=Math.max(0,Math.abs(local.y-anchor.y)-cell.height/2);
-      const distance=Math.hypot(dx,dy);
-      if(distance>TCG_MAT.snapOutside)continue;
-      const midDist=Math.hypot(local.x-anchor.x,local.y-anchor.y);
-      if(distance>dist+1e-8 || (Math.abs(distance-dist)<=1e-8 && midDist>=centerDist))continue;
+      if(zoneDistance>TCG_MAT.snapOutside)continue;
+      if(zoneDistance>bestZoneDistance+eps)continue;
+
       const positions=cell.column===1?TCG_MAT.centerCards:1;
-      const slot=Math.min(positions-1,Math.max(0,
-        Math.round((local.x-(anchor.x-cell.width/2)+(cell.column===1?-0.5:0))/ (cell.width/positions)-0.5)));
-      // All 7 card anchors are within the same single wide, rounded rectangle.
-      const snappedLocalX=anchor.x+(slot-(positions-1)/2)*(cell.width/positions);
-      const snapped=tcgMatWorld(snappedLocalX,anchor.y,seat);
+      const slotWidth=cell.width/positions;
+      // Compare every legal slot, rather than rounding through floating
+      // boundaries. This works for all orientations and exact gutter ties.
+      let slot=0,nearestX=anchor.x;
+      let slotDistance=Infinity;
+      for(let i=0;i<positions;i++){
+        const candidateX=anchor.x+(i-(positions-1)/2)*slotWidth;
+        const distance=Math.abs(local.x-candidateX);
+        if(distance<slotDistance-eps){
+          slot=i;nearestX=candidateX;slotDistance=distance;
+        }
+      }
+      const spotDistance=Math.hypot(slotDistance,local.y-anchor.y);
+      if(best&&Math.abs(zoneDistance-bestZoneDistance)<=eps&&
+         spotDistance>=bestSpotDistance-eps)continue;
+      const snapped=tcgMatWorld(nearestX,anchor.y,seat);
       best={...cell,...snapped,slot};
-      dist=distance;centerDist=midDist;
+      bestZoneDistance=zoneDistance;
+      bestSpotDistance=spotDistance;
     }
   }
   return best;
