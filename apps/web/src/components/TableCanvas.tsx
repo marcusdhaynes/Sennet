@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,nextCastleAllySeat,nextCastleFocusedSeat,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -115,7 +115,7 @@ function drawTcgMats(
   onFocusCastleSeat:(seat:number)=>void,
   selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
 ){
   const drawnSeats=seatLayers
@@ -142,7 +142,8 @@ function drawTcgMats(
         TCG_MAT_WIDTH,TCG_MAT_HEIGHT);
       mat.cursor='pointer';
       mat.on('pointertap',event=>{
-        if(event.target!==mat)return; // Never steal Sword/Shield/arrow clicks.
+        // Interactive controls stop propagation themselves. Playmat artwork
+        // may be the event target, so don't require target===mat here.
         event.stopPropagation();
         onFocusCastleSeat(seat);
       });
@@ -269,7 +270,15 @@ function drawTcgMats(
     // rotated mat, positive local X appears on the LEFT of the screen.
     // Left = seat number decrement (counter-clockwise in full-table view).
     // Right = seat number increment (clockwise), always skipping our seat.
-    if(seatLayers&&seat===selectedOpponent&&(!castleActive||castleMode==='single'||castleMode==='focus')){
+    if(seatLayers&&(
+      !castleActive&&seat===selectedOpponent||
+      castleActive&&castleMode==='single'&&seat===selectedOpponent||
+      castleActive&&castleMode==='focus'&&(
+        seat===focused.ally||seat===focused.enemy||
+        castleBaseMode==='single'&&focused.ally===null&&seat===selectedOpponent&&
+          relations[seat]==='ally'
+      )
+    )){
       const allyHere=castleActive&&relations[seat]==='ally';
       for(const direction of ['left','right'] as const){
         const left=direction==='left';
@@ -297,7 +306,7 @@ function drawTcgMats(
         });
         button.on('pointertap',e=>{
           e.stopPropagation();
-          onCycleOpponent(direction);
+          onCycleOpponent(direction,seat);
         });
         mat.addChild(button);
       }
@@ -494,15 +503,16 @@ function drawTcgMats(
 function makeDuelSeatLayers(
   board:Container,viewerSeat:number,opponentSeat:number|null,
   relations:Readonly<Record<number,OpponentRelation>>,castleActive:boolean,
-  castleMode:CastleMode|'focus',viewport:{width:number;height:number}
+  castleMode:CastleMode|'focus',castleBaseMode:CastleMode,
+  focused:Readonly<CastleSideFocus>,viewport:{width:number;height:number}
 ){
   const layers=new Map<number,Container>();
-  // Castle: a fixed-size viewer anchored on the left; Single shows one
-  // selected ally, All optimizes its ally grid. Enemies stay above the line.
+  // Each Castle half is independent. Focusing one role never removes or
+  // shrinks the unfocused role's grid; two focuses leave exactly three mats.
   const layout=castleActive
-    ?castleMode==='focus'&&opponentSeat!==null
-      ?castleFocusedLayout(viewerSeat,opponentSeat,relations,viewport)!
-      :castleGridLayout(viewerSeat,relations,castleMode==='focus'?'all':castleMode,opponentSeat,viewport)
+    ?castleIndependentFocusLayout(viewerSeat,relations,
+      castleMode==='focus'?castleBaseMode:castleMode,opponentSeat,
+      castleMode==='focus'?focused:{ally:null,enemy:null},viewport)
     :oneOnOneMatchupLayout(viewerSeat,opponentSeat!,relations,BATTLEFIELD_PLAYMAT_PADDING);
   // Render the viewer last so Eye/Castle controls stay on top.
   const order=[...layout.mats.keys()].filter(seat=>seat!==viewerSeat);
@@ -521,8 +531,9 @@ function makeDuelSeatLayers(
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
   duelOpponent:number|null,castleActive:boolean,castleMode:CastleMode|'focus',
+  castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,
   viewport:{width:number;height:number},
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
@@ -565,10 +576,12 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       .stroke({color:0x112d2b,width:4}));
   }
   const layers=duelOpponent===null&&!castleActive
-    ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,castleMode,viewport);
+    ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,
+      castleMode,castleBaseMode,focused,viewport);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
-    onEyeTap,onEyeHold,onCastleTap,onCastleHold,castleActive,castleMode,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
+    onEyeTap,onEyeHold,onCastleTap,onCastleHold,castleActive,castleMode,
+    castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -717,7 +730,11 @@ function readOpponentRelations(actorId:string):Record<number,OpponentRelation>{
     return relations;
   }catch{return {};}
 }
-type EyeView={kind:'overview'|'self'|'targeting'|'versus'|'castle';opponent:number|null;castleMode?:CastleMode|'focus'};
+type EyeView={
+  kind:'overview'|'self'|'targeting'|'versus'|'castle';
+  opponent:number|null;castleMode?:CastleMode|'focus';
+  castleFocusedAlly?:number|null;castleFocusedEnemy?:number|null;
+};
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
@@ -740,7 +757,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const preferredCastleMode=useRef<CastleMode>('all');
   const lastCastleAlly=useRef<number|null>(null);
   const previousCastleView=useRef<EyeView>({kind:'self',opponent:null});
-  const cycleOpponentHandler=useRef<(direction:'left'|'right')=>void>(()=>{});
+  const cycleOpponentHandler=useRef<(direction:'left'|'right',sourceSeat:number)=>void>(()=>{});
   const toggleRelationHandler=useRef<(targetSeat:number,choice:'enemy'|'ally')=>void>(()=>{});
   const focusOpponent=useRef<()=>void>(()=>{});
   const resetCamera=useRef<()=>void>(()=>{});
@@ -852,12 +869,14 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       ()=>castleTapHandler.current(),()=>castleHoldHandler.current(),
-      direction=>cycleOpponentHandler.current(direction),
+       (direction,sourceSeat)=>cycleOpponentHandler.current(direction,sourceSeat),
       (targetSeat,choice)=>toggleRelationHandler.current(targetSeat,choice),
       targetSeat=>castleFocusHandler.current(targetSeat),
       id=>{controlPointer.current=id;},hoverTimers.current,playmat,
       eyeView.kind==='versus'||eyeView.kind==='castle'?eyeView.opponent:null,
       eyeView.kind==='castle',eyeView.castleMode??preferredCastleMode.current,
+      preferredCastleMode.current,
+      {ally:eyeView.castleFocusedAlly??null,enemy:eyeView.castleFocusedEnemy??null},
       viewport,relations,250);
     duelLayers.current=seatGroups;
     updateView.current();
@@ -1139,15 +1158,22 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const widthScale=w/bounds.width;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
-    cycleOpponentHandler.current=(direction)=>{
+    cycleOpponentHandler.current=(direction,sourceSeat)=>{
       const current=viewRef.current;
-      if(current.kind==='castle'&&current.castleMode==='focus'&&current.opponent!==null){
-        const next=nextCastleFocusedSeat(seatRef.current,current.opponent,
+      if(current.kind==='castle'&&current.castleMode==='focus'){
+        const role=relationsRef.current[sourceSeat];
+        if(role!=='ally'&&role!=='enemy')return;
+        const next=nextCastleFocusedSeat(seatRef.current,sourceSeat,
           direction,relationsRef.current);
-        if(next===null||next===current.opponent)return;
+        if(next===null||next===sourceSeat)return;
         cancelActiveDrag.current();
-        selectView({...current,opponent:next});
-        return; // Same role, same side, same fixed Castle camera.
+        if(role==='ally'){
+          lastCastleAlly.current=next;
+          selectView({...current,castleFocusedAlly:next,opponent:next});
+        }else{
+          selectView({...current,castleFocusedEnemy:next});
+        }
+        return; // Cycle only this side; leave the opposite view untouched.
       }
       if(current.kind==='castle'&&current.castleMode==='single'){
         const next=nextCastleAllySeat(seatRef.current,current.opponent,
@@ -1176,15 +1202,31 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       setRelations(next);
       if(selected.kind==='castle'){
         if(selected.castleMode==='focus'){
-          if(next[selected.opponent??-1]!=='ally'&&
-             next[selected.opponent??-1]!=='enemy'){
-            // If the focused role was cleared, return to the remembered
-            // broad mode rather than trapping the camera on an empty mat.
-            const ally=nextCastleAllySeat(seatRef.current,lastCastleAlly.current,
-              'right',next);
-            selectView({kind:'castle',opponent:ally,castleMode:preferredCastleMode.current});
+          let ally=selected.castleFocusedAlly??null;
+          let enemy=selected.castleFocusedEnemy??null;
+          // Moving a focused player from Shield to Sword (or vice versa)
+          // transfers only that player's focus to the new side. Clearing
+          // the role releases only that side; keep the other side focused.
+          if(ally===targetSeat&&next[targetSeat]!=='ally')ally=null;
+          if(enemy===targetSeat&&next[targetSeat]!=='enemy')enemy=null;
+          if((selected.castleFocusedAlly===targetSeat||
+              selected.castleFocusedEnemy===targetSeat)&&
+             next[targetSeat]==='ally')ally=targetSeat;
+          if((selected.castleFocusedAlly===targetSeat||
+              selected.castleFocusedEnemy===targetSeat)&&
+             next[targetSeat]==='enemy')enemy=targetSeat;
+          if(ally===null&&enemy===null){
+            const selectedAlly=nextCastleAllySeat(seatRef.current,
+              lastCastleAlly.current,'right',next);
+            lastCastleAlly.current=selectedAlly;
+            selectView({kind:'castle',opponent:selectedAlly,
+              castleMode:preferredCastleMode.current});
+          }else{
+            const selectedAlly=nextCastleAllySeat(seatRef.current,
+              ally??selected.opponent,'right',next);
+            selectView({...selected,opponent:ally??selectedAlly,
+              castleFocusedAlly:ally,castleFocusedEnemy:enemy});
           }
-          // Switching this player's Sword/Shield keeps focus on them.
         }else{
           const ally=nextCastleAllySeat(seatRef.current,selected.opponent,'right',next);
           lastCastleAlly.current=ally;
@@ -1197,15 +1239,20 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     castleFocusHandler.current=targetSeat=>{
       const current=viewRef.current;
-      if(current.kind!=='castle'||targetSeat===seatRef.current||
-         (relationsRef.current[targetSeat]!=='ally'&&
-          relationsRef.current[targetSeat]!=='enemy'))return;
-      if(current.castleMode==='focus'&&current.opponent===targetSeat)return;
+      if(current.kind!=='castle'||targetSeat===seatRef.current)return;
+      const role=relationsRef.current[targetSeat];
+      if(role!=='ally'&&role!=='enemy')return;
+      if(current.castleMode==='focus'&&
+        (role==='ally'?current.castleFocusedAlly:current.castleFocusedEnemy)===targetSeat)return;
       cancelActiveDrag.current();panPointer.current=null;
-      // Focus is neither Single nor All. Keep preferredCastleMode untouched
-      // so holding Castle resumes the natural next mode in the toggle.
-      selectView({kind:'castle',opponent:targetSeat,castleMode:'focus'});
-      // No camera movement: the player remains full-size and left anchored.
+      // The chosen side alone becomes a full-sized single-player view.
+      // The other side retains either its complete All grid or its own
+      // previous focus; never replace an Ally focus with an Enemy focus.
+      selectView({...current,castleMode:'focus',
+        castleFocusedAlly:role==='ally'?targetSeat:current.castleFocusedAlly??null,
+        castleFocusedEnemy:role==='enemy'?targetSeat:current.castleFocusedEnemy??null});
+      // Focus is neither Single nor All. The next Castle hold continues
+      // from the remembered broad-mode toggle without a camera jump.
     };
     castleTapHandler.current=()=>{
       const mode=viewRef.current;
