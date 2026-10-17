@@ -46,6 +46,7 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
       const w=region.width,h=region.height;
       const section=appearance.sections[playmatSectionIndex(region.row,region.column)];
       const accent=asColor(TCG_ROW_COLORS[region.row]);
+      const middle=region.column===1;
       const clip=id+'-region-'+region.row+'-'+region.column;
       const merged=region.column===1&&region.lastRow>region.row;
       const matte=section.textureLayers.matte,sandy=section.textureLayers.sandy,glossy=section.textureLayers.glossy;
@@ -56,8 +57,10 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
       return <g key={clip} pointerEvents="none">
         <defs><clipPath id={clip}><rect x={x+2} y={y+2} width={w-4} height={h-4} rx="6"/></clipPath></defs>
         <rect x={x} y={y} width={w} height={h} rx="8" fill="#00050a"
-          stroke={accent} strokeOpacity={merged?.7:.3} strokeWidth={merged?2:1}/>
-        <rect x={x+2} y={y+2} width={w-4} height={h-4} rx="6" fill={accent} fillOpacity={merged?.13:.055}/>
+          stroke={middle?accent:'#253d36'}
+          strokeOpacity={middle?(merged?.7:.3):.32} strokeWidth={merged?2:1}/>
+        <rect x={x+2} y={y+2} width={w-4} height={h-4} rx="6"
+          fill={middle?accent:'#253d36'} fillOpacity={middle?(merged?.13:.055):.025}/>
         <g clipPath={'url(#'+clip+')'}>
           {image&&<image href={image}
             x={spansImage?0:x+2} y={spansImage?0:y+2}
@@ -76,8 +79,8 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
             <line x1={x+8} x2={x+w-8} y1={y+h-8} y2={y+h-8}
               stroke="#051910" strokeOpacity={glossy.opacity*.28} strokeWidth="3"/>
           </>}
-          <rect x={x+5} y={y+5} width={w-10} height={h-10}
-            fill={'url(#'+id+'-grid)'} opacity={merged?.4:.13}/>
+          {middle&&<rect x={x+5} y={y+5} width={w-10} height={h-10}
+            fill={'url(#'+id+'-grid)'} opacity={merged?.4:.13}/>}
         </g>
         {section.innerShadow&&<>
           <rect x={x+3} y={y+3} width={w-6} height={h-6} rx="5"
@@ -93,7 +96,8 @@ function LiveMatPreview({appearance,merges,seat,onToggle}:{
         </>}
         {section.outerBevel&&<>
           <rect x={x-1} y={y-1} width={w+2} height={h+2} rx="8"
-            stroke="#d7cbac" fill="none" strokeWidth="2.2" strokeOpacity={section.bevelOpacity*.68}/>
+            stroke={middle?'#d7cbac':'#36554b'} fill="none" strokeWidth="2.2"
+            strokeOpacity={section.bevelOpacity*.68}/>
           <rect x={x-2} y={y-2} width={w+4} height={h+4} rx="9"
             stroke="black" fill="none" strokeWidth="1.8" strokeOpacity={section.bevelOpacity*.36}/>
         </>}
