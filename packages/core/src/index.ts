@@ -118,6 +118,16 @@ export function defaultPlaymatAppearance():PlaymatAppearance {
     snapMerged:false
   };
 }
+/** Each client applies its stored appearance only to its own seat.
+ * Other seats get the built-in appearance—not the current viewer's image,
+ * texture, transparency, or bevel preferences.
+ * These appearance preferences are deliberately excluded from GameState.
+ */
+export function playmatAppearanceForSeat(
+  personal:PlaymatAppearance, viewerSeat:number, targetSeat:number
+):PlaymatAppearance{
+  return viewerSeat===targetSeat?personal:defaultPlaymatAppearance();
+}
 /** Persisted preferences can be old-format data or untrusted imported JSON.
  * Migrate existing texture dropdown selections without losing their opacity. */
 export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
