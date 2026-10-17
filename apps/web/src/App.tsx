@@ -378,7 +378,7 @@ export default function App(){
               </div>
               <div className="reader-block">
                 <h3>TCG center-section controls</h3>
-                <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into one larger card-snapping area. Hover and click the − control to separate them again.</p>
+                <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into a larger, freely usable area. Snapping inside merged sections is off by default and can be enabled under Playmat → Card placement. Hover and click − to separate the sections again.</p>
                 <label htmlFor="merge-control-opacity">Button transparency — <strong>{Math.round((1-mergeOpacity)*100)}% transparent</strong>
                   <input id="merge-control-opacity" aria-label="Center merge button transparency" type="range"
                     min={.05} max={.5} step={.01} value={mergeOpacity}
