@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -280,14 +280,16 @@ function drawTcgMats(
     // Circular eye tool lives at the TOP of the local mat.
     if(seat===viewerSeat){
       const eye=new Container();
-      // Center the eye ON the top edge of row one in every view, with
-      // the identical diameter and hit area as each merge button.
-      eye.position.set(0,-TCG_MAT_HEIGHT/2);
+      // In Castle/Opponent views the entire hit circle is ABOVE the
+      // strict divider; in the full-table view retain the original
+      // centered-on-the-top-border placement.
+      const eyePosition=viewButtonPosition('eye',seatLayers!==null);
+      eye.position.set(eyePosition.x,eyePosition.y);
       eye.eventMode='static';
-      eye.hitArea=new Circle(0,0,19);
+      eye.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       eye.cursor='pointer';
       eye.addChild(new Graphics()
-        .circle(0,0,16).fill({color:0x183a33,alpha:.96})
+        .circle(0,0,VIEW_BUTTON_RADIUS).fill({color:0x183a33,alpha:.96})
         .stroke({color:0xe4cf9d,alpha:1,width:1.5})
         .ellipse(0,0,10,6).stroke({color:0xf4e4bd,width:1.8})
         .circle(0,0,3.3).fill({color:0xf6e4c1})
@@ -331,11 +333,12 @@ function drawTcgMats(
       // Same size as the eye and merge controls. Castle switches to the
       // classified-only battlefield, excluding every unmarked opponent.
       const castle=new Container();
-      castle.position.set(42,-TCG_MAT_HEIGHT/2);
+      const castlePosition=viewButtonPosition('castle',seatLayers!==null);
+      castle.position.set(castlePosition.x,castlePosition.y);
       castle.eventMode='static';
       castle.cursor='pointer';
-      castle.hitArea=new Circle(0,0,19);
-      castle.addChild(new Graphics().circle(0,0,16)
+      castle.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
+      castle.addChild(new Graphics().circle(0,0,VIEW_BUTTON_RADIUS)
         .fill({color:castleActive?0x426750:0x183a33,alpha:.96})
         .stroke({color:castleActive?0xf5d69a:0xe4cf9d,
           width:castleActive?2.4:1.5,alpha:1}));
