@@ -87,6 +87,56 @@ test('Each of the twelve players has an independent four-row, three-column mat',
   assert.ok(TCG_MAT.outerRadius<TABLE_APOTHEM);
 });
 
+test('2.5D deck box is a separate movable accessory, never a deck or card',()=>{
+  const initial=createGame('tcg');
+  const slot=tcgMatCells(0).find(p=>p.row===0&&p.column===2);
+  assert.ok(slot);
+  const box={id:'accessory-box-1',kind:'deck-box',name:'Deck box',
+    x:slot.x,y:slot.y,color:'#34544a',matSeat:0,rotation:0,faceUp:true};
+  const add={id:'deckbox-add',type:'ADD',actor:'local',payload:{object:box}};
+  const withBox=applyCommand(initial,add);
+  const saved=withBox.objects.find(o=>o.id===box.id);
+  assert.equal(saved?.kind,'deck-box');
+  assert.equal(saved?.matSeat,0);
+  assert.equal(saved?.color,'#34544a');
+  assert.equal(saved?.zone,'TABLE');
+  assert.equal(withBox.objects.filter(o=>o.zone==='DECK').length,
+    initial.objects.filter(o=>o.zone==='DECK').length,
+    'Adding a deck box cannot add, replace or consume actual deck cards');
+  const deck=tcgMatCells(0).find(p=>p.row===1&&p.column===2);
+  const movedTo={x:deck.x+11,y:deck.y+8};
+  const snap=tcgSnapPoint(movedTo.x,movedTo.y);
+  assert.ok(snap);
+  assert.ok(Math.hypot(snap.x-movedTo.x,snap.y-movedTo.y)>2,
+    'Test target is a card zone with a meaningful snap offset');
+  const move={id:'deckbox-move',type:'MOVE',actor:'local',
+    payload:{id:box.id,...movedTo}};
+  const afterMove=applyCommand(withBox,move);
+  const moved=afterMove.objects.find(o=>o.id===box.id);
+  assert.equal(moved?.x,movedTo.x,'Box must remain freely draggable, not snap like a card');
+  assert.equal(moved?.y,movedTo.y);
+  assert.equal(moved?.matSeat,0,'Dragging within a table preserves the owner-side rendering');
+  assert.equal(moved?.zone,'TABLE');
+  assert.deepEqual(replay(initial,[add,move]),afterMove,
+    'Deck boxes must be deterministic across client/server replay');
+  const cloned=applyCommand(afterMove,{id:'deckbox-clone',type:'CLONE',
+    actor:'local',payload:{id:box.id,newId:'accessory-box-2'}});
+  assert.equal(cloned.objects.find(o=>o.id==='accessory-box-2')?.kind,'deck-box');
+  const rotated=applyCommand(cloned,{id:'deckbox-rotate',type:'ROTATE',
+    actor:'local',payload:{id:box.id,degrees:30}});
+  assert.equal(rotated.objects.find(o=>o.id===box.id)?.rotation,30);
+  const removed=applyCommand(rotated,{id:'deckbox-delete',type:'DELETE',
+    actor:'local',payload:{id:box.id}});
+  assert.ok(!removed.objects.some(o=>o.id===box.id));
+  assert.equal(removed.objects.filter(o=>o.zone==='DECK').length,
+    initial.objects.filter(o=>o.zone==='DECK').length);
+  const pack=parseGamePack({schema:'sennet.pack/1',
+    id:'deckbox.test',name:'Deck box pack',author:'Test',kind:'tcg',
+    objects:[box]});
+  assert.equal(pack.objects[0]?.kind,'deck-box',
+    'Portable game packs must preserve the new object kind');
+});
+
 test('Wide middle column supports seven distinct card positions per row',()=>{
   const zone=tcgMatCells(0).find(cell=>cell.row===2&&cell.column===1);
   assert.ok(zone);
