@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -309,11 +309,12 @@ test('merged center rows share seven horizontal snap positions across their comb
   const top=tcgMatCells(0).find(z=>z.column===1&&z.row===0);
   const bottom=tcgMatCells(0).find(z=>z.column===1&&z.row===1);
   for(const input of [top,bottom]){
-    const dest=tcgSnapPoint(input.x,input.y,state.centerMerges);
+    assert.equal(tcgSnapPoint(input.x,input.y,state.centerMerges),null);
+    const dest=tcgSnapPoint(input.x,input.y,state.centerMerges,true);
     assert.equal(dest.row,0);
     assert.equal(dest.slot,3);
     assert.ok(Math.hypot(dest.x-region.x,dest.y-region.y)<1e-6);
-    const card=applyCommand(state,c('MOVE',{id:'hero-a',x:input.x,y:input.y})).objects.find(z=>z.id==='hero-a');
+    const card=applyCommand(state,c('MOVE',{id:'hero-a',x:input.x,y:input.y,snapMerged:true})).objects.find(z=>z.id==='hero-a');
     assert.ok(Math.hypot(card.x-region.x,card.y-region.y)<1e-6);
   }
 });
@@ -532,4 +533,40 @@ test('mat draw rejects invalid seats, another player mat, empty decks and owned 
   assert.throws(()=>applyCommand({...state,players:[]},c('DRAW',{matSeat:2})),/No cards/);
   const owned={...state,objects:state.objects.map(o=>o.matSeat===0?{...o,owner:'P2'}:o)};
   assert.throws(()=>applyCommand(owned,c('DRAW',{matSeat:0})),/No cards/);
+});
+
+test('combined center pockets are freeform by default and obey explicit per-command snap opt-in',()=>{
+  const state=applyCommand(createGame('tcg'),c('SET_CENTER_MERGE',{seat:0,boundary:1,merged:true}));
+  const area=tcgMatRegions(0,state.centerMerges).find(z=>z.column===1&&z.row===1);
+  const pt=tcgMatWorld(-42,38,0);
+  const defaultMove=applyCommand(state,c('MOVE',{id:'hero-a',...pt}));
+  const loose=defaultMove.objects.find(o=>o.id==='hero-a');
+  assert.ok(Math.hypot(loose.x-pt.x,loose.y-pt.y)<.001);
+  const snappedMove=applyCommand(state,c('MOVE',{id:'hero-a',...pt,snapMerged:true}));
+  const snapped=snappedMove.objects.find(o=>o.id==='hero-a');
+  assert.ok(Math.hypot(snapped.y-area.y)<1);
+  assert.ok(Math.hypot(snapped.x-pt.x,snapped.y-pt.y)>2);
+  assert.deepEqual(replay(state,[c('MOVE',{id:'hero-a',...pt,snapMerged:true})]).objects.find(o=>o.id==='hero-a').x,snapped.x);
+});
+
+test('unmerged spaces always snap and appearance defaults are independent and normalized',()=>{
+  const cfg=defaultPlaymatAppearance();
+  assert.equal(cfg.sections.length,12);
+  assert.equal(cfg.snapMerged,false);
+  assert.equal(cfg.sections[0].texture,'matte-glossy');
+  assert.ok(cfg.sections[0].innerShadow&&cfg.sections[0].innerBevel);
+  assert.equal(playmatSectionIndex(3,2),11);
+  const first=tcgMatCells(0).find(cell=>cell.row===2&&cell.column===1);
+  const pt=tcgMatWorld(25,tcgMatLocal(first.x,first.y,0).y+10,0);
+  assert.ok(tcgSnapPoint(pt.x,pt.y,[],false));
+  const input={...cfg,images:{bg_abcde:'data:image/png;base64,aGVsbG8=',fake:'javascript:bad'},
+    selectedSections:[5,5,-1,12,2],
+    sections:[{...cfg.sections[0],imageId:'fake',shadowOpacity:77,texture:'unreal'}]};
+  const safe=normalizePlaymatAppearance(input);
+  assert.deepEqual(safe.selectedSections,[2,5]);
+  assert.equal(safe.sections[0].imageId,'');
+  assert.equal(safe.sections[0].shadowOpacity,1);
+  assert.equal(safe.sections[0].texture,'matte-glossy');
+  assert.equal(safe.sections[1].imageId,'');
+  assert.equal(safe.snapMerged,false);
 });
