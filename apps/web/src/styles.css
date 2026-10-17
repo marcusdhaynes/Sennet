@@ -328,46 +328,85 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .opponent-seat-tab{transition:none}
 }
 
-/* Playmat settings: same physical 4×3 geometry as the tabletop mat. */
-.mat-editor-grid{
-  display:grid;
-  grid-template-columns:minmax(28px,.14fr) minmax(110px,1fr) minmax(28px,.14fr);
-  grid-template-rows:repeat(4,42px);
-  gap:4px;
-  padding:8px;
-  border:1px solid #6a796c;
-  border-radius:11px;
-  background:#071b1a;
-  width:100%;
-  box-shadow:inset 0 2px 10px #0008;
+/* Dense, live playmat editor. The preview follows the same world-space
+   rectangles and appearance values as the actual Pixi tabletop. */
+.playmat-editor{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mat-editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.reader .mat-editor-heading h2{font-size:27px;line-height:1.1;margin:0}
+.mat-editor-heading p{font-size:10px;line-height:1.3;margin:2px 0 0}
+.mat-editor-layout{display:grid;grid-template-columns:minmax(0,1.04fr) minmax(0,.96fr);gap:10px;align-items:start}
+.mat-editor-pane{min-width:0;border:1px solid #c4b390;border-radius:7px;padding:9px;background:#f8edda;}
+.mat-preview-pane{background:#eee2c8}
+.mat-pane-bar{display:flex;align-items:center;gap:6px;min-width:0;margin-bottom:6px}
+.reader .mat-pane-bar h3,.reader .mat-inline-image h3{
+  font-family:'DM Sans',system-ui,sans-serif;font-size:12px;font-weight:800;
+  letter-spacing:.01em;white-space:nowrap;margin:0;line-height:1.2;
 }
-.mat-editor-cell{
-  display:flex;
-  justify-content:center;align-items:center;
-  min-width:0;margin:0;padding:2px 3px;
-  border:1px solid #567064;
-  border-radius:5px;
-  background:linear-gradient(135deg,#15302c,#0d2422);
-  color:#8eaa9c;
-  font:700 9px/1.2 'DM Sans',sans-serif;
-  letter-spacing:.03em;
-  transition:background .16s,border-color .16s,color .16s;
+.mat-pane-bar h3{margin-right:auto!important}
+.mat-pane-bar span{font-size:9px;line-height:1.25;color:#69583f}
+.mat-pane-bar button,.mat-mini-button,.mat-input-row button{
+  flex:none;margin:0;border:1px solid #baa881;background:#f6edda;
+  border-radius:4px;padding:4px 7px;color:#4d412f;font-size:10px;font-weight:700;
 }
-.mat-editor-cell.side{writing-mode:vertical-rl;font-size:8px;letter-spacing:.015em}
-.mat-editor-cell.chosen{
-  background:linear-gradient(135deg,#335e4b,#1d5145);
-  border-color:#f2d59a;
-  color:#f9e6bd;
-  box-shadow:inset 0 0 0 1px #e5bc6d77;
+.mat-pane-bar button:hover,.mat-mini-button:hover,.mat-input-row button:hover{background:#e7d5b0}
+.mat-live-svg{
+  width:100%;max-height:300px;display:block;overflow:visible;
+  border-radius:6px;background:#071915;
+  border:1px solid #5a6e60;box-shadow:inset 0 2px 8px #0008;
 }
-.mat-editor-cell:focus-visible{outline:2px solid #ffd88a;outline-offset:1px}
-.mat-editor-check{display:flex!important;flex-direction:row!important;align-items:center;gap:10px}
-.mat-editor-check input[type=checkbox]{
-  flex:none;width:17px;height:17px;accent-color:#cba767;
+.mat-preview-hit{cursor:pointer;outline:none}
+.mat-preview-hit rect{stroke:transparent;fill:transparent;transition:fill .15s,stroke .15s}
+.mat-preview-hit.chosen rect{stroke:#ffe5a3;fill:#f5cf74;fill-opacity:.045}
+.mat-preview-hit:hover rect,.mat-preview-hit:focus-visible rect{
+  stroke:#fff1c9;stroke-width:3;fill:#ffe6a1;fill-opacity:.15;
 }
-.reader-block input[type=file]{
-  display:block;width:100%;min-width:0;font-size:12px;
+.mat-preview-hint{justify-content:center;font-size:9px;color:#69573e;line-height:1.25}
+.mat-inline-image{border-top:1px solid #cabb9a;padding-top:7px;margin-top:7px;display:grid;gap:5px}
+.mat-input-row{display:flex;align-items:center;gap:5px}
+.mat-input-row input[type=url]{
+  min-width:0;flex:1;width:100%;border:1px solid #b5a280;border-radius:4px;
+  background:#fffaf0;color:#403727;font-size:11px;padding:6px 7px;height:29px;
 }
-.reader-block select:disabled,
-.reader-block input:disabled,
-.reader-block button:disabled{opacity:.45;cursor:not-allowed}
+.mat-input-row button{height:29px;padding:4px 8px}
+.mat-upload-control{
+  position:relative;overflow:hidden;cursor:pointer;display:flex;
+  justify-content:center;align-items:center;flex:1;
+  margin:0!important;height:29px;border:1px solid #baa881;border-radius:4px;
+  background:#f6edda;color:#4d412f;font-size:10px;font-weight:700;
+}
+.mat-upload-control input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.mat-upload-control:has(input:focus-visible){outline:2px solid #a77a38;outline-offset:2px}
+.mat-editor-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-items:start}
+.mat-editor-controls .mat-editor-pane{padding:8px}
+.mat-compact-control{display:flex;flex-direction:column;gap:3px;padding:5px 0;border-top:1px solid #dfd2b8}
+.mat-compact-control:first-of-type{border-top:0}
+.mat-compact-check{
+  display:flex!important;flex-direction:row!important;align-items:center;
+  gap:5px!important;margin:0!important;min-width:0;cursor:pointer;
+  font-size:10px!important;line-height:1.2!important;font-weight:700!important;color:#54442e!important;
+}
+.mat-compact-check input[type=checkbox]{
+  width:14px;height:14px;margin:0;flex:none;accent-color:#4c7359;
+}
+.mat-compact-opacity{display:flex!important;flex-direction:column!important;
+  gap:1px!important;margin:0!important;
+  font-size:9px!important;line-height:1.2!important;color:#6c5b43!important;
+}
+.mat-compact-opacity input[type=range]{width:100%;height:14px;margin:0;accent-color:#426b58}
+.mat-compact-single{padding:6px 0;border-top:1px solid #dfd2b8}
+.mat-editor-snapping{
+  grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:4px;padding:8px 9px!important;
+}
+.mat-editor-snapping span{font-size:9px;line-height:1.2;color:#847058}
+.playmat-editor input:disabled,.playmat-editor button:disabled{opacity:.43;cursor:not-allowed}
+@media(max-width:760px){
+  .mat-editor-layout{grid-template-columns:minmax(0,1fr)}
+  .mat-live-svg{max-height:270px}
+  .mat-editor-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:420px){
+  .mat-editor-controls{grid-template-columns:minmax(0,1fr)}
+  .mat-editor-heading p{font-size:9px}
+  .mat-editor-heading h2{font-size:23px!important}
+}
