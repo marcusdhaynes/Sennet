@@ -326,8 +326,8 @@ export const PLAYMAT_BOTTOM_BUTTON_RADIUS=16;
 export const PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS=19;
 export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
 /** Balanced clear space around every mat in Eye and Castle views.
- * The Hand-line circles extend 19 units past the mat, and 3 more units
- * provide a tiny safety margin for antialiasing / border strokes.
+ * The Play 03 top-line circles extend 19 units past the mat, plus 3
+ * additional units of antialiasing clearance.
  * Applied equally at the divider, outer viewport edges, and between mats.
  */
 export const BATTLEFIELD_PLAYMAT_PADDING=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS+3;
@@ -340,13 +340,16 @@ export function battlefieldFitBounds(columns:number,padding=BATTLEFIELD_PLAYMAT_
     height:2*TCG_MAT_HEIGHT+4*pad
   };
 }
-// Row 3 (zero-indexed) is HAND. Anchor to its actual geometry, not an
-// approximation based on the decorative backing or a viewport boundary.
+// Row 0 (zero-indexed) is PLAY 03. All view and relationship
+// buttons straddle its top edge, using the owning player's coordinates.
+export const TCG_PLAY03_TOP_LINE_Y=-TCG_MAT_HEIGHT/2;
+// Preserve the independent HAND-edge geometry for existing consumers.
 export const TCG_HAND_BOTTOM_LINE_Y=
   -TCG_MAT_HEIGHT/2+
   (TCG_MAT.rows-1)*(TCG_MAT.rowHeight+TCG_MAT.gap)+
   TCG_MAT.rowHeight;
-export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_HAND_BOTTOM_LINE_Y;
+// Legacy API alias: the button line is now the top of PLAY 03.
+export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_PLAY03_TOP_LINE_Y;
 export const VIEW_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const VIEW_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
 export const VIEW_BUTTON_CASTLE_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
@@ -355,7 +358,7 @@ export function viewButtonPosition(control:'eye'|'castle'):{
 }{
   return {
     x:control==='eye'?-PLAYMAT_BOTTOM_BUTTON_OFFSET:PLAYMAT_BOTTOM_BUTTON_OFFSET,
-    y:TCG_HAND_BOTTOM_LINE_Y
+    y:TCG_PLAY03_TOP_LINE_Y
   };
 }
 /** Shared visual colors: consistent inactive role identity, unmistakable
@@ -373,7 +376,7 @@ export function opponentRelationButtonPosition(choice:'enemy'|'ally',_enemySide=
     // This is from the MAT OWNER'S perspective. An enemy mat rotates
     // naturally; do not invert coordinates based on the local viewer.
     x:choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET,
-    y:TCG_HAND_BOTTOM_LINE_Y
+    y:TCG_PLAY03_TOP_LINE_Y
   };
 }
 /** Only one role can be active for an opponent; activating it again clears it. */
