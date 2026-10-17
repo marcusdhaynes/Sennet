@@ -771,7 +771,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(hint&&!hint.destroyed){
         if(hint.parent!==parent)parent.addChild(hint);
         hint.clear();hint.removeChildren().forEach(child=>child.destroy());
-        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges,playmatRef.current.snapMerged):null;
+        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges,playmatRef.current.snapMerged,seatRef.current):null;
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
