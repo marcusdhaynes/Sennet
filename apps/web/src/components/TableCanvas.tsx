@@ -125,7 +125,9 @@ function drawTcgMats(
       for(const direction of ['left','right'] as const){
         const left=direction==='left';
         const button=new Container();
-        button.position.set((left?1:-1)*(TCG_MAT_WIDTH/2+31),0);
+        // Center the circle ON the outside border, not beyond the mat.
+        // Opponent's rotated local +X is the screen's left side.
+        button.position.set((left?1:-1)*TCG_MAT_WIDTH/2,0);
         button.eventMode='static';
         button.hitArea=new Circle(0,0,19);
         button.cursor='pointer';
@@ -718,11 +720,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const w=host.clientWidth,h=host.clientHeight;
       if(w<=0||h<=0)return;
       const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
-      // Use full viewport height on desktop; on narrow portrait screens,
-      // fit both side navigation buttons without stretching or clipping.
-      // The independent colored player halves always fill the viewport.
+      // Fit the two player halves without stretching cards, including the
+      // half-overhanging navigation circles centered ON the mat borders.
       const heightScale=h/(2*TCG_MAT_HEIGHT);
-      const arrowsWidth=TCG_MAT_WIDTH+2*(31+19);
+      const arrowsWidth=TCG_MAT_WIDTH+2*19;
       const widthScale=Math.max(80,w-24)/arrowsWidth;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
@@ -775,6 +776,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       requestAnimationFrame(()=>focusOpponent.current());
     };
     const zoomAt=(x:number,y:number,ratio:number)=>{
+      // Opposing view has a fixed matchup camera. Only the eye control may
+      // leave it; ordinary zoom input must not break the two-mat layout.
+      if(viewRef.current.kind==='versus')return;
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
       interruptFocus();
       const {scene}=current,c=camera.current;
@@ -791,12 +795,15 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current();
     };
     const pan=(dx:number,dy:number)=>{
+      if(viewRef.current.kind==='versus')return;
       interruptFocus();
       camera.current.panX+=dx;camera.current.panY+=dy;
       updateView.current();
     };
     const wheel=(event:WheelEvent)=>{
       event.preventDefault();
+      // Block wheel zoom, trackpad scroll/pinch and Shift+wheel pan.
+      if(viewRef.current.kind==='versus')return;
       const point=coordinates(event);
       const factor=event.deltaMode===1?16:event.deltaMode===2?host.clientHeight:1;
       if(event.shiftKey&&!event.ctrlKey){
@@ -808,6 +815,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     const down=(event:PointerEvent)=>{
+      // Cards, stacks, eye and opponent arrows still receive Pixi events,
+      // but grabbing empty space must never pan a locked matchup.
+      if(viewRef.current.kind==='versus')return;
       if(event.pointerType==='touch'){
         pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
         if(pointers.current.size>=2){
@@ -839,6 +849,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     const move=(event:PointerEvent)=>{
+      if(viewRef.current.kind==='versus')return;
       const touches=pointers.current;
       if(event.pointerType==='touch'&&touches.has(event.pointerId)){
         const old=[...touches.values()];
@@ -885,6 +896,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const key=(event:KeyboardEvent)=>{
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
+      // Keyboard reset and +/- cannot bypass the opponent-view camera lock.
+      // The eye button remains the explicit way to leave this view.
+      if(viewRef.current.kind==='versus'){
+        if(['0','+','=','-'].includes(event.key))event.preventDefault();
+        return;
+      }
       if(event.key==='0'){reset();}
       if(event.key==='+'||event.key==='='){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1.25);}
       if(event.key==='-'){event.preventDefault();zoomAt(host.clientWidth/2,host.clientHeight/2,1/1.25);}
