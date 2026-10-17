@@ -613,25 +613,34 @@ export function castleIndependentFocusLayout(
   mode:CastleMode,selectedAlly:number|null,
   focused:Readonly<CastleSideFocus>,
   viewport:{width:number;height:number},
-  padding=BATTLEFIELD_PLAYMAT_PADDING
+  padding=BATTLEFIELD_PLAYMAT_PADDING,
+  selectedEnemy:number|null=null
 ):ReturnType<typeof castleGridLayout>{
-  const ally=focused.ally!==null&&focused.ally!==viewerSeat&&
-    relations[focused.ally]==='ally'?focused.ally:null;
-  const enemy=focused.enemy!==null&&focused.enemy!==viewerSeat&&
-    relations[focused.enemy]==='enemy'?focused.enemy:null;
-  if(ally===null&&enemy===null)
-    return castleGridLayout(viewerSeat,relations,mode,selectedAlly,viewport,padding);
+  const available=(role:'ally'|'enemy')=>
+    Array.from({length:SEATS},(_,seat)=>seat)
+      .filter(seat=>seat!==viewerSeat&&relations[seat]===role);
+  const allies=available('ally'),enemies=available('enemy');
+  const valid=(seat:number|null,role:'ally'|'enemy')=>
+    seat!==null&&seat!==viewerSeat&&relations[seat]===role?seat:null;
+  const allyFocus=valid(focused.ally,'ally');
+  const enemyFocus=valid(focused.enemy,'enemy');
+  const activeAlly=valid(selectedAlly,'ally')??allies[0]??null;
+  const activeEnemy=valid(selectedEnemy,'enemy')??enemies[0]??null;
+  // A focus overrides ONLY its own side. Otherwise Single means one
+  // participant from EACH role and All means all participants from EACH.
+  // This deliberately does not use castleGridLayout's ally-only "single"
+  // option: both Sword and Shield groups must follow the same toggle.
+  const drawnAllies=allyFocus!==null?[allyFocus]:
+    mode==='single'?(activeAlly===null?[]:[activeAlly]):allies;
+  const drawnEnemies=enemyFocus!==null?[enemyFocus]:
+    mode==='single'?(activeEnemy===null?[]:[activeEnemy]):enemies;
   const displayed:Record<number,OpponentRelation>={};
-  for(let seat=0;seat<SEATS;seat++){
-    if(seat===viewerSeat)continue;
-    const role=relations[seat];
-    if(role==='ally'&&(ally===null||seat===ally)||
-       role==='enemy'&&(enemy===null||seat===enemy)){
-      displayed[seat]=role;
-    }
-  }
-  return castleGridLayout(viewerSeat,displayed,mode,
-    ally??selectedAlly,viewport,padding);
+  for(const seat of drawnAllies)displayed[seat]='ally';
+  for(const seat of drawnEnemies)displayed[seat]='enemy';
+  // Keep the SAME viewport-based camera, viewer anchor and per-half grid
+  // rectangles as All, independent of which side is single or focused.
+  return castleGridLayout(viewerSeat,displayed,'all',
+    allyFocus??activeAlly,viewport,padding);
 }
 /** Focus a marked Castle ally or enemy in isolation without changing the
  * all/single preference. Reuses the same locked Castle camera and the same
