@@ -330,6 +330,18 @@ export function alliedMatLayout(viewerSeat:number,allySeat:number):OpposingMatLa
       rotation:(viewerSeat-allySeat)*Math.PI/6}
   };
 }
+/** The enemy-facing side is an invariant of Opponent Mode.
+ * Shield is the ONLY relation that permits a side-by-side arrangement.
+ * Sword, a neutral opponent, and transitions from a previous Ally all use
+ * the exact same opposite-side geometry relative to the current viewer.
+ */
+export function matchupMatLayout(
+  viewerSeat:number,opponentSeat:number,relation:OpponentRelation
+):OpposingMatLayout {
+  return relation==='ally'
+    ?alliedMatLayout(viewerSeat,opponentSeat)
+    :opposingMatLayout(viewerSeat,opponentSeat);
+}
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   for(let seat=0;seat<SEATS;seat++){
