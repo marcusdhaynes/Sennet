@@ -288,12 +288,12 @@ function drawTcgMats(
       }
     }
 
-    // Eye and Castle centers lie EXACTLY ON the Hand section's bottom
-    // border, using the owning player's local playmat orientation.
+    // Eye and Castle centers straddle the PLAY 03 top border,
+    // symmetrically around the owning player's local mat center.
     if(seat===viewerSeat){
       const eye=new Container();
-      // The center of each circle straddles the Hand row's bottom border
-      // (not an inset into the row or a viewport-relative position).
+      // The center of each circle straddles PLAY 03's top line,
+      // not a viewport-relative position.
       const eyePosition=viewButtonPosition('eye');
       eye.position.set(eyePosition.x,eyePosition.y);
       eye.eventMode='static';
@@ -386,9 +386,8 @@ function drawTcgMats(
           const button=new Container();
           const enemySide=opponentAcrossDivider(
             castleActive?'castle':'eye',relations[seat]??null);
-          // Anchor to THIS opponent's own Hand-bottom line, not
-          // the viewer's screen-bottom or the central battlefield divider.
-          // For enemies that physical line appears screen-top after rotation.
+          // Anchor to THIS opponent's own PLAY 03 top line, not the
+          // viewer's screen edge or central battlefield divider.
           const position=opponentRelationButtonPosition(choice,enemySide);
           button.position.set(position.x,position.y);
           button.eventMode='static';
@@ -418,7 +417,7 @@ function drawTcgMats(
             glyph.moveTo(0,-7).lineTo(0,8)
               .stroke({color:0xf4e4bd,alpha:.55,width:1.2});
           }
-          // Keep the icon oriented with the owner and their Hand row,
+          // Keep the icon oriented with the owner and their PLAY 03 row,
           // exactly like the other markings on their playmat.
           glyph.eventMode='none';button.addChild(glyph);
           button.on('pointerdown',e=>{
@@ -754,7 +753,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       resizeObserver=new ResizeObserver(()=>{
         const oldW=lastWidth,oldH=lastHeight;
         rescale();
-        // Preserve complete Hand-circle visibility after viewport resizing,
+        // Preserve complete PLAY 03 circle visibility after resizing,
         // not just when Eye/Castle is initially activated.
         if((lastWidth!==oldW||lastHeight!==oldH)&&
           (viewRef.current.kind==='versus'||viewRef.current.kind==='castle')){
@@ -1033,7 +1032,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const projected=board.toGlobal(origin);
       const localX=(projected.x-scene.x)/scene.scale.x;
       const localY=(projected.y-scene.y)/scene.scale.y;
-      // Fit to the screen, including the new eye above the mat.
+      // Fit to the screen, including the view controls on PLAY 03.
       // On sufficiently tall displays, the mat fills 96% of screen width.
       const widthFit=.96*w/TCG_MAT_WIDTH;
       const heightFit=.91*h/(TCG_MAT_HEIGHT+148);
@@ -1053,7 +1052,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const lineup=viewRef.current.kind==='castle'
         ?groupedMatchupLayout(seatRef.current,null,relationsRef.current,BATTLEFIELD_PLAYMAT_PADDING)
         :oneOnOneMatchupLayout(seatRef.current,selected!,relationsRef.current,BATTLEFIELD_PLAYMAT_PADDING);
-      // Account for the FULL Hand-circle hit radius, plus a minimal
+      // Account for the FULL PLAY 03 circle hit radius, plus a minimal
       // 3-unit safety clearance, equally on all four sides of each mat.
       // This also gives both battlefield halves breathing room at the divider.
       const bounds=battlefieldFitBounds(lineup.columns);
