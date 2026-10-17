@@ -325,6 +325,21 @@ export type OpponentRelation='enemy'|'ally'|null;
 export const PLAYMAT_BOTTOM_BUTTON_RADIUS=16;
 export const PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS=19;
 export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
+/** Balanced clear space around every mat in Eye and Castle views.
+ * The Hand-line circles extend 19 units past the mat, and 3 more units
+ * provide a tiny safety margin for antialiasing / border strokes.
+ * Applied equally at the divider, outer viewport edges, and between mats.
+ */
+export const BATTLEFIELD_PLAYMAT_PADDING=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS+3;
+export function battlefieldFitBounds(columns:number,padding=BATTLEFIELD_PLAYMAT_PADDING){
+  const pad=Math.max(0,padding);
+  const count=Math.max(1,Math.trunc(columns));
+  const step=TCG_MAT_WIDTH+Math.max(ALLY_MAT_GAP,2*pad);
+  return {
+    width:TCG_MAT_WIDTH+(count-1)*step+2*pad,
+    height:2*TCG_MAT_HEIGHT+4*pad
+  };
+}
 // Row 3 (zero-indexed) is HAND. Anchor to its actual geometry, not an
 // approximation based on the decorative backing or a viewport boundary.
 export const TCG_HAND_BOTTOM_LINE_Y=
@@ -398,8 +413,10 @@ export function matchupMatLayout(
  * This transforms visuals only; canonical tabletop positions never change.
  */
 export function groupedMatchupLayout(
-  viewerSeat:number,selectedSeat:number|null,relations:Readonly<Record<number,OpponentRelation>>
+  viewerSeat:number,selectedSeat:number|null,
+  relations:Readonly<Record<number,OpponentRelation>>,padding=0
 ):{mats:Map<number,OpposingMatLayout['player']>;enemySeats:number[];allySeats:number[];columns:number} {
+  const pad=Math.max(0,padding);
   const seats=Array.from({length:SEATS},(_,seat)=>seat)
     .filter(seat=>seat!==viewerSeat);
   const enemySeats=seats.filter(seat=>relations[seat]==='enemy'||
@@ -410,7 +427,8 @@ export function groupedMatchupLayout(
   const downX=Math.cos(radial),downY=Math.sin(radial);
   const originAngle=tcgMatOrigin(viewerSeat).angle;
   const rightX=Math.cos(originAngle),rightY=Math.sin(originAngle);
-  const distance=TCG_MAT_WIDTH+ALLY_MAT_GAP;
+  // Keep at least one full pad on EITHER side of adjacent playmats.
+  const distance=TCG_MAT_WIDTH+Math.max(ALLY_MAT_GAP,2*pad);
   const mats=new Map<number,OpposingMatLayout['player']>();
   const add=(list:readonly number[],y:number,enemy:boolean)=>{
     for(let index=0;index<list.length;index++){
@@ -424,8 +442,8 @@ export function groupedMatchupLayout(
       });
     }
   };
-  add(enemySeats,-TCG_MAT_HEIGHT/2,true);
-  add(bottomSeats,TCG_MAT_HEIGHT/2,false);
+  add(enemySeats,-TCG_MAT_HEIGHT/2-pad,true);
+  add(bottomSeats,TCG_MAT_HEIGHT/2+pad,false);
   return {
     mats,enemySeats,allySeats,
     columns:Math.max(enemySeats.length,bottomSeats.length)
@@ -437,9 +455,9 @@ export function groupedMatchupLayout(
  */
 export function oneOnOneMatchupLayout(
   viewerSeat:number,opponentSeat:number,
-  _relations:Readonly<Record<number,OpponentRelation>>
+  _relations:Readonly<Record<number,OpponentRelation>>,padding=0
 ):ReturnType<typeof groupedMatchupLayout>{
-  return groupedMatchupLayout(viewerSeat,opponentSeat,{});
+  return groupedMatchupLayout(viewerSeat,opponentSeat,{},padding);
 }
 /** Eye ignores Sword/Shield classification for visual facing; Castle
  * alone puts allies on the viewer's side of the divider.
