@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -902,11 +902,14 @@ test('Castle lineup shows marked allies and enemies only, never neutral/unmarked
     assert.equal(castle.mats.has(candidates[0]),false);
     assert.equal(castle.mats.has(candidates[7]),false);
     assert.equal(castle.mats.has(candidates[9]),false);
-    const eye=groupedMatchupLayout(viewer,candidates[9],relations);
-    assert.ok(eye.mats.has(candidates[9]),
-      'Existing Eye targeting still displays the selected unclassified opponent');
-    assert.ok(eye.mats.has(candidates[1]),'Sword-marked enemies still visible in Eye mode');
-    assert.ok(eye.mats.has(candidates[3]),'Shield-marked allies still visible in Eye mode');
+    const eye=oneOnOneMatchupLayout(viewer,candidates[9],relations);
+    assert.deepEqual([...eye.mats.keys()].sort((a,b)=>a-b),
+      [viewer,candidates[9]].sort((a,b)=>a-b),
+      'Eye shows only viewer plus the selected opponent');
+    assert.equal(eye.mats.has(candidates[1]),false,
+      'Other marked enemies do not leak into Eye view');
+    assert.equal(eye.mats.has(candidates[3]),false,
+      'Other marked allies do not leak into Eye view');
   }
 });
 test('Castle view with no classifications shows only own playmat',()=>{
@@ -916,8 +919,8 @@ test('Castle view with no classifications shows only own playmat',()=>{
     assert.deepEqual(castle.enemySeats,[]);
     assert.deepEqual(castle.allySeats,[]);
     assert.equal(castle.columns,1);
-    const selected=groupedMatchupLayout(viewer,(viewer+1)%12,{});
-    assert.equal(selected.mats.size,2,'Eye mode retains original selected-opponent behavior');
+    const selected=oneOnOneMatchupLayout(viewer,(viewer+1)%12,{});
+    assert.equal(selected.mats.size,2,'Eye mode retains exactly one selected opponent');
   }
 });
 
@@ -979,6 +982,36 @@ test('every seat anchors button centers to its own Hand lower boundary, includin
           assert.ok(button.y-VIEW_BUTTON_RADIUS<localBottom);
           assert.ok(button.y+VIEW_BUTTON_RADIUS>localBottom);
         }
+      }
+    }
+  }
+});
+
+test('Eye is exactly one-on-one for EVERY opponent, even with all other seats classified',()=>{
+  for(let viewer=0;viewer<12;viewer++){
+    const rivals=Array.from({length:12},(_,seat)=>seat).filter(seat=>seat!==viewer);
+    const relations=Object.fromEntries(rivals.map((seat,index)=>
+      [seat,index%3===0?'enemy':index%3===1?'ally':null]));
+    for(const opponent of rivals){
+      const eye=oneOnOneMatchupLayout(viewer,opponent,relations);
+      assert.equal(eye.mats.size,2);
+      assert.deepEqual([...eye.mats.keys()].sort((a,b)=>a-b),
+        [viewer,opponent].sort((a,b)=>a-b));
+      const relation=relations[opponent];
+      if(relation==='ally'){
+        assert.deepEqual(eye.allySeats,[opponent]);
+        assert.deepEqual(eye.enemySeats,[]);
+        assert.equal(eye.columns,2);
+      }else{
+        assert.deepEqual(eye.enemySeats,[opponent]);
+        assert.deepEqual(eye.allySeats,[]);
+        assert.equal(eye.columns,1);
+      }
+      const castle=groupedMatchupLayout(viewer,null,relations);
+      assert.equal(castle.mats.has(opponent),relation==='enemy'||relation==='ally');
+      for(const other of rivals.filter(seat=>seat!==opponent)){
+        assert.equal(eye.mats.has(other),false,
+          'Other classified seats cannot appear in Eye view');
       }
     }
   }
