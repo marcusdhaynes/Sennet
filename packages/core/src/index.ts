@@ -466,15 +466,16 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'MOVE': if(obj){
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=(state.kind==='tcg' && obj.kind==='card')?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true):null;
+      const snapEligible=state.kind==='tcg'&&obj.kind!=='board';
+      const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
         // Playing a card from a deck or hand makes it a public table card.
-        obj.zone='TABLE';
+        if(obj.kind==='card' || obj.kind==='deck')obj.zone='TABLE';
         message=`Placed ${obj.name} on seat ${snapped.seat+1}, row ${snapped.row+1}, column ${snapped.column+1}, position ${snapped.slot+1}`;
       } else {
-        if(state.kind==='tcg' && obj.kind==='card')delete obj.matSeat;
+        if(snapEligible)delete obj.matSeat;
         message=`Moved ${obj.name}`;
       }
       // A normal short drag lifts only this card from a deck stack.
