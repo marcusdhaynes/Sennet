@@ -428,3 +428,9 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .mat-editor-heading p{font-size:9px}
   .mat-editor-heading h2{font-size:23px!important}
 }
+
+/* When Shield is active, both seats are on the same (bottom) side.
+   Keep the retractable identity tabs aligned with their respective mats. */
+.ally-identity .opponent-seat-tab{width:min(148px,calc(50vw - 20px))}
+.ally-player .opponent-seat-tab{left:25%}
+.ally-opponent .opponent-seat-tab{left:75%}
