@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -118,6 +118,9 @@ function drawTcgMats(
     ? [...seatLayers.keys()]
     : Array.from({length:12},(_,i)=>i);
   for(const seat of drawnSeats){
+    // Personal appearance belongs only to the current viewer's own mat.
+    // Opponents use the default appearance in both table and versus views.
+    const seatPlaymat=playmatAppearanceForSeat(playmat,viewerSeat,seat);
     const parent=seatLayers?.get(seat)??board;
     const cells=tcgMatCells(seat);
     const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
@@ -151,16 +154,16 @@ function drawTcgMats(
       const w=cell.width,h=cell.height;
       const merged=cell.column===1&&cell.lastRow>cell.row;
       const accent=TCG_ROW_COLORS[merged&&cell.row===0&&cell.lastRow===2?1:cell.row];
-      const section=playmat.sections[playmatSectionIndex(cell.row,cell.column)];
+      const section=seatPlaymat.sections[playmatSectionIndex(cell.row,cell.column)];
       const base=new Graphics()
         .roundRect(x,y,w,h,8).fill({color:0x00050a,alpha:.98})
         .stroke({color:accent,width:merged?2:1,alpha:merged?.7:.3})
         .roundRect(x+2,y+2,w-4,h-4,6).fill({color:accent,alpha:merged?.13:.055})
         .stroke({color:0x071915,width:1.8,alpha:.90});
       base.eventMode='none';mat.addChild(base);
-      const spanImage=playmat.imageMode==='span';
-      const imageId=spanImage?playmat.spanningImageId:section.imageId;
-      const image=playmat.images[imageId];
+      const spanImage=seatPlaymat.imageMode==='span';
+      const imageId=spanImage?seatPlaymat.spanningImageId:section.imageId;
+      const image=seatPlaymat.images[imageId];
       if(image)addPlaymatImage(mat,base,x,y,w,h,image,spanImage);
       addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column);
       const grid=new Graphics();
