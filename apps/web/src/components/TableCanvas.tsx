@@ -340,9 +340,14 @@ function createPiece(o:TableObject,isSelected:boolean){
 /** In opposing view, player identification retracts off-screen while a
  * small arrow tab remains visible. A 250ms dwell reveals it; without a
  * click it automatically retracts after one second. Click to pin open. */
+/** In opponent view, identities stay open while hovered (or pinned).
+ * A 250ms dwell opens them; after leaving, wait one second before closing.
+ * Re-entering cancels the pending retraction.
+ */
 function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;seat:number}){
   const [shown,setShown]=useState(false);
   const [pinned,setPinned]=useState(false);
+  const hovered=useRef(false);
   const hoverTimer=useRef<number|null>(null);
   const retractTimer=useRef<number|null>(null);
   const clear=(ref:{current:number|null})=>{
@@ -350,38 +355,47 @@ function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;
   };
   useEffect(()=>()=>{clear(hoverTimer);clear(retractTimer);},[]);
   const scheduleHover=()=>{
+    hovered.current=true;
+    clear(retractTimer);
     if(pinned||shown)return;
     clear(hoverTimer);
     hoverTimer.current=window.setTimeout(()=>{
       hoverTimer.current=null;
-      setShown(true);
-      clear(retractTimer);
-      retractTimer.current=window.setTimeout(()=>{
-        retractTimer.current=null;
-        setShown(false);
-      },1000);
+      if(hovered.current)setShown(true);
     },250);
   };
   const leave=()=>{
+    hovered.current=false;
     clear(hoverTimer);
-    if(!pinned){clear(retractTimer);setShown(false);}
+    if(!pinned&&shown){
+      clear(retractTimer);
+      retractTimer.current=window.setTimeout(()=>{
+        retractTimer.current=null;
+        if(!hovered.current)setShown(false);
+      },1000);
+    }
   };
   const toggle=()=>{
-    clear(hoverTimer);clear(retractTimer);
-    if(pinned){setPinned(false);setShown(false);}
-    else {setPinned(true);setShown(true);}
+    clear(hoverTimer);
+    clear(retractTimer);
+    if(pinned){
+      // Unpinning while hovered must not collapse the nameplate.
+      setPinned(false);setShown(hovered.current);
+    }else{
+      setPinned(true);setShown(true);
+    }
   };
-  const label=name.trim()||('Player '+(seat+1));
+  const displayName=name.trim()||('Player '+(seat+1));
   return <div
     className={'opponent-seat-tab '+side+(shown?' expanded':'')}
     onPointerDown={event=>event.stopPropagation()}
     onPointerEnter={scheduleHover} onPointerLeave={leave}>
     <button type="button" className="opponent-seat-tab-button"
-      aria-label={label+', seat '+(seat+1)+'. Hover to reveal or click to pin.'}
+      aria-label={displayName+', seat '+(seat+1)+'. Hover to reveal or click to pin.'}
       aria-expanded={shown} aria-pressed={pinned}
       onClick={toggle}>
       <span className="opponent-seat-tab-label">
-        <span className="opponent-seat-tab-title">{label}</span>
+        <span className="opponent-seat-tab-title">{displayName}</span>
         <span className="opponent-seat-tab-number">SEAT {seat+1}</span>
         <span className="opponent-seat-tab-pin">{pinned?'PINNED':'CLICK TO PIN'}</span>
       </span>
@@ -389,6 +403,7 @@ function RetractableSeatLabel({side,name,seat}:{side:'top'|'bottom';name:string;
     </button>
   </div>;
 }
+
 type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
