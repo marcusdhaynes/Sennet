@@ -153,20 +153,18 @@ function drawTcgMats(
     // Circular eye tool lives at the TOP of the local mat.
     if(seat===viewerSeat){
       const eye=new Container();
-      // In the opposing view the eye sits directly over the shared seam,
-      // with exactly the same outer circle size as a merge control.
-      const outerRadius=duel?16:32;
-      eye.position.set(0,-TCG_MAT_HEIGHT/2-(duel?0:64));
+      // Center the eye ON the top edge of row one in every view, with
+      // the identical diameter and hit area as each merge button.
+      eye.position.set(0,-TCG_MAT_HEIGHT/2);
       eye.eventMode='static';
-      eye.hitArea=new Circle(0,0,duel?19:38);
+      eye.hitArea=new Circle(0,0,19);
       eye.cursor='pointer';
       eye.addChild(new Graphics()
-        .circle(0,0,outerRadius).fill({color:0x183a33,alpha:.96})
-        .stroke({color:0xe4cf9d,alpha:1,width:duel?1.5:2.5})
-        .ellipse(0,0,duel?10:18,duel?6:11)
-          .stroke({color:0xf4e4bd,width:duel?1.8:2.8})
-        .circle(0,0,duel?3.3:6).fill({color:0xf6e4c1})
-        .circle(duel?1:-2,duel?-1:-2,duel?1.2:2).fill({color:0x3f5e53}));
+        .circle(0,0,16).fill({color:0x183a33,alpha:.96})
+        .stroke({color:0xe4cf9d,alpha:1,width:1.5})
+        .ellipse(0,0,10,6).stroke({color:0xf4e4bd,width:1.8})
+        .circle(0,0,3.3).fill({color:0xf6e4c1})
+        .circle(1,-1,1.2).fill({color:0x3f5e53}));
       // The pointer must remain almost motionless for the 250 ms hold.
       let pending:number|null=null;
       let pressedPointer:number|null=null;
