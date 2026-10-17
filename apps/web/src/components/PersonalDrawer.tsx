@@ -20,11 +20,19 @@ export default function PersonalDrawer({openBook,activeBook,seat,name}:{
 }){
   const [open,setOpen]=useState(false);
   const label='Player '+String(seat+1).padStart(2,'0');
-  const displayName=name.trim()||'Player';
+  const displayName=name.trim().replace(/^player(?:\s+|$)/i,'').trim();
   const shelfId='personal-player-books';
 
   return <div className={'player-hub'+(open?' is-open':'')}>
+    <button type="button" className="player-hub-tab"
+      onClick={()=>setOpen(previous=>!previous)}
+      aria-controls={shelfId} aria-expanded={open}
+      aria-label={label+(displayName?', '+displayName:'')+'. '+(open?'Collapse':'Expand')+' books'}
+      title={open?'Collapse your books':'Expand your books'}>
+      <span className="player-hub-number">{label}</span>
+    </button>
     <div id={shelfId} className="player-hub-content" aria-hidden={!open}>
+      {displayName&&<div className="player-hub-name">{displayName}</div>}
       <div className="player-hub-books" aria-label="Your command books">
         {BOOKS.map(book=><button key={book.id} type="button"
           className={'table-book book-'+book.id+(activeBook===book.id?' opened':'')}
@@ -43,13 +51,5 @@ export default function PersonalDrawer({openBook,activeBook,seat,name}:{
         </button>)}
       </div>
     </div>
-    <button type="button" className="player-hub-tab"
-      onClick={()=>setOpen(previous=>!previous)}
-      aria-controls={shelfId} aria-expanded={open}
-      aria-label={label+', '+displayName+'. '+(open?'Collapse':'Expand')+' books'}
-      title={open?'Collapse your books':'Expand your books'}>
-      <span className="player-hub-number">{label}</span>
-      <span className="player-hub-name">{displayName}</span>
-    </button>
   </div>;
 }
