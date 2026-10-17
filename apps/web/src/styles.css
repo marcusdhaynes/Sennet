@@ -13,6 +13,22 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
    Pixi controls the cursor normally when hovering a draggable object. */
 .pixi-host.is-panning canvas{cursor:grabbing!important}
 .pixi-host canvas:active{user-select:none}
+/* A viewport-fixed battlefield boundary: it never drifts, fades or
+   shrinks when opponent count changes or the locked camera re-frames.
+   It is drawn above both players' mats, but cannot intercept clicks. */
+.opponent-battle-divider{
+  position:absolute;
+  z-index:18;
+  left:0;
+  right:0;
+  top:50%;
+  height:3px;
+  transform:translateY(-50%);
+  pointer-events:none;
+  background:#dbc18c;
+  box-shadow:0 -2px 0 #11231e,0 2px 0 #122c25,0 0 10px #e3be8077;
+}
+
 
 .table-books{position:absolute;z-index:5;top:calc(50% + min(22vh,20vw));left:50%;display:flex;justify-content:center;align-items:center;gap:clamp(9px,2vw,28px);transform:translate(-50%,-18%);pointer-events:none;perspective:900px}
 .table-book{position:relative;display:block;flex:none;width:clamp(66px,8.4vw,112px);height:clamp(87px,11.2vw,150px);padding:0;border:0;border-radius:2px 6px 8px 2px;background:transparent;box-shadow:10px 10px 18px #0007;transform:rotate(-7deg) rotateX(12deg);transition:transform .22s ease,filter .22s ease,box-shadow .22s ease;pointer-events:auto;touch-action:manipulation}
