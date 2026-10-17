@@ -342,6 +342,47 @@ export function matchupMatLayout(
     ?alliedMatLayout(viewerSeat,opponentSeat)
     :opposingMatLayout(viewerSeat,opponentSeat);
 }
+/** Every Sword-marked enemy stays in the upper/opposing row—even
+ * while a Shield-marked ally is selected. All allied seats share the
+ * player's lower row and face the player's direction. Unmarked selected
+ * opponents retain the classic across-the-table presentation.
+ *
+ * This transforms visuals only; canonical tabletop positions never change.
+ */
+export function groupedMatchupLayout(
+  viewerSeat:number,selectedSeat:number,relations:Readonly<Record<number,OpponentRelation>>
+):{mats:Map<number,OpposingMatLayout['player']>;enemySeats:number[];allySeats:number[];columns:number} {
+  const seats=Array.from({length:SEATS},(_,seat)=>seat)
+    .filter(seat=>seat!==viewerSeat);
+  const enemySeats=seats.filter(seat=>relations[seat]==='enemy'||
+    (seat===selectedSeat&&relations[seat]!=='ally'));
+  const allySeats=seats.filter(seat=>relations[seat]==='ally');
+  const bottomSeats=[viewerSeat,...allySeats];
+  const radial=-Math.PI/2+viewerSeat*Math.PI/6;
+  const downX=Math.cos(radial),downY=Math.sin(radial);
+  const originAngle=tcgMatOrigin(viewerSeat).angle;
+  const rightX=Math.cos(originAngle),rightY=Math.sin(originAngle);
+  const distance=TCG_MAT_WIDTH+ALLY_MAT_GAP;
+  const mats=new Map<number,OpposingMatLayout['player']>();
+  const add=(list:readonly number[],y:number,enemy:boolean)=>{
+    for(let index=0;index<list.length;index++){
+      const seat=list[index];
+      const x=(index-(list.length-1)/2)*distance;
+      mats.set(seat,{
+        x:BOARD_CENTER+rightX*x+downX*y,
+        y:BOARD_CENTER+rightY*x+downY*y,
+        rotation:seat===viewerSeat?0:
+          (viewerSeat+(enemy?6:0)-seat)*Math.PI/6
+      });
+    }
+  };
+  add(enemySeats,-TCG_MAT_HEIGHT/2,true);
+  add(bottomSeats,TCG_MAT_HEIGHT/2,false);
+  return {
+    mats,enemySeats,allySeats,
+    columns:Math.max(enemySeats.length,bottomSeats.length)
+  };
+}
 export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   for(let seat=0;seat<SEATS;seat++){
