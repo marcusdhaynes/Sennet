@@ -277,11 +277,12 @@ function drawTcgMats(
       }
     }
 
-    // Eye and Castle sit evenly centered just inside the BOTTOM mat border.
+    // Eye and Castle centers lie EXACTLY ON the Hand section's bottom
+    // border, using the owning player's local playmat orientation.
     if(seat===viewerSeat){
       const eye=new Container();
-      // Same location in every view. Entire hit circle rests inside
-      // the mat above its own bottom border, never straddling the edge.
+      // The center of each circle straddles the Hand row's bottom border
+      // (not an inset into the row or a viewport-relative position).
       const eyePosition=viewButtonPosition('eye');
       eye.position.set(eyePosition.x,eyePosition.y);
       eye.eventMode='static';
@@ -372,9 +373,9 @@ function drawTcgMats(
           const active=relations[seat]===choice;
           const button=new Container();
           const enemySide=relations[seat]!=='ally';
-          // Every button pair sits on its mat's SCREEN-bottom border.
-          // Enemy mats face us (180°); mirror X and Y so their buttons
-          // remain just above the center divider, in the correct order.
+          // Anchor to THIS opponent's own Hand-bottom line, not
+          // the viewer's screen-bottom or the central battlefield divider.
+          // For enemies that physical line appears screen-top after rotation.
           const position=opponentRelationButtonPosition(choice,enemySide);
           button.position.set(position.x,position.y);
           button.eventMode='static';
@@ -404,9 +405,8 @@ function drawTcgMats(
             glyph.moveTo(0,-7).lineTo(0,8)
               .stroke({color:0xf4e4bd,alpha:.55,width:1.2});
           }
-          // Counter-rotate the glyphs so enemy Sword and Shield icons are
-          // upright to the viewer despite the enemy mat facing them.
-          if(enemySide)glyph.rotation=Math.PI;
+          // Keep the icon oriented with the owner and their Hand row,
+          // exactly like the other markings on their playmat.
           glyph.eventMode='none';button.addChild(glyph);
           button.on('pointerdown',e=>{
             if(e.button!==0)return;
