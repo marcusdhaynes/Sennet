@@ -632,3 +632,46 @@ test('multi-texture opacity sanitizes invalid values without disabling valid tex
   assert.deepEqual(layers.sandy,{enabled:true,opacity:1});
   assert.deepEqual(layers.glossy,{enabled:true,opacity:.18});
 });
+
+test('background image modes preserve independent section images and a separate full-mat image',()=>{
+  const config=defaultPlaymatAppearance();
+  assert.equal(config.imageMode,'repeat');
+  assert.equal(config.spanningImageId,'');
+  const images={
+    bg_repeat0:'data:image/png;base64,aGVsbG8=',
+    bg_repeat1:'https://example.com/second.webp',
+    bg_continuous:'data:image/jpeg;base64,aGVsbG8='
+  };
+  const sections=config.sections.map((section,index)=>({
+    ...section,imageId:index===0?'bg_repeat0':index===1?'bg_repeat1':''
+  }));
+  const span=normalizePlaymatAppearance({
+    ...config,images,sections,imageMode:'span',spanningImageId:'bg_continuous'
+  });
+  assert.equal(span.imageMode,'span');
+  assert.equal(span.spanningImageId,'bg_continuous');
+  assert.equal(span.sections[0].imageId,'bg_repeat0');
+  assert.equal(span.sections[1].imageId,'bg_repeat1');
+  assert.equal(span.sections[5].textureLayers.matte.enabled,true);
+  assert.equal(span.sections[5].innerShadow,true);
+  assert.equal(span.sections[5].innerBevel,true);
+  const repeated=normalizePlaymatAppearance({...span,imageMode:'repeat'});
+  assert.equal(repeated.imageMode,'repeat');
+  assert.equal(repeated.spanningImageId,'bg_continuous');
+  assert.deepEqual(repeated.sections,span.sections);
+  assert.deepEqual(repeated.images,images);
+});
+
+test('invalid spanning backgrounds cannot bypass image normalization and legacy preferences stay in repeat mode',()=>{
+  const cfg=defaultPlaymatAppearance();
+  const invalid=normalizePlaymatAppearance({...cfg,imageMode:'span',
+    spanningImageId:'bad',
+    images:{bad:'javascript:alert(1)',bg_good:'https://example.com/valid.jpg'}
+  });
+  assert.equal(invalid.imageMode,'span');
+  assert.equal(invalid.spanningImageId,'');
+  assert.equal(invalid.images.bg_good,'https://example.com/valid.jpg');
+  assert.equal(invalid.images.bad,undefined);
+  assert.equal(normalizePlaymatAppearance({...cfg,imageMode:'anywhere'}).imageMode,'repeat');
+  assert.equal(normalizePlaymatAppearance({sections:cfg.sections}).imageMode,'repeat');
+});
