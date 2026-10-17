@@ -113,7 +113,7 @@ function drawTcgMats(
   onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,
   selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,castleActive:boolean,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
 ){
   const drawnSeats=seatLayers
@@ -328,6 +328,38 @@ function drawTcgMats(
       eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
       eye.on('pointercancel',()=>{pressedPointer=null;clear();});
       mat.addChild(eye);
+      // Same size as the eye and merge controls. Castle switches to the
+      // classified-only battlefield, excluding every unmarked opponent.
+      const castle=new Container();
+      castle.position.set(42,-TCG_MAT_HEIGHT/2);
+      castle.eventMode='static';
+      castle.cursor='pointer';
+      castle.hitArea=new Circle(0,0,19);
+      castle.addChild(new Graphics().circle(0,0,16)
+        .fill({color:castleActive?0x426750:0x183a33,alpha:.96})
+        .stroke({color:castleActive?0xf5d69a:0xe4cf9d,
+          width:castleActive?2.4:1.5,alpha:1}));
+      const castleMark=new Graphics();
+      // Crenellated wall with two towers and a dark arched gate.
+      castleMark
+        .rect(-10,-7,5,5).rect(-3,-7,6,5).rect(5,-7,5,5)
+        .fill(0xf4e4bd)
+        .rect(-10,-3,20,12).fill(0xf4e4bd)
+        .rect(-12,-10,7,5).rect(5,-10,7,5).fill(0xf4e4bd)
+        .rect(-12,-6,7,15).rect(5,-6,7,15).fill(0xf4e4bd)
+        .roundRect(-3,2,6,8,3).fill(0x183a33)
+        .moveTo(-12,9).lineTo(12,9)
+        .stroke({color:0xf4e4bd,width:1.4});
+      castleMark.eventMode='none';
+      castle.addChild(castleMark);
+      castle.on('pointerdown',e=>{
+        if(e.button!==0)return;
+        e.stopPropagation();onControlDown(e.pointerId);
+      });
+      castle.on('pointertap',e=>{
+        e.stopPropagation();onCastleTap();
+      });
+      mat.addChild(castle);
     }
     // Every other mat in Opponent Mode owns its own centered Sword and
     // Shield controls. The Eye remains exclusive to the viewer's mat.
@@ -391,7 +423,7 @@ function drawTcgMats(
  * changing a single game coordinate. Pieces remain logically at their seats.
  */
 function makeDuelSeatLayers(
-  board:Container,viewerSeat:number,opponentSeat:number,
+  board:Container,viewerSeat:number,opponentSeat:number|null,
   relations:Readonly<Record<number,OpponentRelation>>
 ){
   const layers=new Map<number,Container>();
@@ -413,14 +445,14 @@ function makeDuelSeatLayers(
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
-  duelOpponent:number|null,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  duelOpponent:number|null,castleActive:boolean,
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
-  if(duelOpponent!==null){
-    // Each opponent-view player owns one entire half of the viewport.
+  if(duelOpponent!==null||castleActive){
+    // The classified-only Castle and Eye opponent modes share one divider.
     // Wide felt planes fill spare screen width without deforming cards.
     const panels=new Container();
     panels.position.set(BOARD_CENTER,BOARD_CENTER);
@@ -455,10 +487,11 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt)
       .stroke({color:0x112d2b,width:4}));
   }
-  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent,relations);
+  const layers=duelOpponent===null&&!castleActive
+    ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
     onToggleRelation,duelOpponent,relations,onMerge,
-    onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
+    onEyeTap,onEyeHold,onCastleTap,castleActive,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -609,7 +642,8 @@ function readOpponentRelations(actorId:string):Record<number,OpponentRelation>{
     return relations;
   }catch{return {};}
 }
-type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
+type EyeView={kind:'overview'|'self'|'targeting'|'versus'|'castle';opponent:number|null};
+const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -626,6 +660,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const selectView=(next:EyeView)=>{viewRef.current=next;setEyeView(next);};
   const eyeTapHandler=useRef<()=>void>(()=>{});
   const eyeHoldHandler=useRef<()=>void>(()=>{});
+  const castleTapHandler=useRef<()=>void>(()=>{});
+  const previousCastleView=useRef<EyeView>({kind:'self',opponent:null});
   const cycleOpponentHandler=useRef<(direction:'left'|'right')=>void>(()=>{});
   const toggleRelationHandler=useRef<(targetSeat:number,choice:'enemy'|'ally')=>void>(()=>{});
   const focusOpponent=useRef<()=>void>(()=>{});
@@ -723,10 +759,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const seatGroups=drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
+      ()=>castleTapHandler.current(),
       direction=>cycleOpponentHandler.current(direction),
       (targetSeat,choice)=>toggleRelationHandler.current(targetSeat,choice),
       id=>{controlPointer.current=id;},hoverTimers.current,playmat,
-      eyeView.kind==='versus'?eyeView.opponent:null,relations,250);
+      eyeView.kind==='versus'?eyeView.opponent:null,eyeView.kind==='castle',relations,250);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
@@ -927,7 +964,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // Locked opponent mode may need to show up to twelve mats at once.
       // Permit a below-normal fit scale ONLY there; the standard camera
       // retains its strict 100% full-table minimum zoom.
-      const targetZoom=viewRef.current.kind==='versus'
+      const targetZoom=isBattleView(viewRef.current.kind)
         ?Math.min(48,Math.max(.12,Number.isFinite(zoom)?zoom:1))
         :clampTableZoom(zoom);
       const bounded=clampTablePan(panX,panY,targetZoom,w,h);
@@ -975,7 +1012,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // Fit the two player halves without stretching cards, including the
       // half-overhanging navigation circles centered ON the mat borders.
       const selected=viewRef.current.opponent;
-      if(selected===null)return;
+      if(selected===null&&viewRef.current.kind!=='castle')return;
       const lineup=groupedMatchupLayout(seatRef.current,selected,relationsRef.current);
       const heightScale=h/(2*TCG_MAT_HEIGHT);
       // Keep ALL persistent Sword enemies in the opposing row, plus
@@ -997,7 +1034,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     toggleRelationHandler.current=(targetSeat,choice)=>{
       const selected=viewRef.current;
-      if(selected.kind!=='versus'||targetSeat===seatRef.current||
+      if(!isBattleView(selected.kind)||targetSeat===seatRef.current||
          !Number.isInteger(targetSeat)||targetSeat<0||targetSeat>=12)return;
       const next={...relationsRef.current};
       next[targetSeat]=toggleOpponentRelation(next[targetSeat]??null,choice);
@@ -1006,6 +1043,28 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // The clicked mat may relocate from one side to the other; keep
       // the locked camera framing every marked opponent and ally.
       requestAnimationFrame(()=>focusOpponent.current());
+    };
+    castleTapHandler.current=()=>{
+      const mode=viewRef.current;
+      if(mode.kind==='castle'){
+        // Castle is a separate filter, not a change to Eye semantics.
+        const restore=previousCastleView.current;
+        if(restore.kind==='versus'&&restore.opponent!==null){
+          selectView(restore);
+          requestAnimationFrame(()=>focusOpponent.current());
+        }else if(restore.kind==='self'){
+          selectView(restore);
+          requestAnimationFrame(()=>focusMyMat.current());
+        }else{
+          selectView({kind:'overview',opponent:null});
+          resetCamera.current();
+        }
+      }else{
+        previousCastleView.current=mode;
+        cancelActiveDrag.current();
+        selectView({kind:'castle',opponent:null});
+        requestAnimationFrame(()=>focusOpponent.current());
+      }
     };
     eyeTapHandler.current=()=>{
       const mode=viewRef.current.kind;
@@ -1018,7 +1077,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     eyeHoldHandler.current=()=>{
-      if(viewRef.current.kind==='versus'){
+      if(isBattleView(viewRef.current.kind)){
         selectView({kind:'self',opponent:null});
         requestAnimationFrame(()=>focusMyMat.current());
       }else{
@@ -1048,7 +1107,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const zoomAt=(x:number,y:number,ratio:number)=>{
       // Opposing view has a fixed matchup camera. Only the eye control may
       // leave it; ordinary zoom input must not break the two-mat layout.
-      if(viewRef.current.kind==='versus')return;
+      if(isBattleView(viewRef.current.kind))return;
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
       interruptFocus();
       const {scene}=current,c=camera.current;
@@ -1065,7 +1124,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current();
     };
     const pan=(dx:number,dy:number)=>{
-      if(viewRef.current.kind==='versus')return;
+      if(isBattleView(viewRef.current.kind))return;
       interruptFocus();
       camera.current.panX+=dx;camera.current.panY+=dy;
       updateView.current();
@@ -1073,7 +1132,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const wheel=(event:WheelEvent)=>{
       event.preventDefault();
       // Block wheel zoom, trackpad scroll/pinch and Shift+wheel pan.
-      if(viewRef.current.kind==='versus')return;
+      if(isBattleView(viewRef.current.kind))return;
       const point=coordinates(event);
       const factor=event.deltaMode===1?16:event.deltaMode===2?host.clientHeight:1;
       if(event.shiftKey&&!event.ctrlKey){
@@ -1087,7 +1146,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const down=(event:PointerEvent)=>{
       // Cards, stacks, eye and opponent arrows still receive Pixi events,
       // but grabbing empty space must never pan a locked matchup.
-      if(viewRef.current.kind==='versus')return;
+      if(isBattleView(viewRef.current.kind))return;
       if(event.pointerType==='touch'){
         pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
         if(pointers.current.size>=2){
@@ -1119,7 +1178,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     const move=(event:PointerEvent)=>{
-      if(viewRef.current.kind==='versus')return;
+      if(isBattleView(viewRef.current.kind))return;
       const touches=pointers.current;
       if(event.pointerType==='touch'&&touches.has(event.pointerId)){
         const old=[...touches.values()];
@@ -1176,7 +1235,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
       // Keyboard reset and +/- cannot bypass the opponent-view camera lock.
       // The eye button remains the explicit way to leave this view.
-      if(viewRef.current.kind==='versus'){
+      if(isBattleView(viewRef.current.kind)){
         if(['0','+','=','-'].includes(event.key))event.preventDefault();
         return;
       }
@@ -1195,7 +1254,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
-      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};cycleOpponentHandler.current=()=>{};toggleRelationHandler.current=()=>{};
+      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};castleTapHandler.current=()=>{};cycleOpponentHandler.current=()=>{};toggleRelationHandler.current=()=>{};
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',selectOpponent,true);
       host.removeEventListener('pointerdown',down);
@@ -1208,8 +1267,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
+    {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
-      <div className="opponent-battle-divider" aria-hidden="true"/>
       <div className={selectedRelation==='ally'?'ally-identity ally-opponent':''}>
         <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
           side={selectedRelation==='ally'?'bottom':'top'}
@@ -1221,6 +1280,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
       </div>
     </>}
+    {eyeView.kind==='castle'&&
+      <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
+        idleOpacity={mergeOpacity} name={playerName||'YOU'}/>}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
       <span>Choose an opponent's mat or seat</span>
       <button type="button" onClick={()=>{selectView({kind:'overview',opponent:null});resetCamera.current();}}>Cancel</button>
