@@ -13,10 +13,12 @@ function label(text:string,size:number,color:number,weight:'normal'|'bold'='norm
  */
 function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
   section:PlaymatSectionStyle,seed:number){
-  const {textureOpacity:alpha}=section;
+  const matte=section.textureLayers.matte;
+  const sandy=section.textureLayers.sandy;
+  const glossy=section.textureLayers.glossy;
   const finish=new Graphics();
   finish.eventMode='none';
-  if(section.texture==='matte'||section.texture==='matte-glossy'){
+  if(matte.enabled&&matte.opacity>0){
     // Very fine interrupted horizontal fibers rather than a flat color wash.
     for(let py=y+7;py<y+h-6;py+=8){
       const offset=(Math.floor(py)+seed*7)%11;
@@ -24,9 +26,9 @@ function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
         finish.moveTo(px,py).lineTo(Math.min(px+12,x+w-6),py);
       }
     }
-    finish.stroke({color:0x9dbbb4,alpha:alpha*.32,width:.55});
+    finish.stroke({color:0x9dbbb4,alpha:matte.opacity*.32,width:.55});
   }
-  if(section.texture==='sandy'){
+  if(sandy.enabled&&sandy.opacity>0){
     // Deterministic micro-particles: no animation or random reshuffling.
     const num=Math.min(680,Math.ceil(w*h/100));
     for(let i=0;i<num;i++){
@@ -34,16 +36,16 @@ function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
       const px=x+6+u*(w-12),py=y+6+v*(h-12);
       finish.circle(px,py,i%8===0?1.35:.65);
     }
-    finish.fill({color:0xc7d2b9,alpha:alpha*.6});
+    finish.fill({color:0xc7d2b9,alpha:sandy.opacity*.6});
   }
-  if(section.texture==='glossy'||section.texture==='matte-glossy'){
+  if(glossy.enabled&&glossy.opacity>0){
     const band=Math.max(9,h*.21);
     finish.roundRect(x+5,y+5,w-10,band,5)
-      .fill({color:0xffffff,alpha:alpha*.20});
+      .fill({color:0xffffff,alpha:glossy.opacity*.20});
     finish.moveTo(x+8,y+band+6).lineTo(x+w-8,y+band+6)
-      .stroke({color:0xd2e9df,alpha:alpha*.50,width:1});
+      .stroke({color:0xd2e9df,alpha:glossy.opacity*.50,width:1});
     finish.moveTo(x+8,y+h-8).lineTo(x+w-8,y+h-8)
-      .stroke({color:0x051910,alpha:alpha*.28,width:3});
+      .stroke({color:0x051910,alpha:glossy.opacity*.28,width:3});
   }
   mat.addChild(finish);
   if(section.innerShadow){
