@@ -12,7 +12,7 @@ function label(text:string,size:number,color:number,weight:'normal'|'bold'='norm
  * Textures are drawn over the optional background image but under the label.
  */
 function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
-  section:PlaymatSectionStyle,seed:number){
+  section:PlaymatSectionStyle,seed:number,isCenterColumn:boolean){
   const matte=section.textureLayers.matte;
   const sandy=section.textureLayers.sandy;
   const glossy=section.textureLayers.glossy;
@@ -73,7 +73,8 @@ function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
     // Both exposed outer edges and 4-unit gaps between regions are embossed.
     const outside=new Graphics()
       .roundRect(x-1,y-1,w+2,h+2,8)
-      .stroke({color:0xd7cbac,alpha:section.bevelOpacity*.68,width:2.2})
+      .stroke({color:isCenterColumn?0xd7cbac:0x36554b,
+        alpha:section.bevelOpacity*.68,width:2.2})
       .roundRect(x-2,y-2,w+4,h+4,9)
       .stroke({color:0x000000,alpha:section.bevelOpacity*.36,width:1.8});
     outside.eventMode='none';mat.addChild(outside);
@@ -175,7 +176,7 @@ function drawTcgMats(
       const imageId=spanImage?seatPlaymat.spanningImageId:section.imageId;
       const image=seatPlaymat.images[imageId];
       if(image)addPlaymatImage(mat,base,x,y,w,h,image,spanImage);
-      addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column);
+      addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column,isCenterColumn);
       // Remove colored grid lines from both OUTER columns. Keep the
       // colored guide lines in the middle playing area unchanged.
       if(isCenterColumn){
