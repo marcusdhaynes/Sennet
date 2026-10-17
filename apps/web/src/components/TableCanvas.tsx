@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -110,6 +110,7 @@ function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,
 function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,playmat:PlaymatAppearance,
+  opponentRelation:OpponentRelation,onToggleRelation:(choice:'enemy'|'ally')=>void,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
@@ -129,14 +130,13 @@ function drawTcgMats(
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
     parent.addChild(mat);
-    // Both physical playing surfaces stop precisely at the shared seam.
-    // Old beveled backing extended 4 units beyond *both* edges, making the
-    // opposing mats visibly overlap despite correct center positions.
-    const duel=seatLayers!==null;
-    const backingTop=duel&&seat===viewerSeat
+    // In enemy view, opposite edges touch the central dividing line
+    // without overlap. Ally view uses normal full-height mat backings.
+    const duel=seatLayers!==null,enemyView=duel&&opponentRelation!=='ally';
+    const backingTop=enemyView&&seat===viewerSeat
       ?-TCG_MAT_HEIGHT/2
       :-TCG_MAT_HEIGHT/2-4;
-    const backingBottom=duel&&seat!==viewerSeat
+    const backingBottom=enemyView&&seat!==viewerSeat
       ?TCG_MAT_HEIGHT/2
       :TCG_MAT_HEIGHT/2+4;
     mat.addChild(new Graphics()
@@ -321,15 +321,65 @@ function drawTcgMats(
       eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
       eye.on('pointercancel',()=>{pressedPointer=null;clear();});
       mat.addChild(eye);
+      // Relationship toggles belong to this viewer and the selected seat.
+      // No game commands or remote player state are changed.
+      if(seatLayers){
+        for(const choice of ['enemy','ally'] as const){
+          const isSword=choice==='enemy';
+          const active=opponentRelation===choice;
+          const button=new Container();
+          button.position.set(isSword?-42:42,-TCG_MAT_HEIGHT/2);
+          button.eventMode='static';
+          button.cursor='pointer';
+          button.hitArea=new Circle(0,0,19);
+          button.addChild(new Graphics()
+            .circle(0,0,16)
+            .fill({color:active?(isSword?0x78372d:0x245a4a):0x183a33,alpha:.97})
+            .stroke({color:active?(isSword?0xf0b194:0xa4e6c5):0xe4cf9d,
+              alpha:1,width:active?2.2:1.5}));
+          const glyph=new Graphics();
+          if(isSword){
+            // Single upright sword: blade, crossguard, grip, pommel.
+            glyph.moveTo(-1,2).lineTo(6,-8).lineTo(9,-11)
+              .lineTo(8,-6).lineTo(1,3)
+              .stroke({color:0xf4e4bd,width:2,cap:'round',join:'round'});
+            glyph.moveTo(-6,-1).lineTo(3,6)
+              .moveTo(-2,3).lineTo(-7,9)
+              .stroke({color:0xf4e4bd,width:2.5,cap:'round',join:'round'});
+            glyph.circle(-8,10,1.7).fill(0xf4e4bd);
+          }else{
+            glyph.moveTo(0,-10).lineTo(8,-6).lineTo(7,3)
+              .quadraticCurveTo(4,9,0,11)
+              .quadraticCurveTo(-4,9,-7,3)
+              .lineTo(-8,-6).closePath()
+              .stroke({color:0xf4e4bd,width:2,join:'round'});
+            glyph.moveTo(0,-7).lineTo(0,8)
+              .stroke({color:0xf4e4bd,alpha:.55,width:1.2});
+          }
+          glyph.eventMode='none';button.addChild(glyph);
+          button.on('pointerdown',e=>{
+            if(e.button!==0)return;
+            e.stopPropagation();
+            onControlDown(e.pointerId);
+          });
+          button.on('pointertap',e=>{
+            e.stopPropagation();
+            onToggleRelation(choice);
+          });
+          mat.addChild(button);
+        }
+      }
     }
   }
 }
 /** Reframe arbitrary opponent into the opposing (top) position without
  * changing a single game coordinate. Pieces remain logically at their seats.
  */
-function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number){
+function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:number,relation:OpponentRelation){
   const layers=new Map<number,Container>();
-  const layout=opposingMatLayout(viewerSeat,opponentSeat);
+  const layout=relation==='ally'
+    ?alliedMatLayout(viewerSeat,opponentSeat)
+    :opposingMatLayout(viewerSeat,opponentSeat);
   // Draw the local mat last so the shared-seam eye stays above both mats.
   for(const which of [opponentSeat,viewerSeat]){
     const origin=tcgMatOrigin(which);
@@ -344,8 +394,8 @@ function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:numbe
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
-  duelOpponent:number|null,eyeHoldMs:number):Map<number,Container>|null{
+  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onToggleRelation:(choice:'enemy'|'ally')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  duelOpponent:number|null,relation:OpponentRelation,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
@@ -385,8 +435,9 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt)
       .stroke({color:0x112d2b,width:4}));
   }
-  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent);
-  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,onMerge,
+  const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent,relation);
+  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
+    relation,onToggleRelation,onMerge,
     onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
