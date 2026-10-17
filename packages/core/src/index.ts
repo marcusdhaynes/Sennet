@@ -313,18 +313,18 @@ export type OpponentRelation='enemy'|'ally'|null;
  * An inset beyond the hit radius keeps controls away from the dividing
  * line (for allies) and from viewport clipping (for enemies).
  */
-/** All view and relationship buttons sit immediately above the BOTTOM
- * border of their respective playmats, with their full hit circles inside
- * the mat. The two buttons in each group are evenly spaced around X=0.
+/** All view and relationship buttons rest just inside the SCREEN-BOTTOM
+ * border of their respective mats. Both buttons in each pair are centered
+ * evenly about the mat's horizontal midpoint and stay fully clickable.
  *
- * An enemy mat is rotated 180° toward the viewer, so its screen-left and
- * screen-right positions are mirrored. The buttons still occupy its own
- * bottom edge, never another player's mat.
+ * Enemy mats are rotated 180° toward the viewer, so their screen-bottom
+ * edge is local -Y rather than +Y. Mirror both axes for that layout.
  */
 export const PLAYMAT_BOTTOM_BUTTON_RADIUS=16;
 export const PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS=19;
 export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
-export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_MAT_HEIGHT/2-PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
+export const PLAYMAT_BOTTOM_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS+5;
+export const PLAYMAT_BOTTOM_BUTTON_Y=TCG_MAT_HEIGHT/2-PLAYMAT_BOTTOM_BUTTON_INSET;
 export const VIEW_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const VIEW_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
 export const VIEW_BUTTON_CASTLE_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
@@ -339,12 +339,15 @@ export function viewButtonPosition(control:'eye'|'castle'):{
 export const OPPONENT_RELATION_BUTTON_OFFSET=PLAYMAT_BOTTOM_BUTTON_OFFSET;
 export const OPPONENT_RELATION_BUTTON_RADIUS=PLAYMAT_BOTTOM_BUTTON_RADIUS;
 export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
-export const OPPONENT_RELATION_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS;
+export const OPPONENT_RELATION_BUTTON_INSET=PLAYMAT_BOTTOM_BUTTON_INSET;
 export function opponentRelationButtonPosition(choice:'enemy'|'ally',enemySide=false){
   const localX=choice==='enemy'?-OPPONENT_RELATION_BUTTON_OFFSET:OPPONENT_RELATION_BUTTON_OFFSET;
   return {
     x:enemySide?-localX:localX,
-    y:PLAYMAT_BOTTOM_BUTTON_Y
+    // An enemy's mat is rotated 180 degrees, so local -Y is the
+    // bottom edge ON SCREEN, just above the center divider.
+    y:enemySide?-TCG_MAT_HEIGHT/2+PLAYMAT_BOTTOM_BUTTON_INSET
+      :PLAYMAT_BOTTOM_BUTTON_Y
   };
 }
 /** Only one role can be active for an opponent; activating it again clears it. */
