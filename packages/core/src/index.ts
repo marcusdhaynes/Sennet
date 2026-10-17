@@ -313,6 +313,24 @@ export type OpponentRelation='enemy'|'ally'|null;
  * An inset beyond the hit radius keeps controls away from the dividing
  * line (for allies) and from viewport clipping (for enemies).
  */
+/** Eye and Castle are the viewer's ONLY view buttons. While the
+ * battlefield divider is visible, their complete 19-unit hit circles
+ * remain on its upper side, never crossing into the allied half.
+ * Outside battlefield modes they keep the established top-border position.
+ */
+export const VIEW_BUTTON_RADIUS=16;
+export const VIEW_BUTTON_HIT_RADIUS=19;
+export const VIEW_BUTTON_CASTLE_OFFSET=42;
+export const VIEW_BUTTON_DIVIDER_CLEARANCE=5;
+export function viewButtonPosition(
+  control:'eye'|'castle',battlefield:boolean
+):{x:number;y:number}{
+  return {
+    x:control==='castle'?VIEW_BUTTON_CASTLE_OFFSET:0,
+    y:-TCG_MAT_HEIGHT/2-
+      (battlefield?VIEW_BUTTON_HIT_RADIUS+VIEW_BUTTON_DIVIDER_CLEARANCE:0)
+  };
+}
 export const OPPONENT_RELATION_BUTTON_OFFSET=22;
 export const OPPONENT_RELATION_BUTTON_RADIUS=16;
 export const OPPONENT_RELATION_BUTTON_HIT_RADIUS=19;
