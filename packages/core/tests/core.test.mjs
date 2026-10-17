@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,opponentRelationButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -815,6 +815,34 @@ test('enemy/neutral matchup placement never inherits former ally position',()=>{
       assert.deepEqual(matchupMatLayout(viewer,opposite,'ally'),alliedMatLayout(viewer,opposite));
       const afterAlly=matchupMatLayout(viewer,opposite,'enemy');
       assert.deepEqual(afterAlly,original,'Sword restores exactly original opposing coordinates');
+    }
+  }
+});
+
+test('Sword and Shield share each other player top-row border, centered as a nonoverlapping pair',()=>{
+  const sword=opponentRelationButtonPosition('enemy');
+  const shield=opponentRelationButtonPosition('ally');
+  assert.equal((sword.x+shield.x)/2,0,'The pair must be horizontally centered');
+  assert.equal(sword.x,-OPPONENT_RELATION_BUTTON_OFFSET);
+  assert.equal(shield.x,OPPONENT_RELATION_BUTTON_OFFSET);
+  assert.equal(sword.y,-TCG_MAT_HEIGHT/2);
+  assert.equal(shield.y,-TCG_MAT_HEIGHT/2);
+  assert.equal(OPPONENT_RELATION_BUTTON_RADIUS,16);
+  assert.ok(shield.x-sword.x>=2*OPPONENT_RELATION_BUTTON_HIT_RADIUS,
+    'Both controls must remain independently clickable');
+  for(let viewer=0;viewer<12;viewer++){
+    const selected=(viewer+1)%12;
+    const layout=groupedMatchupLayout(viewer,selected,{
+      [(viewer+2)%12]:'enemy',[(viewer+3)%12]:'ally'
+    });
+    for(const target of layout.mats.keys()){
+      const ownsEye=target===viewer;
+      const ownsRelationshipButtons=target!==viewer;
+      assert.notEqual(ownsEye,ownsRelationshipButtons);
+      if(ownsRelationshipButtons){
+        const relation=target===(viewer+2)%12?'enemy':target===(viewer+3)%12?'ally':null;
+        assert.equal(toggleOpponentRelation(relation,'enemy'),relation==='enemy'?null:'enemy');
+      }
     }
   }
 });
