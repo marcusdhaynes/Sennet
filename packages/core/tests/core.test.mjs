@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -674,4 +674,43 @@ test('invalid spanning backgrounds cannot bypass image normalization and legacy 
   assert.equal(invalid.images.bad,undefined);
   assert.equal(normalizePlaymatAppearance({...cfg,imageMode:'anywhere'}).imageMode,'repeat');
   assert.equal(normalizePlaymatAppearance({sections:cfg.sections}).imageMode,'repeat');
+});
+
+test('a viewer\'s custom playmat affects only their own seat, including in opponent view',()=>{
+  const own=defaultPlaymatAppearance();
+  own.sections[0].innerShadow=false;
+  own.sections[4].outerBevel=true;
+  own.sections[7].textureLayers.matte.opacity=.93;
+  own.images.bg_personal='data:image/png;base64,aGVsbG8=';
+  own.imageMode='span';
+  own.spanningImageId='bg_personal';
+  for(let viewer=0;viewer<12;viewer++){
+    assert.equal(playmatAppearanceForSeat(own,viewer,viewer),own);
+    for(let other=0;other<12;other++){
+      if(other===viewer)continue;
+      const remote=playmatAppearanceForSeat(own,viewer,other);
+      const baseline=defaultPlaymatAppearance();
+      assert.deepEqual(remote,baseline,'Other seats must retain built-in look');
+      assert.equal(remote.spanningImageId,'');
+      assert.equal(remote.sections[7].textureLayers.matte.opacity,.18);
+    }
+  }
+  assert.equal(own.spanningImageId,'bg_personal','Isolation must not mutate user preferences');
+});
+
+test('personal merged snapping never applies to other players\' merged center sections',()=>{
+  const base=createGame('tcg');
+  const first=applyCommand(base,c('SET_CENTER_MERGE',{seat:0,boundary:0,merged:true}));
+  const state=applyCommand(first,c('SET_CENTER_MERGE',{seat:1,boundary:0,merged:true}));
+  const a=tcgMatCells(0).find(z=>z.column===1&&z.row===0);
+  const b=tcgMatCells(1).find(z=>z.column===1&&z.row===0);
+  assert.ok(tcgSnapPoint(a.x,a.y,state.centerMerges,true,0));
+  assert.equal(tcgSnapPoint(b.x,b.y,state.centerMerges,true,0),null);
+  assert.ok(tcgSnapPoint(b.x,b.y,state.centerMerges,true,1));
+  const remote=applyCommand(state,c('MOVE',{id:'hero-a',x:b.x+8,y:b.y+6,snapMerged:true,snapMergedSeat:0})).objects.find(z=>z.id==='hero-a');
+  assert.ok(Math.hypot(remote.x-(b.x+8),remote.y-(b.y+6))<1e-5,'Opponent merged section must remain freeform');
+  const self=applyCommand(state,c('MOVE',{id:'hero-a',x:a.x+8,y:a.y+6,snapMerged:true,snapMergedSeat:0})).objects.find(z=>z.id==='hero-a');
+  assert.ok(Math.hypot(self.x-(a.x+8),self.y-(a.y+6))>2,'Local merged section uses user setting');
+  const other=tcgMatCells(1).find(z=>z.column===0&&z.row===2);
+  assert.ok(tcgSnapPoint(other.x+3,other.y+3,state.centerMerges,true,0),'Unmerged sections always snap');
 });
