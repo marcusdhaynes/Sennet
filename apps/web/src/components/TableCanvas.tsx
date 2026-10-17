@@ -497,7 +497,7 @@ function makeDuelSeatLayers(
     group.pivot.set(origin.x,origin.y);
     group.position.set(target.x,target.y);
     group.rotation=target.rotation;
-    group.scale.set('scale' in target?target.scale:1);
+    group.scale.set('scale' in target&&typeof target.scale==='number'?target.scale:1);
     board.addChild(group);layers.set(which,group);
   }
   return layers;
