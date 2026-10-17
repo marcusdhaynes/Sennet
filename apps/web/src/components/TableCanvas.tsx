@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
 interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
@@ -382,6 +382,7 @@ function drawTcgMats(
         for(const choice of ['enemy','ally'] as const){
           const isSword=choice==='enemy';
           const active=relations[seat]===choice;
+          const palette=OPPONENT_RELATION_COLORS[choice];
           const button=new Container();
           const enemySide=opponentAcrossDivider(
             castleActive?'castle':'eye',relations[seat]??null);
@@ -395,9 +396,9 @@ function drawTcgMats(
           button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
           button.addChild(new Graphics()
             .circle(0,0,OPPONENT_RELATION_BUTTON_RADIUS)
-            .fill({color:active?(isSword?0x78372d:0x245a4a):0x183a33,alpha:.97})
-            .stroke({color:active?(isSword?0xf0b194:0xa4e6c5):0xe4cf9d,
-              alpha:1,width:active?2.2:1.5}));
+            .fill({color:active?palette.active:palette.idle,alpha:1})
+            .stroke({color:active?palette.outlineActive:palette.outlineIdle,
+              alpha:1,width:active?2.5:1.5}));
           const glyph=new Graphics();
           if(isSword){
             // Single upright sword: blade, crossguard, grip, pommel.
