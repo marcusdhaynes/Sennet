@@ -223,7 +223,7 @@ export default function PlaymatEditor({appearance,setAppearance,merges,seat,info
   };
   return <div className="playmat-editor">
     <div className="mat-editor-heading">
-      <div><h2>Playmat Settings</h2><p>Live Preview · Changes Automatically Become Your Defaults</p></div>
+      <div><h2>Playmat Settings</h2><p>Your Mat Only · Saved To Your Player Identity · Not Shared With Opponents</p></div>
       <button className="mat-mini-button" onClick={()=>setAppearance(defaultPlaymatAppearance())}>Reset All</button>
     </div>
     <div className="mat-editor-layout">
