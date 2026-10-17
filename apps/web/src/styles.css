@@ -341,3 +341,5 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tcg-app{height:min(620px,65dvh);min-height:360px}.tcg-body{flex:1;min-height:0;overflow:auto}.tcg-header,.tcg-nav{flex-shrink:0}.tcg-app p,.tcg-app label,.tcg-app small,.tcg-app strong,.tcg-app b{color:inherit}.tcg-app p{opacity:.9}.tcg-app .tcg-section-title{color:inherit}
 
 .tcg-preview-card{width:80px;height:112px;object-fit:cover;border-radius:8px;box-shadow:0 4px 10px #0004}.tcg-cards:has(.tcg-preview-card){justify-content:space-evenly}
+.tcg-body>*{flex-shrink:0}
+.tcg-app{height:min(560px,55dvh);min-height:320px}
