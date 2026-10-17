@@ -461,14 +461,17 @@ test('opposing mats project to distinct halves with actual slot edges meeting at
       assert.ok(ourArea.bottom>0&&theirArea.top<0);
       assert.ok(Math.abs(ourArea.left+theirArea.right)<1e-8);
       assert.ok(Math.abs(ourArea.right-theirArea.right)<1e-8);
-      // Opponent arrow controls are outside left/right edges, both at
-      // the opponent's mid-height: between the second and third rows.
-      const leftArrowX=remote.cx+(w/2+31)*Math.cos(remote.rotation);
-      const rightArrowX=remote.cx-(w/2+31)*Math.cos(remote.rotation);
-      const arrowsY=remote.cy+(w/2+31)*Math.sin(remote.rotation);
-      assert.ok(leftArrowX<theirArea.left);
-      assert.ok(rightArrowX>theirArea.right);
-      assert.ok(Math.abs(arrowsY-remote.cy)<1e-8);
+      // Navigation circles are centered directly ON both side borders,
+      // not outside the mat. y=0 lies between rows two and three.
+      const leftArrowX=remote.cx+(w/2)*Math.cos(remote.rotation);
+      const rightArrowX=remote.cx-(w/2)*Math.cos(remote.rotation);
+      const leftArrowY=remote.cy+(w/2)*Math.sin(remote.rotation);
+      const rightArrowY=remote.cy-(w/2)*Math.sin(remote.rotation);
+      assert.ok(Math.abs(leftArrowX-theirArea.left)<1e-8);
+      assert.ok(Math.abs(rightArrowX-theirArea.right)<1e-8);
+      assert.ok(Math.abs(leftArrowY-remote.cy)<1e-8);
+      assert.ok(Math.abs(rightArrowY-remote.cy)<1e-8);
+      assert.ok(Math.abs((leftArrowX+rightArrowX)/2-remote.cx)<1e-8);
     }
   }
 });
