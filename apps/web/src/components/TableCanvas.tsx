@@ -574,15 +574,40 @@ function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';
   </div>;
 }
 
+/** Opponent relations belong to this viewer's local identity, not the
+ * shared game/replay. Record keys are numbered seats on the full table. */
+function readOpponentRelations(actorId:string):Record<number,OpponentRelation>{
+  try{
+    const input=JSON.parse(localStorage.getItem('sennet.opponent-relations.v1.'+
+      encodeURIComponent(actorId))||'{}') as Record<string,unknown>;
+    if(!input||typeof input!=='object'||Array.isArray(input))return {};
+    const relations:Record<number,OpponentRelation>={};
+    for(let seat=0;seat<12;seat++){
+      const value=input[String(seat)];
+      if(value==='enemy'||value==='ally')relations[seat]=value;
+    }
+    return relations;
+  }catch{return {};}
+}
 type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
 export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
+  const [relations,setRelations]=useState<Record<number,OpponentRelation>>(()=>readOpponentRelations(actorId));
+  const relationsRef=useRef(relations);relationsRef.current=relations;
+  const selectedRelation=eyeView.kind==='versus'&&eyeView.opponent!==null
+    ?relations[eyeView.opponent]??null:null;
+  useEffect(()=>{
+    try{localStorage.setItem('sennet.opponent-relations.v1.'+
+      encodeURIComponent(actorId),JSON.stringify(relations));}
+    catch{/* Local storage unavailable: the current session still works. */}
+  },[actorId,relations]);
   const selectView=(next:EyeView)=>{viewRef.current=next;setEyeView(next);};
   const eyeTapHandler=useRef<()=>void>(()=>{});
   const eyeHoldHandler=useRef<()=>void>(()=>{});
   const cycleOpponentHandler=useRef<(direction:'left'|'right')=>void>(()=>{});
+  const toggleRelationHandler=useRef<(choice:'enemy'|'ally')=>void>(()=>{});
   const focusOpponent=useRef<()=>void>(()=>{});
   const resetCamera=useRef<()=>void>(()=>{});
   const duelLayers=useRef<Map<number,Container>|null>(null);
@@ -679,8 +704,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       direction=>cycleOpponentHandler.current(direction),
+      choice=>toggleRelationHandler.current(choice),
       id=>{controlPointer.current=id;},hoverTimers.current,playmat,
-      eyeView.kind==='versus'?eyeView.opponent:null,250);
+      eyeView.kind==='versus'?eyeView.opponent:null,selectedRelation,250);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
@@ -770,7 +796,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView,selectedRelation]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -923,8 +949,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const fit=Math.min(w/(TABLE_VIEW_RADIUS*2),h/(TABLE_VIEW_RADIUS*2));
       // Fit the two player halves without stretching cards, including the
       // half-overhanging navigation circles centered ON the mat borders.
+      const ally=viewRef.current.kind==='versus'&&viewRef.current.opponent!==null&&
+        relationsRef.current[viewRef.current.opponent]==='ally';
       const heightScale=h/(2*TCG_MAT_HEIGHT);
-      const arrowsWidth=TCG_MAT_WIDTH+2*19;
+      // Allied mats share the bottom half, side-by-side with the same
+      // orientation. Both arrows and relationship controls remain in frame.
+      const arrowsWidth=ally?2*TCG_MAT_WIDTH+ALLY_MAT_GAP+2*19:TCG_MAT_WIDTH+2*19;
       const widthScale=Math.max(80,w-24)/arrowsWidth;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
     };
@@ -935,8 +965,17 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(opponent===current.opponent)return;
       cancelActiveDrag.current();
       selectView({kind:'versus',opponent});
-      // The newly selected seat uses the same stable opposing camera.
-      // Only the opponent's mat and identity tab update.
+      // A newly selected seat can have a different ally/enemy layout.
+      requestAnimationFrame(()=>focusOpponent.current());
+    };
+    toggleRelationHandler.current=(choice)=>{
+      const selected=viewRef.current;
+      if(selected.kind!=='versus'||selected.opponent===null)return;
+      const next={...relationsRef.current};
+      next[selected.opponent]=toggleOpponentRelation(next[selected.opponent]??null,choice);
+      relationsRef.current=next;
+      setRelations(next);
+      requestAnimationFrame(()=>focusOpponent.current());
     };
     eyeTapHandler.current=()=>{
       const mode=viewRef.current.kind;
@@ -1126,7 +1165,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
-      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};cycleOpponentHandler.current=()=>{};
+      interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};cycleOpponentHandler.current=()=>{};toggleRelationHandler.current=()=>{};
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',selectOpponent,true);
       host.removeEventListener('pointerdown',down);
@@ -1140,11 +1179,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {eyeView.kind==='versus'&&eyeView.opponent!==null&&<>
-      <RetractableSeatLabel key={'opponent-'+eyeView.opponent} side="top"
-        idleOpacity={mergeOpacity} seat={eyeView.opponent}
-        name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
-      <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
-        idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
+      <div className={selectedRelation==='ally'?'ally-identity ally-opponent':''}>
+        <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
+          side={selectedRelation==='ally'?'bottom':'top'}
+          idleOpacity={mergeOpacity} seat={eyeView.opponent}
+          name={state.players.find(p=>p.seat===eyeView.opponent)?.name||'Player '+(eyeView.opponent+1)}/>
+      </div>
+      <div className={selectedRelation==='ally'?'ally-identity ally-player':''}>
+        <RetractableSeatLabel key={'local-'+seat} side="bottom" seat={seat}
+          idleOpacity={mergeOpacity} name={playerName||'YOU'}/>
+      </div>
     </>}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
       <span>Choose an opponent's mat or seat</span>
