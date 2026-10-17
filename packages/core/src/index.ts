@@ -1,7 +1,7 @@
 /** Sennet's deterministic, renderer-independent tabletop domain and command protocol. */
 export type GameKind = 'sandbox' | 'boardgame' | 'tcg' | 'rpg' | 'wargame' | 'dice' | 'party' | 'custom';
 export type PlayMode = 'sandbox' | 'turn-based' | 'asynchronous';
-export type ObjectKind = 'card' | 'deck' | 'token' | 'miniature' | 'die' | 'tile' | 'board' | 'marker';
+export type ObjectKind = 'card' | 'deck' | 'deck-box' | 'token' | 'miniature' | 'die' | 'tile' | 'board' | 'marker';
 export type Zone = 'TABLE' | 'DECK' | 'HAND' | 'DISCARD';
 export interface TableObject {
   id: string; kind: ObjectKind; name: string; x: number; y: number;
@@ -850,7 +850,7 @@ function safeUrl(v: unknown): string | undefined {
   try { const u = new URL(v); return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost','127.0.0.1'].includes(u.hostname)) ? u.href : undefined; } catch { return undefined; }
 }
 export function sanitizeObject(input: Record<string,unknown>): TableObject {
-  const kinds: ObjectKind[] = ['card','deck','token','miniature','die','tile','board','marker'];
+  const kinds: ObjectKind[] = ['card','deck','deck-box','token','miniature','die','tile','board','marker'];
   const kind = kinds.includes(input.kind as ObjectKind) ? input.kind as ObjectKind : 'token';
   const color = typeof input.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(input.color) ? input.color : '#95b7b2';
   const frameUrls = Array.isArray(input.frameUrls) ? input.frameUrls.slice(0,72).map(safeUrl).filter((s):s is string=>!!s) : undefined;
@@ -950,7 +950,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'MOVE': if(obj){
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapEligible=state.kind==='tcg'&&obj.kind!=='board';
+      // A physical deck box is a freely movable tabletop accessory, not
+      // a card: do not snap it into card slots or modify deck contents.
+      const snapEligible=state.kind==='tcg'&&obj.kind!=='board'&&obj.kind!=='deck-box';
       const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
           ?Number(p.snapMergedSeat):undefined):null;
