@@ -368,7 +368,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       .stroke({color:0x112d2b,width:4}));
   }
   const layers=duelOpponent===null?null:makeDuelSeatLayers(board,seat,duelOpponent);
-  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,onMerge,
+  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,onMerge,
     onEyeTap,onEyeHold,onCycleOpponent,onControlDown,hoverTimers,layers,eyeHoldMs);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
@@ -506,7 +506,7 @@ function RetractableSeatLabel({side,name,seat,idleOpacity}:{side:'top'|'bottom';
 }
 
 type EyeView={kind:'overview'|'self'|'targeting'|'versus';opponent:number|null};
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
@@ -545,6 +545,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
   const currentState=useRef(state);currentState.current=state;
+  const playmatRef=useRef(playmat);playmatRef.current=playmat;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
   useEffect(()=>{
@@ -609,7 +610,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       direction=>cycleOpponentHandler.current(direction),
-      id=>{controlPointer.current=id;},hoverTimers.current,
+      id=>{controlPointer.current=id;},hoverTimers.current,playmat,
       eyeView.kind==='versus'?eyeView.opponent:null,250);
     duelLayers.current=seatGroups;
     updateView.current();
@@ -623,7 +624,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const assumedOwner=obj.matSeat??
         (obj.owner===actorId||obj.owner==='local'?seat:
           state.players.find(p=>p.id===obj.owner)?.seat)??
-        (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges)?.seat:undefined);
+        (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges,true)?.seat:undefined);
       if(seatGroups&&!seatGroups.has(assumedOwner??-1))continue;
       const piece=createPiece(obj,obj.id===selected);
       visuals.current.set(obj.id,piece);
@@ -700,7 +701,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,eyeView]);
+  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -752,7 +753,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(hint&&!hint.destroyed){
         if(hint.parent!==parent)parent.addChild(hint);
         hint.clear();hint.removeChildren().forEach(child=>child.destroy());
-        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges):null;
+        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges,playmatRef.current.snapMerged):null;
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
