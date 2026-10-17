@@ -1,18 +1,102 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
+/** Procedure-generated finishes keep the mat crisp at any camera zoom.
+ * Textures are drawn over the optional background image but under the label.
+ */
+function addPlaymatFinish(mat:Container,x:number,y:number,w:number,h:number,
+  section:PlaymatSectionStyle,seed:number){
+  const {textureOpacity:alpha}=section;
+  const finish=new Graphics();
+  finish.eventMode='none';
+  if(section.texture==='matte'||section.texture==='matte-glossy'){
+    // Very fine interrupted horizontal fibers rather than a flat color wash.
+    for(let py=y+7;py<y+h-6;py+=8){
+      const offset=(Math.floor(py)+seed*7)%11;
+      for(let px=x+6+offset;px<x+w-9;px+=28){
+        finish.moveTo(px,py).lineTo(Math.min(px+12,x+w-6),py);
+      }
+    }
+    finish.stroke({color:0x9dbbb4,alpha:alpha*.32,width:.55});
+  }
+  if(section.texture==='sandy'){
+    // Deterministic micro-particles: no animation or random reshuffling.
+    const num=Math.min(680,Math.ceil(w*h/100));
+    for(let i=0;i<num;i++){
+      const u=((i*73+seed*41)%997)/997,v=((i*197+seed*29)%991)/991;
+      const px=x+6+u*(w-12),py=y+6+v*(h-12);
+      finish.circle(px,py,i%8===0?1.35:.65);
+    }
+    finish.fill({color:0xc7d2b9,alpha:alpha*.6});
+  }
+  if(section.texture==='glossy'||section.texture==='matte-glossy'){
+    const band=Math.max(9,h*.21);
+    finish.roundRect(x+5,y+5,w-10,band,5)
+      .fill({color:0xffffff,alpha:alpha*.20});
+    finish.moveTo(x+8,y+band+6).lineTo(x+w-8,y+band+6)
+      .stroke({color:0xd2e9df,alpha:alpha*.50,width:1});
+    finish.moveTo(x+8,y+h-8).lineTo(x+w-8,y+h-8)
+      .stroke({color:0x051910,alpha:alpha*.28,width:3});
+  }
+  mat.addChild(finish);
+  if(section.innerShadow){
+    const depth=section.shadowOpacity;
+    const shadow=new Graphics()
+      .roundRect(x+3,y+3,w-6,h-6,5)
+      .stroke({color:0x000000,alpha:depth*.7,width:5})
+      .moveTo(x+6,y+7).lineTo(x+w-6,y+7)
+      .stroke({color:0x000000,alpha:depth*.8,width:5})
+      .moveTo(x+7,y+7).lineTo(x+7,y+h-7)
+      .stroke({color:0x000000,alpha:depth*.65,width:4});
+    shadow.eventMode='none';mat.addChild(shadow);
+  }
+  if(section.innerBevel){
+    const bevel=new Graphics()
+      .roundRect(x+2.5,y+2.5,w-5,h-5,6)
+      .stroke({color:0xf4ebd2,alpha:section.bevelOpacity*.30,width:1})
+      .moveTo(x+5,y+h-4).lineTo(x+w-5,y+h-4)
+      .stroke({color:0x020c08,alpha:section.bevelOpacity*.75,width:2})
+      .moveTo(x+w-4,y+5).lineTo(x+w-4,y+h-5)
+      .stroke({color:0x02150f,alpha:section.bevelOpacity*.6,width:2});
+    bevel.eventMode='none';mat.addChild(bevel);
+  }
+  if(section.outerBevel){
+    // Both exposed outer edges and 4-unit gaps between regions are embossed.
+    const outside=new Graphics()
+      .roundRect(x-1,y-1,w+2,h+2,8)
+      .stroke({color:0xd7cbac,alpha:section.bevelOpacity*.68,width:2.2})
+      .roundRect(x-2,y-2,w+4,h+4,9)
+      .stroke({color:0x000000,alpha:section.bevelOpacity*.36,width:1.8});
+    outside.eventMode='none';mat.addChild(outside);
+  }
+}
+function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,h:number,url:string){
+  Assets.load(url).then(texture=>{
+    if(mat.destroyed||base.destroyed)return;
+    const sprite=new Sprite(texture);
+    sprite.eventMode='none';
+    // Cover the section and crop the excess using a rounded mask.
+    const scale=Math.max((w-4)/texture.width,(h-4)/texture.height);
+    sprite.width=texture.width*scale;sprite.height=texture.height*scale;
+    sprite.position.set(x+w/2-sprite.width/2,y+h/2-sprite.height/2);
+    const mask=new Graphics().roundRect(x+2,y+2,w-4,h-4,6).fill(0xffffff);
+    mask.eventMode='none';
+    mat.addChildAt(sprite,mat.getChildIndex(base)+1);
+    mat.addChild(mask);sprite.mask=mask;
+  }).catch(()=>{/* Preserve procedural finish when remote image cannot load. */});
+}
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
 function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
-  opacity:number,hoverMs:number,
+  opacity:number,hoverMs:number,playmat:PlaymatAppearance,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,eyeHoldMs:number
@@ -54,24 +138,28 @@ function drawTcgMats(
       const w=cell.width,h=cell.height;
       const merged=cell.column===1&&cell.lastRow>cell.row;
       const accent=TCG_ROW_COLORS[merged&&cell.row===0&&cell.lastRow===2?1:cell.row];
-      mat.addChild(new Graphics()
+      const section=playmat.sections[playmatSectionIndex(cell.row,cell.column)];
+      const base=new Graphics()
         .roundRect(x,y,w,h,8).fill({color:0x00050a,alpha:.98})
-          .stroke({color:accent,width:merged?2:1,alpha:merged?.7:.3})
+        .stroke({color:accent,width:merged?2:1,alpha:merged?.7:.3})
         .roundRect(x+2,y+2,w-4,h-4,6).fill({color:accent,alpha:merged?.13:.055})
-          .stroke({color:0x071915,width:1.8,alpha:.90})
-        .roundRect(x+5,y+5,w-10,h-10,5).stroke({color:0x9bb5a2,width:1,alpha:.14})
-        .moveTo(x+8,y+4).lineTo(x+w-8,y+4).stroke({color:0x020c0a,alpha:.55,width:2})
-        .moveTo(x+4,y+8).lineTo(x+4,y+h-8).stroke({color:0x06140f,alpha:.48,width:2})
-        .moveTo(x+8,y+h-4).lineTo(x+w-8,y+h-4).stroke({color:0xd4c9a5,alpha:.22,width:1.5}));      const grid=new Graphics();
+        .stroke({color:0x071915,width:1.8,alpha:.90});
+      base.eventMode='none';mat.addChild(base);
+      const image=playmat.images[section.imageId];
+      if(image)addPlaymatImage(mat,base,x,y,w,h,image);
+      addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column);
+      const grid=new Graphics();
       for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
       for(let gy=y+10;gy<y+h-5;gy+=10)grid.moveTo(x+5,gy).lineTo(x+w-5,gy);
       grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});grid.eventMode='none';mat.addChild(grid);
       const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
       text.alpha=merged?1:.6;text.eventMode='none';
-      if(cell.column!==1){text.rotation=-Math.PI/2;text.position.set(x+w/2,y+h/2);}
-      else if(merged){text.position.set(x+w/2,y+h/2);}
-      else{text.anchor.x=0;text.position.set(x+12,y+h/2);}
+      // Center EVERY center-column label. Side labels face toward the
+      // middle: left reads one way, right reads the opposite way.
+      text.position.set(x+w/2,y+h/2);
+      if(cell.column===0)text.rotation=-Math.PI/2;
+      if(cell.column===2)text.rotation=Math.PI/2;
       mat.addChild(text);
     }
     // Boundary line is precisely as wide as this player's playmat.
@@ -238,7 +326,7 @@ function makeDuelSeatLayers(board:Container,viewerSeat:number,opponentSeat:numbe
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCycleOpponent:(direction:'left'|'right')=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
   duelOpponent:number|null,eyeHoldMs:number):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
