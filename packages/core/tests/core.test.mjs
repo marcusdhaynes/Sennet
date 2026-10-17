@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleAllySeats,nextCastleAllySeat,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleAllySeats,nextCastleAllySeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1142,8 +1142,9 @@ test('Castle Single and All preserve the exact full-size, left-aligned player ma
           const a=allyRects[i],b=allyRects[j];
           const dx=Math.abs(a.x-b.x)-(a.w+b.w)/2;
           const dy=Math.abs(a.y-b.y)-(a.h+b.h)/2;
-          assert.ok(dx>=2*pad-1e-7||dy>=2*pad-1e-7,
-            'Neighboring allies retain two-sided padding and never overlap');
+          assert.ok(dx>=CASTLE_GRID_GAP-1e-7||
+            dy>=CASTLE_GRID_GAP+VIEW_BUTTON_HIT_RADIUS*a.h/TCG_MAT_HEIGHT-1e-7,
+            'Grid peers have narrow non-overlapping gaps with button clearance');
         }
       }
       if(first!==null){
@@ -1152,6 +1153,69 @@ test('Castle Single and All preserve the exact full-size, left-aligned player ma
       }
     }
   }
+});
+
+test('Castle All chooses the largest possible grid for every valid 1-10 ally count',()=>{
+  assert.equal(CASTLE_MAX_ALLIES,10);
+  const pad=BATTLEFIELD_PLAYMAT_PADDING;
+  const sizes=[
+    {width:320,height:620},{width:400,height:760},
+    {width:768,height:1024},{width:800,height:600},
+    {width:1366,height:768},{width:1920,height:1080},
+    {width:2560,height:720},{width:3440,height:1440}
+  ];
+  let improvements=0;
+  for(const screen of sizes)for(let count=1;count<=CASTLE_MAX_ALLIES;count++){
+    const viewer=5,enemy=6;
+    const seats=Array.from({length:12},(_,seat)=>seat)
+      .filter(seat=>seat!==viewer&&seat!==enemy).slice(0,count);
+    const relations=Object.fromEntries([
+      [enemy,'enemy'],...seats.map(seat=>[seat,'ally'])
+    ]);
+    const layout=castleGridLayout(viewer,relations,'all',seats[0],screen);
+    const visibleW=screen.width/layout.cameraScale;
+    const visibleH=screen.height/layout.cameraScale;
+    const areaW=visibleW-TCG_MAT_WIDTH-4*pad;
+    const areaH=visibleH/2-2*pad;
+    const chosen=bestCastleGridShape(count,areaW,areaH);
+    const values=seats.map(seat=>layout.mats.get(seat).scale);
+    assert.ok(values.every(scale=>Math.abs(scale-chosen.scale)<1e-9));
+    assert.ok(values.every(scale=>scale>0&&scale<=1));
+    assert.equal(layout.allySeats.length,count);
+    assert.equal(layout.enemySeats.length,1);
+    assert.equal(chosen.rows,Math.ceil(count/chosen.cols));
+    assert.equal(chosen.gapX,CASTLE_GRID_GAP);
+    assert.ok(chosen.gapY>=CASTLE_GRID_GAP);
+    // Independently enumerate ALL possible rectangular arrangements.
+    const alternatives=Array.from({length:count},(_,i)=>{
+      const columns=i+1,rows=Math.ceil(count/columns);
+      return Math.min(1,
+        (areaW-(columns-1)*CASTLE_GRID_GAP)/(columns*TCG_MAT_WIDTH),
+        (areaH-(rows-1)*CASTLE_GRID_GAP)/
+          (rows*TCG_MAT_HEIGHT+(rows-1)*VIEW_BUTTON_HIT_RADIUS));
+    });
+    assert.ok(chosen.scale>=Math.max(...alternatives)-1e-9,
+      'The chosen shape maximizes uniform mat scale over every grid layout');
+    // The previous 44-unit gaps are significantly larger, and should
+    // NEVER yield larger mats with the exact same player footprint.
+    const oldGap=2*pad;
+    const oldBest=Math.max(...Array.from({length:count},(_,i)=>{
+      const columns=i+1,rows=Math.ceil(count/columns);
+      return Math.max(0,Math.min(1,
+        (areaW-(columns-1)*oldGap)/(columns*TCG_MAT_WIDTH),
+        (areaH-(rows-1)*oldGap)/(rows*TCG_MAT_HEIGHT)));
+    }));
+    assert.ok(chosen.scale>=oldBest-1e-9,
+      'Tighter grids must not reduce ally size');
+    if(chosen.scale>oldBest+0.01)improvements++;
+    if(count===10){
+      // Even in the most crowded valid game there is a visible player,
+      // a visible enemy, and all ten allies.
+      assert.equal(layout.mats.size,12);
+      assert.equal(layout.mats.get(viewer).scale,1);
+    }
+  }
+  assert.ok(improvements>=10,'Many dense layouts should be visibly larger');
 });
 
 test('Eye and Castle reserve equal safety padding for complete PLAY 03 circle visibility at all seats',()=>{
