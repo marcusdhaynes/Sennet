@@ -322,7 +322,11 @@ export default function App(){
       title="TCG settings · Deck builder"
       onClick={()=>{setBook(null);setTcgStudioOpen(true);}}><Settings size={19} strokeWidth={1.6}/></button>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
-      onLoadOnTable={loadStudioDeck}/>}
+      onLoadOnTable={loadStudioDeck}
+      snapMerged={playmat.snapMerged}
+      onSnapMerged={value=>setPlaymat(p=>({...p,snapMerged:value}))}
+      stackHoldMs={stackHoldMs} onStackHoldMs={setStackHoldMs}
+      mergeHoverMs={mergeHoverMs} onMergeHoverMs={setMergeHoverMs}/>}
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
         <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
