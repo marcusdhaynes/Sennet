@@ -238,8 +238,23 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
  }
  // Riot requires app-specific approval and server-held credentials.
  // This URL must be a trusted configured server endpoint, NOT a client key.
- const server=import.meta.env.VITE_SENNET_RIFTBOUND_CATALOG_URL;
- if(!server)throw new Error('Riftbound requires Riot approval and a secure server catalogue endpoint. Configure VITE_SENNET_RIFTBOUND_CATALOG_URL after approval; no API key belongs in a web page.');
+ let server:string=import.meta.env.VITE_SENNET_RIFTBOUND_CATALOG_URL||'';
+ if(!server){
+  // A user who already configured their Sennet WSS relay should not
+  // need a second site build merely to enable the approved catalogue.
+  try{
+   const relay=localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'';
+   if(relay){
+    const source=new URL(relay);
+    if(source.protocol==='wss:'||source.protocol==='ws:'){
+     source.protocol=source.protocol==='wss:'?'https:':'http:';
+     source.pathname='/api/tcg/riftbound/catalog';source.search='';
+     source.hash='';server=source.href;
+    }
+   }
+  }catch{/* No configured relay. */}
+ }
+ if(!server)throw new Error('Riftbound requires Riot approval and a secure Sennet relay. Configure a WSS relay or VITE_SENNET_RIFTBOUND_CATALOG_URL after approval; never place API keys in the browser.');
  const address=new URL(server,window.location.origin);
  if(address.protocol!=='https:'&&address.hostname!=='localhost')throw Error('Secure HTTPS Riftbound endpoint required');
  const result=rec(await json(address.href,signal));
