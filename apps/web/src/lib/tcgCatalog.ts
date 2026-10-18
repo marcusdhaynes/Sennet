@@ -244,6 +244,7 @@ async function loadScryfall(
  * The provider runs on a small public VPS, so use at most two requests
  * concurrently and respect Retry-After on transient rate limiting.
  */
+class PermanentCatalogError extends Error{}
 async function loadOnePiece(
  signal:AbortSignal,publish:(label:string,cards:CatalogCard[],partial?:boolean)=>void
 ):Promise<CatalogCard[]>{
@@ -265,7 +266,8 @@ async function loadOnePiece(
     if(!response.ok){
      const transient=response.status===429||response.status===408||
        response.status>=500&&response.status<=599;
-     if(!transient||attempt===2)throw new Error('HTTP '+response.status);
+     if(!transient)throw new PermanentCatalogError('HTTP '+response.status);
+     if(attempt===2)throw new Error('HTTP '+response.status);
      const retryHeader=response.headers.get('Retry-After');
      const retrySeconds=retryHeader?Number(retryHeader):NaN;
      await wait(Number.isFinite(retrySeconds)?
@@ -279,8 +281,8 @@ async function loadOnePiece(
     if(!Array.isArray(items))throw new Error('Unexpected JSON shape');
     return toCards('onepiece',items);
    }catch(error){
-    if(signal.aborted)throw error;
-    if(attempt===2)throw error;
+    if(signal.aborted||error instanceof PermanentCatalogError||attempt===2)
+     throw error;
     await wait(1000*(attempt+1),signal);
    }
   }
