@@ -31,7 +31,7 @@ const card=(game:TcgId,id:unknown,name:unknown,opts:Partial<CatalogCard>={}):Cat
  id:key(game,id),game,name:s(name)||'Unnamed card',number:'',set:'',rarity:'',type:'',types:[],colors:[],
  cost:'',text:'',image:'',price:null,legalities:{},attributes:{},...opts
 });
-function normalize(game:TcgId,value:unknown):CatalogCard|null{
+export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
  const x=rec(value);if(!x||!Object.keys(x).length)return null;
  const imageUris=rec(x.image_uris),digital=rec(imageUris.digital),set=rec(x.set);
  if(game==='lorcana')return card(game,x.id,x.name,{
@@ -61,13 +61,18 @@ function normalize(game:TcgId,value:unknown):CatalogCard|null{
    attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist)}
   });
  }
- if(game==='onepiece')return card(game,x.card_id||x.card_no||x.card_number||x.id,x.card_name||x.name,{
-  number:s(x.card_id||x.card_no||x.card_number),set:s(x.set_name||x.set||x.set_id||x.set_id_name),
+ if(game==='onepiece')return card(game,
+  x.card_image_id||x.card_set_id||x.card_id||x.card_no||x.card_number||x.id,
+  x.card_name||x.name,{
+  number:s(x.card_set_id||x.card_id||x.card_no||x.card_number),
+  set:s(x.set_name||x.set||x.set_id||x.set_id_name),
   rarity:s(x.rarity),type:s(x.card_type||x.type),types:words(x.card_type||x.type),
   colors:words(x.card_color||x.color).flatMap(a=>a.split('/')).map(a=>a.trim()).filter(Boolean),
-  cost:s(x.life??x.cost),text:s(x.card_effect||x.effect||x.text),
+  cost:s(x.card_cost??x.cost??x.life),
+  text:s(x.card_text||x.card_effect||x.effect||x.text),
   image:img(x.card_image||x.image_url||x.card_image_url),
-  attributes:{Power:s(x.power),Counter:s(x.counter),Attribute:s(x.attribute),Life:s(x.life)}
+  attributes:{Power:s(x.card_power??x.power),Counter:s(x.counter_amount??x.counter),
+   Attribute:s(x.attribute),Life:s(x.life),Traits:s(x.sub_types)}
  });
  if(game==='pokemon'){
   const original=rec(x.set);
@@ -149,7 +154,7 @@ async function json(url:string,signal:AbortSignal){
  if(!response.ok)throw new Error('Provider HTTP '+response.status+' ('+new URL(url).hostname+')');
  return response.json();
 }
-const toCards=(game:TcgId,items:unknown)=>unique(arr(items).map(x=>normalize(game,x)).filter(
+const toCards=(game:TcgId,items:unknown)=>unique(arr(items).map(x=>normalizeTcgCard(game,x)).filter(
  (x):x is CatalogCard=>x!==null));
 async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:AbortSignal){
  const publish=(label:string,cards:CatalogCard[],partial=false)=>onUpdate({
@@ -274,6 +279,6 @@ export async function loadTcgCatalog(
 export async function detailCard(game:TcgId,id:string,signal:AbortSignal){
  if(game!=='pokemon')return null;
  const data=await json('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id.split(':').slice(1).join(':')),signal);
- return normalize(game,data);
+ return normalizeTcgCard(game,data);
 }
 export function configFor(game:TcgId){return TCGS.find(t=>t.id===game)!;}
