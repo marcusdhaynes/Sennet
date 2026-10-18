@@ -46,6 +46,34 @@ Your project is hosted at [marcusdhaynes/sennet](https://github.com/marcusdhayne
 
 GitHub Pages hosts the playable local/offline web interface. Real-time multiplayer requires deploying `apps/server` to a separate HTTPS/WSS service; Pages does not run servers. The starter relay is only suitable for development/testing until its security checklist has been addressed.
 
+## Universal TCG Studio (bottom-right gear)
+
+Click the circular gear on the table to open **TCG Studio**. The studio combines a seven-game deck builder with TCG-specific settings for card snapping on merged zones, stack hold timing, merge hover timing, card image loading and compact browsing.
+
+Features: multi-deck autosave in the local browser, complete game-specific catalogues, name/text/number search, set/type/rarity/color/cost filters, sorting, individual card details and ownership, saved notes/tags, Main/Extra/Commander/Leader/DON!!/Resource/Sideboard/Maybeboard sections as appropriate, deck counts, cost curve, indicative prices, format advisories, text import/export, full-fidelity JSON import/export and Load to table (replaces a local game only).
+
+| Game | Provider and full-dataset strategy |
+| --- | --- |
+| Disney Lorcana | Lorcast: one set index, then all set cards, paced at 110ms between requests. |
+| Gundam | GCG API: unmetered NDJSON bulk export, anonymous paginated fallback. |
+| Magic: The Gathering | Scryfall: Oracle Cards bulk export (not abusive pagination). |
+| One Piece | OPTCG API: bulk expansion, starter, promo and DON!! endpoints. |
+| Pokémon | TCGdex: one complete English card index with full details on demand. |
+| Riftbound | Riot Games: requires app-specific key and official approval; no public browser key. |
+| Yu-Gi-Oh! | YGOPRODeck: one complete cardinfo API response. |
+
+IndexedDB caches successful catalogues for 24 hours; artwork is loaded lazily. The app respects providers' rate limits and exposes connection failures instead of inventing cards. Automated legality claims are deliberately avoided; format and banned-card checks are **advisory** and should be verified against official current rules.
+
+### Riot Riftbound approval and setup
+
+Riot's policies require an approved application to access official Riftbound card assets and impose additional constraints on digital game tools. Never put your Riot token into GitHub Pages or a public VITE variable. Sennet includes an optional secure endpoint in its Node relay.
+
+1. Obtain Riot approval and an app-specific API key: https://developer.riotgames.com/docs/riftbound
+2. Configure the separate Node relay's secret environment variable **SENNET_RIOT_API_KEY**.
+3. Build the web app with **VITE_SENNET_RIFTBOUND_CATALOG_URL** pointing to https://your-relay.example/api/tcg/riftbound/catalog. This is an endpoint URL, NOT an API token.
+
+The relay calls Riot's authorized Riftbound content endpoint server-side and caches the result for 24 hours. Until approval/key configuration, the Riftbound catalogue explicitly reports access unavailable. No unofficial mirror is substituted.
+
 ## Creator-owned asset storage (BYOS)
 
 Sennet never requires creators to upload media into Sennet's own server:
