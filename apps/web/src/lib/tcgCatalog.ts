@@ -223,7 +223,7 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
     publish('Loaded '+(index+1)+' / '+paths.length+' card categories',all,true);
    }
   }
-  await Promise.all([worker(),worker()]);
+  await Promise.all([worker(),worker(),worker(),worker()]);
   return unique(all);
  }
  if(game==='pokemon'){
