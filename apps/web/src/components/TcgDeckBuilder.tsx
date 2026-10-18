@@ -2,19 +2,26 @@ import {useDeferredValue,useEffect,useMemo,useRef,useState,type ChangeEvent} fro
 import {ArrowDownToLine,BarChart3,Check,Download,FileInput,Filter,Layers,Plus,RefreshCw,Save,Search,Settings2,Trash2,Upload,X} from 'lucide-react';
 import {configFor,detailCard,loadTcgCatalog,TCGS,type CatalogCard,type CatalogUpdate,type TcgId} from '../lib/tcgCatalog';
 import {changeDeckEntry,deckChecks,deckQuantity,deckStats,newDeck,parseTextDeck,patchDeckEntry,readDecks,saveDecks,toTextDeck,type SavedDeck} from '../lib/deckWorkspace';
-type Props={onClose:()=>void;onLoadOnTable:(deck:SavedDeck)=>void;initialGame?:TcgId};
+type Props={onClose:()=>void;onLoadOnTable:(deck:SavedDeck)=>void;initialGame?:TcgId;
+ snapMerged:boolean;onSnapMerged:(value:boolean)=>void;
+ stackHoldMs:number;onStackHoldMs:(value:number)=>void;
+ mergeHoverMs:number;onMergeHoverMs:(value:number)=>void;};
 const ALL='All';
 function download(name:string,content:string,type='text/plain'){
  const uri=URL.createObjectURL(new Blob([content],{type}));
  const link=document.createElement('a');link.href=uri;link.download=name;link.click();
  window.setTimeout(()=>URL.revokeObjectURL(uri),1000);
 }
-export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokemon'}:Props){
+export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokemon',
+ snapMerged,onSnapMerged,stackHoldMs,onStackHoldMs,mergeHoverMs,onMergeHoverMs}:Props){
  const [decks,setDecks]=useState<SavedDeck[]>(readDecks);
  const [activeId,setActiveId]=useState(()=>{
   try{return localStorage.getItem('sennet.deck-active.v1')||'';}catch{return '';}
  });
- const [game,setGame]=useState<TcgId>(initialGame);
+ const [game,setGame]=useState<TcgId>(()=>{
+  try{const saved=localStorage.getItem('sennet.tcg.preferred.v1');
+   return TCGS.some(t=>t.id===saved)?saved as TcgId:initialGame;}catch{return initialGame;}
+ });
  const [cards,setCards]=useState<CatalogCard[]>([]);
  const [loading,setLoading]=useState(false);
  const [status,setStatus]=useState('Ready');
@@ -28,6 +35,13 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  const [chosen,setChosen]=useState<CatalogCard|null>(null);
  const [view,setView]=useState<'cards'|'stats'|'import'>('cards');
  const [showFilters,setShowFilters]=useState(false);
+ const [settingsOpen,setSettingsOpen]=useState(false);
+ const [showImages,setShowImages]=useState(()=>{
+  try{return localStorage.getItem('sennet.tcg.images.v1')!=='off';}catch{return true;}
+ });
+ const [compact,setCompact]=useState(()=>{
+  try{return localStorage.getItem('sennet.tcg.compact.v1')==='on';}catch{return false;}
+ });
  const [importText,setImportText]=useState(''),[unmatched,setUnmatched]=useState<string[]>([]);
  const [notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0);
  const controller=useRef<AbortController|null>(null);
@@ -39,6 +53,8 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   const entry=newDeck(id);setDecks(old=>[entry,...old]);setActiveId(entry.id);setSection('Main');
  };
  useEffect(()=>{saveDecks(decks);},[decks]);
+ useEffect(()=>{try{localStorage.setItem('sennet.tcg.images.v1',showImages?'on':'off');}catch{/* ephemeral */}},[showImages]);
+ useEffect(()=>{try{localStorage.setItem('sennet.tcg.compact.v1',compact?'on':'off');}catch{/* ephemeral */}},[compact]);
  useEffect(()=>{try{localStorage.setItem('sennet.deck-active.v1',activeId);}catch{/* ephemeral */}},[activeId]);
  useEffect(()=>{
   if(active)return;
@@ -151,6 +167,8 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      {decks.filter(d=>d.game===game).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
     <button title="Create new deck" aria-label="Create new deck" onClick={()=>create(game)}><Plus size={18}/></button>
    </div>
+   <button className={settingsOpen?'is-active':''} title="TCG and deck builder settings"
+    onClick={()=>setSettingsOpen(v=>!v)} aria-label="Open TCG settings"><Settings2 size={16}/><span>Settings</span></button>
    <button title="Close" aria-label="Close TCG settings" onClick={onClose}><X size={19}/></button>
   </header>
   <div className="tcgb-main">
@@ -175,10 +193,10 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
       <option value="rarity">Rarity</option><option value="price">Price</option></select></label>
      <label className="tcgb-owned-filter"><input type="checkbox" checked={ownedOnly} onChange={e=>setOwnedOnly(e.target.checked)}/> Owned</label>
     </div>
-    <div className="tcgb-results">
+    <div className={'tcgb-results'+(compact?' dense':'')}>
      {matches.slice((page-1)*PAGE,page*PAGE).map(c=><div className="tcgb-result" key={c.id}>
       <button className="tcgb-thumb" onClick={()=>chooseCard(c)} title="Card details">
-       {c.image?<img src={c.image} loading="lazy" alt="" />:<span>✦</span>}</button>
+       {showImages&&c.image?<img src={c.image} loading="lazy" alt="" />:<span>✦</span>}</button>
       <button className="tcgb-result-text" onClick={()=>chooseCard(c)}>
        <strong>{c.name}</strong><small>{[c.set,c.number].filter(Boolean).join(' · ')}</small>
        <span>{[c.type,c.colors.join('/')].filter(Boolean).join(' · ')}</span>
@@ -249,10 +267,49 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   </div>
   <footer className="tcgb-footnote"><span><a href={config.url} target="_blank" rel="noreferrer">{config.provider}</a> · {game==='riftbound'?'Riot authorization required':'Locally cached · 24h'} · Unofficial catalogue viewer</span>
    {notice&&<span role="status"><Check size={13}/>{notice}</span>}</footer>
-  {chosen&&<div className="tcgb-preview-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setChosen(null);}}>
+  {settingsOpen&&<div className="tcgb-settings-pane" aria-label="TCG settings">
+   <div className="tcgb-settings-heading"><div><strong>TCG & DECK BUILDER SETTINGS</strong>
+    <small>Table interactions · card browser · catalogue</small></div>
+    <button onClick={()=>setSettingsOpen(false)} aria-label="Return to deck builder"><X size={17}/></button></div>
+   <div className="tcgb-settings-content">
+    <section><h3>Table interactions</h3>
+     <label className="tcgb-toggle"><input type="checkbox" checked={snapMerged}
+      onChange={e=>onSnapMerged(e.target.checked)}/>
+      <span><b>Snap while merged</b><small>Use the 13 horizontal card positions even when play zones are merged.</small></span></label>
+     <label>Hold to pick up a stack <strong>{stackHoldMs} ms</strong>
+      <input type="range" min="250" max="5000" step="250" value={stackHoldMs}
+       onChange={e=>onStackHoldMs(Number(e.target.value))}/></label>
+     <label>Merge hover delay <strong>{mergeHoverMs} ms</strong>
+      <input type="range" min="0" max="3000" step="100" value={mergeHoverMs}
+       onChange={e=>onMergeHoverMs(Number(e.target.value))}/></label>
+    </section>
+    <section><h3>Card browser</h3>
+     <label className="tcgb-toggle"><input type="checkbox" checked={showImages}
+      onChange={e=>setShowImages(e.target.checked)}/>
+      <span><b>Show card artwork</b><small>Load image thumbnails lazily for visible catalogue cards.</small></span></label>
+     <label className="tcgb-toggle"><input type="checkbox" checked={compact}
+      onChange={e=>setCompact(e.target.checked)}/>
+      <span><b>Dense results</b><small>Fit more cards onscreen with smaller rows.</small></span></label>
+     <div className="tcgb-setting-actions">
+      <button onClick={()=>{
+       try{localStorage.setItem('sennet.tcg.preferred.v1',game);}catch{/* ephemeral */}
+       message(config.name+' set as preferred TCG');
+      }}>Save {config.name} as default</button>
+      <button disabled={loading} onClick={()=>{setSettingsOpen(false);setRefresh(v=>v+1);}}>Refresh {config.provider} catalogue</button>
+     </div>
+    </section>
+    <section><h3>Decks & providers</h3>
+     <p>Decks autosave in this browser. Export JSON to preserve full card and section data, or TXT for portable card counts and names.</p>
+     <p>Card filters and sections adapt to each TCG. Structural checks are advisory; format rules and banned lists can change.</p>
+     <p>Riftbound uses only officially authorized Riot content. An approved application and a secure server-side catalogue endpoint are required; API keys must not be embedded in this website.</p>
+     <a target="_blank" rel="noreferrer" href={config.url}>View {config.provider} API documentation ↗</a>
+    </section>
+   </div>
+  </div>}
+  {chosen&&!settingsOpen&&<div className="tcgb-preview-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setChosen(null);}}>
    <aside className="tcgb-preview"><header><b>{chosen.name}</b><button onClick={()=>setChosen(null)} aria-label="Close details"><X size={17}/></button></header>
     <div className="tcgb-preview-content">
-     {chosen.image&&<img src={chosen.image} loading="lazy" alt={chosen.name}/>}
+     {showImages&&chosen.image&&<img src={chosen.image} loading="lazy" alt={chosen.name}/>}
      <div><small>{chosen.set} · {chosen.number}</small><p>{[chosen.type,chosen.colors.join('/'),chosen.rarity].filter(Boolean).join(' · ')}</p>
       {chosen.cost&&<p>Cost: {chosen.cost}</p>}
       {chosen.text&&<pre>{chosen.text}</pre>}
