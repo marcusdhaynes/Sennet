@@ -238,7 +238,7 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
  }
  // Riot requires app-specific approval and server-held credentials.
  // This URL must be a trusted configured server endpoint, NOT a client key.
- let server:string=import.meta.env.VITE_SENNET_RIFTBOUND_CATALOG_URL||'';
+ let server:string=localStorage.getItem('sennet.tcg.riftbound.endpoint.v1')||import.meta.env.VITE_SENNET_RIFTBOUND_CATALOG_URL||'';
  if(!server){
   // A user who already configured their Sennet WSS relay should not
   // need a second site build merely to enable the approved catalogue.
