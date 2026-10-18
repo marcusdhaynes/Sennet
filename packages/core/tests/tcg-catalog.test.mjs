@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {gzipSync} from 'node:zlib';
 import {TCGS,normalizeTcgCard,loadTcgCatalog,configFor} from '../../../apps/web/src/lib/tcgCatalog.ts';
 
 test('Seven requested TCGs have distinct catalogues, providers and deck sections',()=>{
@@ -80,4 +81,113 @@ test('Catalogue endpoints fetch full indexes in one bulk request when supported'
    assert.equal(requests.length-before,game==='mtg'?2:1);
   }
  }finally{globalThis.fetch=previous;}
+});
+
+
+test('Scryfall gzip JSONL streams and parses full printing records across chunk boundaries',async()=>{
+ const before=globalThis.fetch;
+ const source=[
+  {id:'mtg-print-1',name:'Forest',object:'card',set_name:'Alpha',collector_number:'288',
+   type_line:'Basic Land — Forest',image_uris:{small:'https://example.com/forest.jpg'}},
+  {id:'mtg-print-2',name:'Forest',object:'card',set_name:'Beta',collector_number:'289',
+   type_line:'Basic Land — Forest',image_uris:{small:'https://example.com/forest2.jpg'}}
+ ].map(item=>JSON.stringify(item)).join('\n')+'\n';
+ const compressed=gzipSync(Buffer.from(source));
+ const calls=[];
+ globalThis.fetch=async address=>{
+  const url=String(address);calls.push(url);
+  if(url==='https://api.scryfall.com/bulk-data/default-cards'){
+   return new Response(JSON.stringify({
+    object:'bulk_data',type:'default_cards',
+    jsonl_download_uri:'https://data.scryfall.io/default-cards/test.jsonl.gz'
+   }),{status:200,headers:{'content-type':'application/json'}});
+  }
+  if(url==='https://data.scryfall.io/default-cards/test.jsonl.gz'){
+   // Deliver fragments to exercise streaming decompression/line handling.
+   return new Response(new ReadableStream({
+    start(controller){
+     for(let i=0;i<compressed.length;i+=7)controller.enqueue(compressed.subarray(i,i+7));
+     controller.close();
+    }
+   }),{status:200,headers:{'content-type':'application/gzip'}});
+  }
+  throw Error('Unrecognized Scryfall URL: '+url);
+ };
+ try{
+  const changes=[];
+  const cards=await loadTcgCatalog('mtg',new AbortController().signal,u=>changes.push(u),true);
+  assert.equal(cards.length,2);
+  assert.deepEqual(cards.map(c=>c.id),['mtg:mtg-print-1','mtg:mtg-print-2']);
+  assert.deepEqual(cards.map(c=>c.set),['Alpha','Beta']);
+  assert.deepEqual(calls,[
+   'https://api.scryfall.com/bulk-data/default-cards',
+   'https://data.scryfall.io/default-cards/test.jsonl.gz']);
+  assert.ok(changes.some(u=>u.loaded===2&&u.partial?.length===2));
+ }finally{globalThis.fetch=before;}
+});
+
+test('Scryfall resolves jsonl bulk URI from manifest if direct metadata omits it',async()=>{
+ const before=globalThis.fetch;const requests=[];
+ const sample={id:'oracle-test',name:'Island',object:'card'};
+ globalThis.fetch=async address=>{
+  const url=String(address);requests.push(url);
+  if(url.endsWith('/default-cards'))return new Response(JSON.stringify({type:'default_cards'}));
+  if(url.endsWith('/bulk-data'))return new Response(JSON.stringify({data:[
+   {type:'oracle_cards',jsonl_download_uri:'https://data.scryfall.io/wrong.jsonl.gz'},
+   {type:'default_cards',jsonl_download_uri:'https://data.scryfall.io/default.jsonl.gz'}
+  ]}));
+  if(url==='https://data.scryfall.io/default.jsonl.gz')
+   return new Response(gzipSync(Buffer.from(JSON.stringify(sample)+'\n')));
+  throw Error('Unexpected request '+url);
+ };
+ try{
+  const result=await loadTcgCatalog('mtg',new AbortController().signal,()=>{},true);
+  assert.equal(result.length,1);
+  assert.equal(result[0].id,'mtg:oracle-test');
+  assert.equal(requests.length,3);
+ }finally{globalThis.fetch=before;}
+});
+
+test('One Piece merges four categories and completes despite a transient request failure',async()=>{
+ const before=globalThis.fetch;const calls=new Map();
+ const paths=['allSetCards','allSTCards','allPromoCards','allDonCards'];
+ globalThis.fetch=async addr=>{
+  const path=String(addr).split('/').at(-2);
+  assert.ok(paths.includes(path),path);
+  calls.set(path,(calls.get(path)||0)+1);
+  if(path==='allSTCards'&&calls.get(path)===1)
+   return new Response(JSON.stringify({error:'temporarily unavailable'}),{status:503});
+  return new Response(JSON.stringify([{
+   card_set_id:path+'-001',card_name:path,
+   card_type:path==='allDonCards'?'DON!!':'Character',
+   card_cost:'2',card_text:'Example'
+  }]),{status:200});
+ };
+ try{
+  const updates=[];
+  const cards=await loadTcgCatalog('onepiece',new AbortController().signal,u=>updates.push(u),true);
+  assert.equal(cards.length,4);
+  assert.equal(new Set(cards.map(c=>c.id)).size,4);
+  assert.equal(calls.get('allSTCards'),2);
+  assert.ok(updates.some(u=>u.loaded===4&&u.label.includes('4/4')));
+ }finally{globalThis.fetch=before;}
+});
+
+test('One Piece preserves successful bulk categories and reports specifically which failed',async()=>{
+ const before=globalThis.fetch;const requests=[];
+ globalThis.fetch=async addr=>{
+  const path=String(addr).split('/').at(-2);requests.push(path);
+  if(path==='allPromoCards')return new Response('{}',{status:404});
+  return new Response(JSON.stringify([{card_set_id:path+'-001',card_name:path}]));
+ };
+ try{
+  const updates=[];
+  await assert.rejects(
+   loadTcgCatalog('onepiece',new AbortController().signal,u=>updates.push(u),true),
+   /partial catalogue: 3\/4.*Promos.*404/);
+  assert.equal(updates.at(-1).loaded,3);
+  assert.equal(updates.at(-1).partial.length,3);
+  assert.equal(requests.filter(c=>c==='allPromoCards').length,1,
+   'Do not repeatedly retry a permanent HTTP 404');
+ }finally{globalThis.fetch=before;}
 });
