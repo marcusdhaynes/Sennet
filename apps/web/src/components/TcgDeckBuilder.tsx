@@ -45,6 +45,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  const [importText,setImportText]=useState(''),[unmatched,setUnmatched]=useState<string[]>([]);
  const [notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0);
  const controller=useRef<AbortController|null>(null);
+ const forceReload=useRef(false);
  const config=configFor(game);
  const active=decks.find(d=>d.id===activeId&&d.game===game);
  const message=(msg:string)=>{setNotice(msg);window.setTimeout(()=>setNotice(s=>s===msg?'':s),4000);};
@@ -66,11 +67,13 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  useEffect(()=>{
   const abort=new AbortController();controller.current?.abort();controller.current=abort;
   setCards([]);setChosen(null);setStatus('Connecting to '+config.provider+'…');setError('');setLoading(true);
+  const shouldForce=forceReload.current;
+  forceReload.current=false;
   void loadTcgCatalog(game,abort.signal,(update:CatalogUpdate)=>{
    if(abort.signal.aborted)return;
    setStatus(update.label);
    if(update.partial)setCards(update.partial);
-  },refresh>0).then(all=>{
+  },shouldForce).then(all=>{
    if(abort.signal.aborted)return;
    setCards(all);setStatus(all.length.toLocaleString()+' indexed cards');
   }).catch((e:unknown)=>{
@@ -122,6 +125,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   }
  };
  const pickGame=(id:TcgId)=>{
+  forceReload.current=false;
   setGame(id);setActiveId(decks.find(d=>d.game===id)?.id||'');
   setSection('Main');setQuery('');setSetFilter(ALL);setRarity(ALL);
   setType(ALL);setColor(ALL);setCost(ALL);setPage(1);
@@ -176,7 +180,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
     <div className="tcgb-searchrow">
      <label className="tcgb-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, texts, effects, numbers…" aria-label="Search cards"/></label>
      <button className={showFilters?'is-active':''} onClick={()=>setShowFilters(v=>!v)} title="Toggle card filters"><Filter size={17}/></button>
-     <button disabled={loading} onClick={()=>setRefresh(v=>v+1)} title="Refresh the complete card catalogue"><RefreshCw size={17}/></button>
+     <button disabled={loading} onClick={()=>{forceReload.current=true;setRefresh(v=>v+1);}} title="Refresh the complete card catalogue"><RefreshCw size={17}/></button>
     </div>
     {showFilters&&<div className="tcgb-filters">
      {([['Set',setFilter,setSetFilter,facets.sets],['Type',type,setType,facets.types],
@@ -295,7 +299,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
        try{localStorage.setItem('sennet.tcg.preferred.v1',game);}catch{/* ephemeral */}
        message(config.name+' set as preferred TCG');
       }}>Save {config.name} as default</button>
-      <button disabled={loading} onClick={()=>{setSettingsOpen(false);setRefresh(v=>v+1);}}>Refresh {config.provider} catalogue</button>
+      <button disabled={loading} onClick={()=>{forceReload.current=true;setSettingsOpen(false);setRefresh(v=>v+1);}}>Refresh {config.provider} catalogue</button>
      </div>
     </section>
     <section><h3>Decks & providers</h3>
