@@ -660,3 +660,39 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  .tcgb-result .tcgb-thumb{width:29px;height:38px}
  .tcgb-footnote{min-height:22px;padding:4px 7px}
 }
+
+
+.tcg-builder .tcgb-results.dense .tcgb-result{min-height:37px;padding:3px 5px}
+.tcg-builder .tcgb-results.dense .tcgb-thumb{height:29px;width:22px}
+.tcg-builder .tcgb-results.dense .tcgb-result-text span{display:none}
+.tcgb-settings-pane{position:absolute;z-index:4;inset:57px 0 27px;background:linear-gradient(125deg,#1a3429,#10211d);
+ display:flex;flex-direction:column;overflow:hidden}
+.tcgb-settings-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;
+ padding:13px 20px;border-bottom:1px solid #4b6554}
+.tcgb-settings-heading strong{font:700 13px Orbitron,sans-serif;color:#eaddb9}
+.tcgb-settings-heading small{display:block;color:#9ab3a1;margin-top:2px}
+.tcgb-settings-content{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ align-items:start;gap:13px;padding:16px;scrollbar-color:#57725c transparent}
+.tcgb-settings-content section{display:flex;flex-direction:column;gap:14px;
+ background:linear-gradient(145deg,#1d3a30,#142920);
+ padding:16px;border:1px solid #43604c;border-radius:9px;min-width:0}
+.tcgb-settings-content h3{font:700 12px Orbitron,sans-serif;color:#d7bf92;
+ margin:0 0 4px;letter-spacing:.05em}
+.tcgb-settings-content p{font-size:11px;line-height:1.65;color:#b2c5b3;margin:0}
+.tcgb-settings-content a{font-size:11px;color:#e7ce9e}
+.tcgb-settings-content label{font-size:11px;gap:7px;letter-spacing:0}
+.tcgb-settings-content label strong{color:#ecdcb6}
+.tcgb-settings-content input[type="range"]{accent-color:#c5aa79;padding:0}
+.tcgb-settings-content .tcgb-toggle{flex-direction:row;align-items:start;gap:9px;cursor:pointer}
+.tcgb-toggle input{min-height:0;accent-color:#d8c187;margin-top:3px}
+.tcgb-toggle span{display:flex;flex-direction:column;gap:4px}
+.tcgb-toggle b{font-size:11px;color:#e4e7ce}
+.tcgb-toggle small{font-size:10px;color:#9db5a5;line-height:1.5}
+.tcgb-setting-actions{display:flex;flex-wrap:wrap;gap:7px}
+@media(max-width:850px){
+ .tcgb-settings-content{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:530px){
+ .tcgb-settings-pane{inset:85px 0 24px}
+ .tcgb-settings-content{grid-template-columns:1fr}
+}
