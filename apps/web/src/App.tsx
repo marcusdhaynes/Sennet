@@ -1,8 +1,10 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
-import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
+import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Gear,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
+import TcgDeckBuilder from './components/TcgDeckBuilder';
+import type {SavedDeck} from './lib/deckWorkspace';
 import PlaymatEditor from './components/PlaymatEditor';
 import PersonalDrawer from './components/PersonalDrawer';
 import {RoomConnection} from './lib/network';
@@ -98,6 +100,7 @@ export default function App(){
   const sessionId=useRef(createId());
   const [recent,setRecent]=useState<SavedSession[]>(recentGames);
   const [book,setBook]=useState<Book|null>(null);
+  const [tcgStudioOpen,setTcgStudioOpen]=useState(false);
   const [gamesPage,setGamesPage]=useState<GamePage>('all');
   const [settingsPage,setSettingsPage]=useState<SettingsPage>('general');
   const [selected,setSelected]=useState<string|null>(null);
@@ -248,6 +251,37 @@ export default function App(){
     })));
     resetWith({...next,objects,message:deckName+' · '+objects.length+' cards'});
   }
+  function loadStudioDeck(deck:SavedDeck){
+    if(isConnected){inform('To replace a live multiplayer table, disconnect first.');return;}
+    if(replayAt!==null){inform('Exit replay first.');return;}
+    const next=createGame('tcg');
+    const cells=tcgMatCells(seat);
+    const placement=(section:string)=>{
+      const position:Record<string,[number,number]>={
+        Main:[1,2],Extra:[1,0],Sideboard:[0,0],Leader:[0,2],
+        Commander:[0,2],Companion:[2,0],'DON!!':[3,0],
+        Resource:[3,0],Rune:[3,0],Legend:[0,2],Champion:[0,2]
+      };
+      const [row,col]=position[section]??[0,0];
+      return cells.find(c=>c.row===row&&c.column===col)!;
+    };
+    let order=0;
+    const objects:TableObject[]=deck.entries.filter(e=>e.section!=='Maybeboard')
+      .flatMap(entry=>{
+        const where=placement(entry.section);
+        return Array.from({length:Math.min(99,entry.quantity)},()=>({
+          id:'studio-'+createId(),kind:'card' as const,name:entry.card.name,
+          x:where.x,y:where.y,matSeat:seat,rotation:0,
+          zone:entry.section==='Main'?'DECK' as const:'TABLE' as const,
+          faceUp:entry.section!=='Main',color:'#a7a0c7',
+          ...(entry.card.image?{faceUrl:entry.card.image}:{}),
+          description:entry.card.text.slice(0,250),order:order++
+        }));
+      });
+    resetWith({...next,objects,message:deck.name+' · '+objects.length+' cards loaded'});
+    setTcgStudioOpen(false);
+    inform(deck.name+' loaded onto the table');
+  }
   async function executeLua(){
     try{
       setScriptOutput('Running Lua…');
@@ -284,6 +318,11 @@ export default function App(){
         }} readonly={replayAt!==null}/>
     </div>
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
+    <button className="tcg-gear" type="button" aria-label="TCG settings and deck builder"
+      title="TCG settings · Deck builder"
+      onClick={()=>{setBook(null);setTcgStudioOpen(true);}}><Gear size={19} strokeWidth={1.6}/></button>
+    {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
+      onLoadOnTable={loadStudioDeck}/>}
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
         <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
