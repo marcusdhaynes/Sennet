@@ -202,12 +202,12 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
   }
  }
  if(game==='mtg'){
-  const meta=rec(await json('https://api.scryfall.com/bulk-data/oracle-cards',signal));
+  const meta=rec(await json('https://api.scryfall.com/bulk-data/default-cards',signal));
   if(!img(meta.download_uri))throw Error('Scryfall has no bulk download URL');
-  publish('Downloading Oracle catalogue',[]);
+  publish('Downloading all default-language printings',[]);
   const bulk=await json(s(meta.download_uri),signal);
   const cards=toCards(game,bulk);
-  publish('Full Oracle catalogue',cards,true);return cards;
+  publish('Full default-language printing catalogue',cards,true);return cards;
  }
  if(game==='onepiece'){
   // Four provider-defined public bulk endpoints include booster sets,
