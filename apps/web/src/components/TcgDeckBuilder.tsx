@@ -220,7 +220,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      </div>)}
      {!matches.length&&<div className="tcgb-empty">
       {loading?'Loading card catalogue…':error||'No cards match your filters.'}
-      {game==='riftbound'&&<p>Riot requires an approved application and a secure server-held API key. <a href={config.url} target="_blank" rel="noreferrer">Riot access policy</a></p>}
+      {game==='riftbound'&&<p>Riot requires a separately approved application. Request approval through <a href={config.url} target="_blank" rel="noreferrer">Riot's developer portal</a>, then enter your authorized catalogue URL in Settings → Decks & providers.</p>}
      </div>}
     </div>
     <footer className="tcgb-pagination"><span>{status}</span><nav>
