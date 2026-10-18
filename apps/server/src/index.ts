@@ -9,11 +9,47 @@ const DATA_DIR=process.env.SENNET_DATA_DIR||'.sennet-server';
 const MAX_MESSAGE=16*1024;
 const rooms=new Map<string,{state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string}>();
 const sessions=new WeakMap<WebSocket,{room:string;actor:string}>();
+// Riot keys are NEVER sent to browsers. Sennet's optional relay fetches
+// authorized content once per day, then serves a short-lived public cache.
+// Riftbound cannot operate before Riot approves this exact application.
+let riftboundCache:{expires:number;data:unknown}|null=null;
+let riftboundPending:Promise<unknown>|null=null;
+async function authorizedRiftbound(){
+  if(riftboundCache&&riftboundCache.expires>Date.now())return riftboundCache.data;
+  if(riftboundPending)return riftboundPending;
+  const key=process.env.SENNET_RIOT_API_KEY;
+  if(!key)throw new Error('Riot approval / SENNET_RIOT_API_KEY required');
+  riftboundPending=(async()=>{
+    const response=await fetch('https://americas.api.riotgames.com/riftbound/content/v1/contents?locale=en',{
+      headers:{'X-Riot-Token':key,Accept:'application/json'},
+      signal:AbortSignal.timeout(30000)
+    });
+    if(!response.ok)throw new Error('Riot API HTTP '+response.status);
+    const data:unknown=await response.json();
+    if(!data||typeof data!=='object')throw new Error('Invalid Riot content payload');
+    riftboundCache={data,expires:Date.now()+24*60*60*1000};
+    return data;
+  })();
+  try{return await riftboundPending;}finally{riftboundPending=null;}
+}
 const server=createServer((req,res)=>{
   const u=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`);
   res.setHeader('Access-Control-Allow-Origin','*');
   res.setHeader('Content-Type','application/json');
   if(u.pathname==='/health'){res.end(JSON.stringify({ok:true,rooms:rooms.size,version:'0.1.0'}));return;}
+  if(u.pathname==='/api/tcg/riftbound/catalog'){
+    if(req.method!=='GET'){res.writeHead(405);res.end(JSON.stringify({error:'Read only'}));return;}
+    res.setHeader('X-Content-Type-Options','nosniff');
+    void authorizedRiftbound().then(data=>{
+      res.setHeader('Cache-Control','public, max-age=3600');
+      res.end(JSON.stringify(data));
+    }).catch(error=>{
+      res.setHeader('Cache-Control','no-store');
+      res.writeHead(process.env.SENNET_RIOT_API_KEY?502:503);
+      res.end(JSON.stringify({error:error instanceof Error?error.message:'Riot API unavailable'}));
+    });
+    return;
+  }
   res.writeHead(404);res.end(JSON.stringify({error:'Not found'}));
 });
 const wss=new WebSocketServer({server,maxPayload:MAX_MESSAGE,perMessageDeflate:false});
