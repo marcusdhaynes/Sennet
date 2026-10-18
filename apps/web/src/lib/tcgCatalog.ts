@@ -156,6 +156,153 @@ async function json(url:string,signal:AbortSignal){
 }
 const toCards=(game:TcgId,items:unknown)=>unique(arr(items).map(x=>normalizeTcgCard(game,x)).filter(
  (x):x is CatalogCard=>x!==null));
+/** Scryfall switched in July 2026 to newline-delimited gzip JSON.
+ * Stream and decompress in-place rather than allocating a 300MB+ JSON string.
+ * Support old JSON-array metadata only as a backward-compatible fallback.
+ */
+async function loadScryfall(
+ signal:AbortSignal,publish:(label:string,cards:CatalogCard[],partial?:boolean)=>void
+):Promise<CatalogCard[]>{
+ const endpoint='https://api.scryfall.com/bulk-data/default-cards';
+ let metadata=rec(await json(endpoint,signal));
+ let uri=img(metadata.jsonl_download_uri||metadata.download_uri);
+ if(!uri){
+  const index=rec(await json('https://api.scryfall.com/bulk-data',signal));
+  const entry=arr(index.data).find(item=>item.type==='default_cards');
+  metadata=rec(entry);
+  uri=img(metadata.jsonl_download_uri||metadata.download_uri);
+ }
+ if(!uri)throw new Error('Scryfall did not provide a default-cards bulk download; see the provider status page.');
+ publish('Downloading the complete Scryfall printings catalogue…',[]);
+ const response=await fetch(uri,{signal});
+ if(!response.ok)throw new Error('Scryfall bulk download: HTTP '+response.status);
+ const gzip=/\.gz(?:[?#]|$)/i.test(new URL(uri).pathname)&&
+   !/gzip/i.test(response.headers.get('content-encoding')||'');
+ let body:ReadableStream<Uint8Array>|null=response.body;
+ if(!body){
+  // Unusual WebViews omit a response stream; retain compatibility, but
+  // avoid this eager fallback in modern browsers.
+  body=new Response(await response.arrayBuffer()).body;
+ }
+ if(!body)throw new Error('Scryfall bulk response is empty');
+ if(gzip){
+  if(typeof DecompressionStream==='undefined')
+   throw new Error('Your browser cannot decompress Scryfall bulk data. Update your browser to enable gzip streaming.');
+  body=body.pipeThrough(new DecompressionStream('gzip'));
+ }
+ const reader=body.getReader(),decoder=new TextDecoder();
+ const cards:CatalogCard[]=[];
+ let pending='',lastEmit=Date.now();
+ const parseLine=(raw:string)=>{
+  const line=raw.trim();
+  if(!line||line==='['||line===']')return;
+  // JSONL is one object per newline; ignore trailing comma only when
+  // legacy JSON-array bulk data is returned.
+  const cleaned=line.endsWith(',')?line.slice(0,-1):line;
+  const item=JSON.parse(cleaned) as Record<string,unknown>;
+  const normalized=normalizeTcgCard('mtg',item);
+  if(normalized&&item.object!=='error')cards.push(normalized);
+ };
+ try{
+  while(true){
+   const {value,done}=await reader.read();
+   if(done)break;
+   if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+   pending+=decoder.decode(value,{stream:true});
+   let pos=pending.indexOf('\n');
+   while(pos!==-1){
+    parseLine(pending.slice(0,pos));
+    pending=pending.slice(pos+1);
+    pos=pending.indexOf('\n');
+   }
+   // A periodic snapshot makes search usable while the large download
+   // is still streaming, without cloning tens of thousands of cards on
+   // every small network chunk.
+   if(cards.length>0&&Date.now()-lastEmit>1900){
+    publish('Indexed '+cards.length.toLocaleString()+' cards · downloading…',cards.slice(),true);
+    lastEmit=Date.now();
+   }
+  }
+  pending+=decoder.decode();
+  if(pending.trim())parseLine(pending);
+ }finally{reader.releaseLock();}
+ if(!cards.length)throw new Error('Scryfall returned no usable card records');
+ publish('Full Scryfall printing catalogue · '+cards.length.toLocaleString()+' cards',cards,true);
+ return cards;
+}
+/** Four independent One Piece categories: no Promise.all fail-fast.
+ * The provider runs on a small public VPS, so use at most two requests
+ * concurrently and respect Retry-After on transient rate limiting.
+ */
+async function loadOnePiece(
+ signal:AbortSignal,publish:(label:string,cards:CatalogCard[],partial?:boolean)=>void
+):Promise<CatalogCard[]>{
+ const categories=[
+  {name:'Sets',path:'allSetCards'},
+  {name:'Starters',path:'allSTCards'},
+  {name:'Promos',path:'allPromoCards'},
+  {name:'DON!!',path:'allDonCards'}
+ ];
+ const all:CatalogCard[]=[];
+ const failed:string[]=[];
+ let cursor=0,complete=0;
+ async function category(name:string,path:string){
+  const url='https://optcgapi.com/api/'+path+'/';
+  for(let attempt=0;attempt<3;attempt++){
+   if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+   try{
+    const response=await fetch(url,{signal,headers:{Accept:'application/json'}});
+    if(!response.ok){
+     const transient=response.status===429||response.status===408||
+       response.status>=500&&response.status<=599;
+     if(!transient||attempt===2)throw new Error('HTTP '+response.status);
+     const retryHeader=response.headers.get('Retry-After');
+     const retrySeconds=retryHeader?Number(retryHeader):NaN;
+     await wait(Number.isFinite(retrySeconds)?
+       Math.min(12000,Math.max(1000,retrySeconds*1000)):1000*(attempt+1)*2,signal);
+     continue;
+    }
+    const responseBody:unknown=await response.json();
+    const body=rec(responseBody);
+    const items=Array.isArray(responseBody)?responseBody:
+      body.data||body.cards||body.results;
+    if(!Array.isArray(items))throw new Error('Unexpected JSON shape');
+    return toCards('onepiece',items);
+   }catch(error){
+    if(signal.aborted)throw error;
+    if(attempt===2)throw error;
+    await wait(1000*(attempt+1),signal);
+   }
+  }
+  throw new Error('No response');
+ }
+ async function worker(){
+  while(cursor<categories.length){
+   const index=cursor++;
+   const item=categories[index];
+   // Do not start all large downloads simultaneously against the
+   // provider's public VPS; preserve up to two independent workers.
+   if(index%2===1)await wait(300,signal);
+   try{
+    const results=await category(item.name,item.path);
+    all.push(...results);
+    complete++;
+    publish('One Piece: '+complete+'/4 categories · '+all.length.toLocaleString()+
+      ' cards ('+item.name+')',unique(all),true);
+   }catch(error){
+    if(signal.aborted)throw error;
+    failed.push(item.name+' ('+(error instanceof Error?error.message:String(error))+')');
+    publish('One Piece: '+complete+'/4 categories · retry unsuccessful: '+item.name,
+      unique(all),true);
+   }
+  }
+ }
+ await Promise.all([worker(),worker()]);
+ if(failed.length)throw new Error('One Piece partial catalogue: '+complete+
+   '/4 categories loaded. Failed: '+failed.join(', ')+
+   '. Successfully loaded cards remain visible; refresh to retry.');
+ return unique(all);
+}
 async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:AbortSignal){
  const publish=(label:string,cards:CatalogCard[],partial=false)=>onUpdate({
   loaded:cards.length,label,...(partial?{partial:cards}:{}),
@@ -201,31 +348,8 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
    return unique(all);
   }
  }
- if(game==='mtg'){
-  const meta=rec(await json('https://api.scryfall.com/bulk-data/default-cards',signal));
-  if(!img(meta.download_uri))throw Error('Scryfall has no bulk download URL');
-  publish('Downloading all default-language printings',[]);
-  const bulk=await json(s(meta.download_uri),signal);
-  const cards=toCards(game,bulk);
-  publish('Full default-language printing catalogue',cards,true);return cards;
- }
- if(game==='onepiece'){
-  // Four provider-defined public bulk endpoints include booster sets,
-  // starter decks, promos and DON!! cards. Two workers are sufficient.
-  const paths=['allSetCards','allSTCards','allPromoCards','allDonCards'];
-  const all:CatalogCard[]=[];
-  let next=0;
-  async function worker(){
-   while(next<paths.length){
-    const index=next++,result=await json('https://optcgapi.com/api/'+paths[index]+'/',signal);
-    const items=Array.isArray(result)?result:(rec(result).data||rec(result).cards||rec(result).results);
-    all.push(...toCards(game,items));
-    publish('Loaded '+(index+1)+' / '+paths.length+' card categories',all,true);
-   }
-  }
-  await Promise.all([worker(),worker(),worker(),worker()]);
-  return unique(all);
- }
+ if(game==='mtg')return loadScryfall(signal,publish);
+ if(game==='onepiece')return loadOnePiece(signal,publish);
  if(game==='pokemon'){
   // TCGdex lists ALL cards in one response; brief records can be expanded
   // on demand without blocking the initial complete card index.
