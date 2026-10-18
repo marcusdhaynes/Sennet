@@ -219,8 +219,9 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
       <button title={'Add to '+section} aria-label={'Add '+c.name} className="tcgb-add" onClick={()=>add(c)}><Plus size={17}/></button>
      </div>)}
      {!matches.length&&<div className="tcgb-empty">
-      {loading?'Loading card catalogue…':error||'No cards match your filters.'}
-      {game==='riftbound'&&<p>Riot requires a separately approved application. Request approval through <a href={config.url} target="_blank" rel="noreferrer">Riot's developer portal</a>, then enter your authorized catalogue URL in Settings → Decks & providers.</p>}
+      {loading?'Loading card catalogue…':game==='riftbound'&&error?
+       <p>Official Riftbound cards require a Riot-approved application. <a href={config.url} target="_blank" rel="noreferrer">Request Riot approval</a>, then configure the authorized catalog in TCG Settings. No public key or unofficial mirror is used.</p>
+       :error||'No cards match your filters.'}
      </div>}
     </div>
     <footer className="tcgb-pagination"><span>{status}</span><nav>
