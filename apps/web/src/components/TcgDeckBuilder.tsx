@@ -39,6 +39,9 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  const [showImages,setShowImages]=useState(()=>{
   try{return localStorage.getItem('sennet.tcg.images.v1')!=='off';}catch{return true;}
  });
+ const [riotEndpoint,setRiotEndpoint]=useState(()=>{
+  try{return localStorage.getItem('sennet.tcg.riftbound.endpoint.v1')||'';}catch{return '';}
+ });
  const [compact,setCompact]=useState(()=>{
   try{return localStorage.getItem('sennet.tcg.compact.v1')==='on';}catch{return false;}
  });
@@ -54,6 +57,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   const entry=newDeck(id);setDecks(old=>[entry,...old]);setActiveId(entry.id);setSection('Main');
  };
  useEffect(()=>{saveDecks(decks);},[decks]);
+ useEffect(()=>{try{localStorage.setItem('sennet.tcg.riftbound.endpoint.v1',riotEndpoint);}catch{/* ephemeral */}},[riotEndpoint]);
  useEffect(()=>{try{localStorage.setItem('sennet.tcg.images.v1',showImages?'on':'off');}catch{/* ephemeral */}},[showImages]);
  useEffect(()=>{try{localStorage.setItem('sennet.tcg.compact.v1',compact?'on':'off');}catch{/* ephemeral */}},[compact]);
  useEffect(()=>{try{localStorage.setItem('sennet.deck-active.v1',activeId);}catch{/* ephemeral */}},[activeId]);
@@ -306,6 +310,20 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      <p>Decks autosave in this browser. Export JSON to preserve full card and section data, or TXT for portable card counts and names.</p>
      <p>Card filters and sections adapt to each TCG. Structural checks are advisory; format rules and banned lists can change.</p>
      <p>Riftbound uses only officially authorized Riot content. An approved application and a secure server-side catalogue endpoint are required; API keys must not be embedded in this website.</p>
+     <label>Approved Riot catalogue endpoint (URL only)
+      <input value={riotEndpoint} placeholder="https://your-relay.example/api/tcg/riftbound/catalog"
+       onChange={e=>setRiotEndpoint(e.target.value)} aria-label="Authorized Riftbound catalogue URL"/></label>
+     <button disabled={loading} onClick={()=>{
+      try{
+       if(riotEndpoint.trim()){
+        const endpoint=new URL(riotEndpoint.trim());
+        if(endpoint.protocol!=='https:'&&endpoint.hostname!=='localhost')throw Error('HTTPS required');
+        localStorage.setItem('sennet.tcg.riftbound.endpoint.v1',endpoint.href);
+       }else localStorage.removeItem('sennet.tcg.riftbound.endpoint.v1');
+       message('Riot endpoint saved (no secret stored)');
+       if(game==='riftbound'){setSettingsOpen(false);forceReload.current=true;setRefresh(v=>v+1);}
+      }catch(e){message(e instanceof Error?e.message:'Invalid endpoint URL');}
+     }}>Apply Riot endpoint</button>
      <a target="_blank" rel="noreferrer" href={config.url}>View {config.provider} API documentation ↗</a>
     </section>
    </div>
