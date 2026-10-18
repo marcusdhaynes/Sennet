@@ -251,42 +251,65 @@ async function loadOnePiece(
  const categories=[
   {name:'Sets',path:'allSetCards'},
   {name:'Starters',path:'allSTCards'},
-  {name:'Promos',path:'allPromoCards'},
+  // OPTCG's published docs still say allPromoCards, but its newer
+  // public route is allPromos. Try both hostnames before the legacy alias.
+  {name:'Promos',path:'allPromos'},
   {name:'DON!!',path:'allDonCards'}
  ];
  const all:CatalogCard[]=[];
  const failed:string[]=[];
  let cursor=0,complete=0;
  async function category(name:string,path:string){
-  const url='https://optcgapi.com/api/'+path+'/';
-  for(let attempt=0;attempt<3;attempt++){
-   if(signal.aborted)throw new DOMException('Cancelled','AbortError');
-   try{
-    const response=await fetch(url,{signal,headers:{Accept:'application/json'}});
-    if(!response.ok){
-     const transient=response.status===429||response.status===408||
-       response.status>=500&&response.status<=599;
-     if(!transient)throw new PermanentCatalogError('HTTP '+response.status);
-     if(attempt===2)throw new Error('HTTP '+response.status);
-     const retryHeader=response.headers.get('Retry-After');
-     const retrySeconds=retryHeader?Number(retryHeader):NaN;
-     await wait(Number.isFinite(retrySeconds)?
-       Math.min(12000,Math.max(1000,retrySeconds*1000)):1000*(attempt+1)*2,signal);
-     continue;
+  const urls=name==='Promos'?[
+   'https://optcgapi.com/api/allPromos/',
+   'https://www.optcgapi.com/api/allPromos/',
+   'https://optcgapi.com/api/allPromoCards/'
+  ]:['https://optcgapi.com/api/'+path+'/'];
+  const errors:string[]=[];
+  for(const url of urls){
+   // Do not waste retries on an obsolete promo route returning HTTP 404.
+   // However a network/CORS error on one hostname is worth trying the
+   // canonical alternate hostname before telling the user it has failed.
+   for(let attempt=0;attempt<3;attempt++){
+    if(signal.aborted)throw new DOMException('Cancelled','AbortError');
+    try{
+     const response=await fetch(url,{signal,headers:{Accept:'application/json'}});
+     if(!response.ok){
+      const transient=response.status===429||response.status===408||
+        response.status>=500&&response.status<=599;
+      if(!transient)throw new PermanentCatalogError('HTTP '+response.status);
+      if(attempt===2)throw new Error('HTTP '+response.status);
+      const retryHeader=response.headers.get('Retry-After');
+      const retrySeconds=retryHeader?Number(retryHeader):NaN;
+      await wait(Number.isFinite(retrySeconds)?
+        Math.min(12000,Math.max(1000,retrySeconds*1000)):1000*(attempt+1)*2,signal);
+      continue;
+     }
+     const responseBody:unknown=await response.json();
+     const body=rec(responseBody);
+     const items=Array.isArray(responseBody)?responseBody:
+       body.data||body.cards||body.results;
+     if(!Array.isArray(items))throw new PermanentCatalogError('Unexpected JSON shape');
+     return toCards('onepiece',items);
+    }catch(error){
+     if(signal.aborted)throw error;
+     if(error instanceof PermanentCatalogError||attempt===2){
+      errors.push(new URL(url).hostname+new URL(url).pathname+': '+
+        (error instanceof Error?error.message:String(error)));
+      break;
+     }
+     // Browser NetworkError often means a blocked route, not an outage.
+     // For promos, immediately try its alternate endpoint/hostname rather
+     // than sleeping through repeated failures of the same broken route.
+     if(name==='Promos'&&error instanceof TypeError){
+      errors.push(new URL(url).hostname+new URL(url).pathname+': '+error.message);
+      break;
+     }
+     await wait(1000*(attempt+1),signal);
     }
-    const responseBody:unknown=await response.json();
-    const body=rec(responseBody);
-    const items=Array.isArray(responseBody)?responseBody:
-      body.data||body.cards||body.results;
-    if(!Array.isArray(items))throw new Error('Unexpected JSON shape');
-    return toCards('onepiece',items);
-   }catch(error){
-    if(signal.aborted||error instanceof PermanentCatalogError||attempt===2)
-     throw error;
-    await wait(1000*(attempt+1),signal);
    }
   }
-  throw new Error('No response');
+  throw new Error(errors.join('; ')||'No available API response');
  }
  async function worker(){
   while(cursor<categories.length){
