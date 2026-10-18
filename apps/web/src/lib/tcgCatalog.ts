@@ -197,7 +197,8 @@ async function loadScryfall(
  if(gzip){
   if(typeof DecompressionStream==='undefined')
    throw new Error('Your browser cannot decompress Scryfall bulk data. Update your browser to enable gzip streaming.');
-  body=body.pipeThrough(new DecompressionStream('gzip'));
+  body=body.pipeThrough(new DecompressionStream('gzip') as unknown as
+    ReadableWritablePair<Uint8Array,Uint8Array>);
  }
  const reader=body.getReader(),decoder=new TextDecoder();
  const cards:CatalogCard[]=[];
