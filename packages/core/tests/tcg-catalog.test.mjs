@@ -61,7 +61,7 @@ test('Catalogue endpoints fetch full indexes in one bulk request when supported'
  const fixtures={
   'https://api.tcgdex.net/v2/en/cards':[{id:'base1-4',name:'Charizard'}],
   'https://db.ygoprodeck.com/api/v7/cardinfo.php':{data:[{id:1,name:'Blue-Eyes'}]},
-  'https://api.scryfall.com/bulk-data/oracle-cards':{download_uri:'https://data.scryfall.io/oracle.json'},
+  'https://api.scryfall.com/bulk-data/default-cards':{download_uri:'https://data.scryfall.io/oracle.json'},
   'https://data.scryfall.io/oracle.json':[{id:'example',name:'Forest'}],
   'https://api.gcgapi.com/v1/bulk':'{"product_id":"GD01-001","name":"Gundam"}\n'
  };
