@@ -696,3 +696,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  .tcgb-settings-pane{inset:85px 0 24px}
  .tcgb-settings-content{grid-template-columns:1fr}
 }
+
+
+.tcgb-provider-warning{display:flex;align-items:center;gap:8px;padding:7px 10px;
+ border-bottom:1px solid #967c58;background:#423526;color:#f5dbb0;font-size:10px;
+ line-height:1.45}
+.tcgb-provider-warning span{flex:1;max-height:58px;overflow:auto}
+.tcg-builder .tcgb-provider-warning button{background:#5b4932;border:1px solid #b79869;
+ font-size:10px;padding:4px 8px;flex:none}
+@media(max-width:530px){.tcgb-provider-warning{flex-wrap:wrap}}
