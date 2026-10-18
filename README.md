@@ -56,7 +56,7 @@ Features: multi-deck autosave in the local browser, complete game-specific catal
 | --- | --- |
 | Disney Lorcana | Lorcast: one set index, then all set cards, paced at 110ms between requests. |
 | Gundam | GCG API: unmetered NDJSON bulk export, anonymous paginated fallback. |
-| Magic: The Gathering | Scryfall: Default Cards bulk export (all default-language printings and sets, not abusive pagination). |
+| Magic: The Gathering | Scryfall: Default Cards gzip-compressed JSONL stream via jsonl_download_uri (all default-language printings and sets, not abusive pagination). |
 | One Piece | OPTCG API: bulk expansion, starter, promo and DON!! endpoints. |
 | Pokémon | TCGdex: one complete English card index with full details on demand. |
 | Riftbound | Riot Games: requires app-specific key and official approval; no public browser key. |
