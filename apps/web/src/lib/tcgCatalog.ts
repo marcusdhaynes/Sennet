@@ -390,7 +390,7 @@ async function fetchCatalog(game:TcgId,onUpdate:(v:CatalogUpdate)=>void,signal:A
    }
   }catch{/* No configured relay. */}
  }
- if(!server)throw new Error('Riftbound requires Riot approval and a secure Sennet relay. Configure a WSS relay or VITE_SENNET_RIFTBOUND_CATALOG_URL after approval; never place API keys in the browser.');
+ if(!server)throw new Error('Riot approval required. Riftbound cards can load after Riot approves Sennet and an authorized catalogue URL is connected under TCG Settings → Decks & providers.');
  const address=new URL(server,window.location.origin);
  if(address.protocol!=='https:'&&address.hostname!=='localhost')throw Error('Secure HTTPS Riftbound endpoint required');
  const result=rec(await json(address.href,signal));
