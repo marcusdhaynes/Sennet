@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
-import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Gear,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
+import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Settings,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
@@ -320,7 +320,7 @@ export default function App(){
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
     <button className="tcg-gear" type="button" aria-label="TCG settings and deck builder"
       title="TCG settings · Deck builder"
-      onClick={()=>{setBook(null);setTcgStudioOpen(true);}}><Gear size={19} strokeWidth={1.6}/></button>
+      onClick={()=>{setBook(null);setTcgStudioOpen(true);}}><Settings size={19} strokeWidth={1.6}/></button>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}/>}
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
