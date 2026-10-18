@@ -150,7 +150,7 @@ test('Scryfall resolves jsonl bulk URI from manifest if direct metadata omits it
 
 test('One Piece merges four categories and completes despite a transient request failure',async()=>{
  const before=globalThis.fetch;const calls=new Map();
- const paths=['allSetCards','allSTCards','allPromoCards','allDonCards'];
+ const paths=['allSetCards','allSTCards','allPromos','allDonCards'];
  globalThis.fetch=async addr=>{
   const path=String(addr).split('/').at(-2);
   assert.ok(paths.includes(path),path);
@@ -173,11 +173,50 @@ test('One Piece merges four categories and completes despite a transient request
  }finally{globalThis.fetch=before;}
 });
 
-test('One Piece preserves successful bulk categories and reports specifically which failed',async()=>{
- const before=globalThis.fetch;const requests=[];
+test('One Piece falls back to the www promo endpoint on a browser NetworkError',async()=>{
+ const before=globalThis.fetch;
+ const urls=[];
+ globalThis.fetch=async url=>{
+  const text=String(url);urls.push(text);
+  if(text==='https://optcgapi.com/api/allPromos/')
+   throw new TypeError('NetworkError when attempting to fetch resource.');
+  const category=text.split('/').at(-2);
+  return new Response(JSON.stringify([{card_set_id:category+'-001',card_name:category}]));
+ };
+ try{
+  const updates=[];
+  const cards=await loadTcgCatalog('onepiece',new AbortController().signal,
+   value=>updates.push(value),true);
+  assert.equal(cards.length,4);
+  assert.ok(urls.includes('https://www.optcgapi.com/api/allPromos/'));
+  assert.ok(!urls.includes('https://optcgapi.com/api/allPromoCards/'),
+   'Do not request the obsolete route when the alternate host succeeds.');
+  assert.ok(updates.some(v=>v.label.includes('4/4')));
+ }finally{globalThis.fetch=before;}
+});
+
+test('One Piece falls back to its documented legacy promo route if both current routes fail',async()=>{
+ const before=globalThis.fetch,requested=[];
+ globalThis.fetch=async url=>{
+  const text=String(url);requested.push(text);
+  if(text.endsWith('/allPromos/'))return new Response('',{status:404});
+  const category=text.split('/').at(-2);
+  return new Response(JSON.stringify([{card_set_id:category+'-001',card_name:category}]));
+ };
+ try{
+  const cards=await loadTcgCatalog('onepiece',new AbortController().signal,()=>{},true);
+  assert.equal(cards.length,4);
+  assert.ok(requested.includes('https://optcgapi.com/api/allPromoCards/'));
+ }finally{globalThis.fetch=before;}
+});
+
+test('One Piece partial response preserves other categories when every promo endpoint fails',async()=>{
+ const before=globalThis.fetch;
+ const requests=[];
  globalThis.fetch=async addr=>{
-  const path=String(addr).split('/').at(-2);requests.push(path);
-  if(path==='allPromoCards')return new Response('{}',{status:404});
+  const url=String(addr);const path=url.split('/').at(-2);requests.push(url);
+  if(path==='allPromos'||path==='allPromoCards')
+   return new Response('{}',{status:404});
   return new Response(JSON.stringify([{card_set_id:path+'-001',card_name:path}]));
  };
  try{
@@ -187,7 +226,7 @@ test('One Piece preserves successful bulk categories and reports specifically wh
    /partial catalogue: 3\/4.*Promos.*404/);
   assert.equal(updates.at(-1).loaded,3);
   assert.equal(updates.at(-1).partial.length,3);
-  assert.equal(requests.filter(c=>c==='allPromoCards').length,1,
-   'Do not repeatedly retry a permanent HTTP 404');
+  assert.equal(requests.filter(s=>s.includes('/allPromos/')).length,2);
+  assert.equal(requests.filter(s=>s.includes('/allPromoCards/')).length,1);
  }finally{globalThis.fetch=before;}
 });
