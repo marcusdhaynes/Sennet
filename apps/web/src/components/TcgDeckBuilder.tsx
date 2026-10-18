@@ -82,8 +82,10 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
    setCards(all);setStatus(all.length.toLocaleString()+' indexed cards');
   }).catch((e:unknown)=>{
    if(abort.signal.aborted)return;
-   setError(e instanceof Error?e.message:String(e));
-   setStatus('Catalogue unavailable');
+   const failure=e instanceof Error?e.message:String(e);
+   setError(failure);
+   setStatus(failure.startsWith('One Piece partial catalogue:')?
+    'One Piece · incomplete catalogue':'Catalogue unavailable');
   }).finally(()=>{if(!abort.signal.aborted)setLoading(false);});
   return()=>abort.abort();
  },[game,config.provider,refresh]);
@@ -201,6 +203,11 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
       <option value="rarity">Rarity</option><option value="price">Price</option></select></label>
      <label className="tcgb-owned-filter"><input type="checkbox" checked={ownedOnly} onChange={e=>setOwnedOnly(e.target.checked)}/> Owned</label>
     </div>
+    {error&&cards.length>0&&<div className="tcgb-provider-warning" role="alert">
+     <span>{error}</span>
+     <button disabled={loading} onClick={()=>{forceReload.current=true;setRefresh(v=>v+1);}}>
+      Retry incomplete categories</button>
+    </div>}
     <div className={'tcgb-results'+(compact?' dense':'')}>
      {matches.slice((page-1)*PAGE,page*PAGE).map(c=><div className="tcgb-result" key={c.id}>
       <button className="tcgb-thumb" onClick={()=>chooseCard(c)} title="Card details">
