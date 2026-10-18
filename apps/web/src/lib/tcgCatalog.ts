@@ -176,6 +176,15 @@ async function loadScryfall(
  publish('Downloading the complete Scryfall printings catalogue…',[]);
  const response=await fetch(uri,{signal});
  if(!response.ok)throw new Error('Scryfall bulk download: HTTP '+response.status);
+ // The 2026 provider format is gzip JSONL. This branch is only for
+ // older JSON-array export metadata, and keeps legacy offline mirrors
+ // compatible without accidentally parsing their entire array as one card.
+ if(/\.json$/i.test(new URL(uri).pathname)){
+  const legacy=toCards('mtg',await response.json());
+  if(!legacy.length)throw new Error('Scryfall legacy JSON export was empty');
+  publish('Full Scryfall catalogue · '+legacy.length.toLocaleString()+' cards',legacy,true);
+  return legacy;
+ }
  const gzip=/\.gz(?:[?#]|$)/i.test(new URL(uri).pathname)&&
    !/gzip/i.test(response.headers.get('content-encoding')||'');
  let body:ReadableStream<Uint8Array>|null=response.body;
