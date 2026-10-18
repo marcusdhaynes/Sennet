@@ -145,8 +145,8 @@ async function writeCache(game:TcgId,cards:CatalogCard[]){
 }
 const wait=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{
  if(signal.aborted){reject(new DOMException('Cancelled','AbortError'));return;}
- const timer=window.setTimeout(()=>{signal.removeEventListener('abort',abort);resolve();},ms);
- function abort(){window.clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));}
+ const timer=setTimeout(()=>{signal.removeEventListener('abort',abort);resolve();},ms);
+ function abort(){clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));}
  signal.addEventListener('abort',abort,{once:true});
 });
 async function json(url:string,signal:AbortSignal){
