@@ -1,21 +1,57 @@
-// Offline shell caching only. Community media is intentionally NOT cached by this service worker.
-const CACHE='sennet-shell-v1';
+// Network-first application shell. Offline navigation can use a cached page,
+// but a missing JavaScript/CSS chunk must NEVER be replaced with HTML:
+// doing so produces a blank screen from a strict module MIME-type error.
+const CACHE='sennet-shell-v2';
+const SCOPE=self.registration.scope;
+const SHELL=new URL('./',SCOPE).href;
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(['./','./favicon.svg','./manifest.webmanifest'])));
-  self.skipWaiting();
+  event.waitUntil((async()=>{
+    const cache=await caches.open(CACHE);
+    // Installation should not fail merely because an optional icon is missing.
+    try{await cache.add(SHELL);}catch{/* Offline first visits still proceed. */}
+    await self.skipWaiting();
+  })());
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
-  self.clients.claim();
+  event.waitUntil((async()=>{
+    const names=await caches.keys();
+    await Promise.all(names.filter(name=>
+      name.startsWith('sennet-shell-')&&name!==CACHE
+    ).map(name=>caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 self.addEventListener('fetch',event=>{
-  if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;
+  const request=event.request;
+  if(request.method!=='GET')return;
+  const url=new URL(request.url);
+  if(url.origin!==self.location.origin||!url.href.startsWith(SCOPE))return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
+    const navigation=request.mode==='navigate';
+    const asset=['script','style','image','font'].includes(request.destination);
     try{
-      const response=await fetch(event.request);
-      if(response.ok && (event.request.destination==='script'||event.request.destination==='style'||event.request.mode==='navigate'||event.request.destination==='image'))cache.put(event.request,response.clone());
+      const response=await fetch(request);
+      if(response.ok){
+        if(navigation&&url.pathname===new URL(SHELL).pathname){
+          await cache.put(SHELL,response.clone()).catch(()=>{});
+        }else if(asset){
+          // Never cache an HTML error page under a script or stylesheet URL.
+          const type=response.headers.get('content-type')||'';
+          const valid=request.destination==='script'?/javascript|ecmascript/i.test(type):
+            request.destination==='style'?/text\/css/i.test(type):
+            request.destination==='image'?/image\//i.test(type):
+            /font|octet-stream/i.test(type);
+          if(valid)await cache.put(request,response.clone()).catch(()=>{});
+        }
+      }
       return response;
-    }catch{return await cache.match(event.request)||await cache.match('./')||Response.error();}
+    }catch{
+      if(navigation)return await cache.match(SHELL)||Response.error();
+      // Exact-URL asset fallback only. The previous SW incorrectly
+      // returned the cached index.html for nonexistent JS and CSS files.
+      if(asset)return await cache.match(request)||Response.error();
+      return Response.error();
+    }
   })());
 });
