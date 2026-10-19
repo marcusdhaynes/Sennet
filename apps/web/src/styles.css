@@ -477,15 +477,6 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 
 
 /* Universal TCG Studio: compact 2.5D parchment-on-emerald tooling. */
-.tcg-gear{
- position:absolute;right:18px;bottom:18px;z-index:35;
- width:36px;height:36px;padding:0;border-radius:50%;
- border:1.5px solid #d7bd8e;background:linear-gradient(145deg,#32584b,#142b26);
- color:#f0d9ac;box-shadow:0 5px 15px #04131199,inset 0 1px 0 #ffffff20;
- display:flex;align-items:center;justify-content:center;
- transition:background .15s ease,transform .15s ease;
-}
-.tcg-gear:hover,.tcg-gear:focus-visible{background:#3c6556;transform:translateY(-1px)}
 .tcg-builder-backdrop{
  position:fixed;inset:0;z-index:200;background:#010b0bca;
  display:flex;align-items:center;justify-content:center;padding:14px;
