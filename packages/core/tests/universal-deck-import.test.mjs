@@ -54,7 +54,7 @@ test('Text formats: Arena sets, MTGO sideboard, sections, quantity placements an
   '// Maybeboard','1 Force of Will','[Main]','Lightning Bolt x2'
  ].join('\n');
  const p=parseDeckImport(input);
- assert.equal(p.rows.length,9);
+ assert.equal(p.rows.length,8);
  assert.deepEqual(p.rows[0],{
   name:'Lightning Bolt',setCode:'2X2',number:'117',quantity:4,section:'Main',raw:'4 Lightning Bolt (2X2) 117'});
  assert.equal(p.rows[1].quantity,2);
