@@ -945,7 +945,7 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
       return 'You can only merge sections on your own mat';
   }
-  if(command.type==='DRAW'&&command.payload.matSeat!==undefined){
+  if((command.type==='DRAW'||command.type==='SHUFFLE')&&command.payload.matSeat!==undefined){
     const seat=command.payload.matSeat;
     if(state.kind!=='tcg'||typeof seat!=='number'||!Number.isInteger(seat)||seat<0||seat>=SEATS)
       return 'Invalid draw mat';
@@ -1069,7 +1069,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
       message=`${command.actor.slice(0,8)} drew a card`;break;
     }
     case 'SHUFFLE':{
-      const list=objects.filter(o=>o.zone==='DECK' && (!p.prefix || o.id.startsWith(String(p.prefix))));const rand=prng(finite(p.seed,1));
+      const list=objects.filter(o=>o.zone==='DECK' &&
+        (p.matSeat===undefined||o.matSeat===p.matSeat) &&
+        (!p.prefix || o.id.startsWith(String(p.prefix))));const rand=prng(finite(p.seed,1));
       for(let i=list.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
       list.forEach((o,i)=>o.order=i);message=`Shuffled ${list.length} cards`;break;
     }
