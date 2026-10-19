@@ -1,7 +1,8 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
+import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -861,7 +862,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -901,12 +902,24 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const activeFocusAnimation=useRef<number|null>(null);
   const controlPointer=useRef<number|null>(null);
   const hoverTimers=useRef(new Set<number>());
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onMergeCenter,onViewChange};
+  const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
+  const lastTap=useRef<{id:string;at:number;x:number;y:number}|null>(null);
+  const openGestureMenu=useRef<(id:string,x:number,y:number)=>void>(()=>{});
+  openGestureMenu.current=(id,x,y)=>{
+    const bounds=mount.current?.getBoundingClientRect();
+    if(!bounds)return;
+    const menuW=294,menuH=405;
+    const left=Math.max(8,Math.min(Math.max(8,bounds.width-menuW-8),x-bounds.left-40));
+    const top=Math.max(8,Math.min(Math.max(8,bounds.height-menuH-8),y-bounds.top-40));
+    setGestureMenu({id,x:left,y:top,inspect:false});
+    lastTap.current=null;
+  };
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onMergeCenter,onViewChange};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
     startClientX:number;startClientY:number;moved:boolean;
-    whole:boolean;members:{id:string;x:number;y:number}[];
+    whole:boolean;held:boolean;members:{id:string;x:number;y:number}[];
     timer:number|null;
   };
   const drag=useRef<ActiveDrag|null>(null);
@@ -1057,23 +1070,34 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           const members=cardStackMembers(state,obj.id);
           const eligible=members.length>=2&&members.every(o=>!o.locked&&
             (state.kind!=='tcg'||!o.owner||o.owner===(state.players.length?actorId:'local')));
+          setGestureMenu(null);
           const active:ActiveDrag={
             id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board'&&obj.kind!=='deck-box',
             x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
-            whole:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
+            whole:false,held:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
             timer:null
           };
           drag.current=active;
-          if(eligible){
-            active.timer=window.setTimeout(()=>{
-              if(drag.current!==active||active.moved)return;
-              active.timer=null;
+          active.timer=window.setTimeout(()=>{
+            if(drag.current!==active||active.moved)return;
+            active.timer=null;active.held=true;
+            if(eligible){
               active.whole=true;
               if(!active.visual.destroyed)markHeldStack(active.visual,active.members.length);
-            },Math.min(5000,Math.max(250,stackHoldMs)));
-          }
+            }else if(!active.visual.destroyed){
+              const halo=new Graphics().ellipse(0,0,42,54)
+                .stroke({color:0xffdfa2,alpha:.95,width:2});
+              halo.eventMode='none';active.visual.addChild(halo);
+            }
+          },eligible?Math.min(5000,Math.max(250,stackHoldMs)):GESTURE_HOLD_MS);
           callbacks.current.onSelect(obj.id);
+        });
+        piece.on('rightdown',e=>{
+          e.stopPropagation();
+          cancelActiveDrag.current();
+          callbacks.current.onSelect(obj.id);
+          openGestureMenu.current(obj.id,e.clientX,e.clientY);
         });
       }
     }
@@ -1117,7 +1141,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const d=drag.current,current=session.current;
       if(!d||d.pointerId!==event.pointerId||!current||!mount.current)return;
       if(!d.moved){
-        if(Math.hypot(event.clientX-d.startClientX,event.clientY-d.startClientY)<6)return;
+        if(Math.hypot(event.clientX-d.startClientX,event.clientY-d.startClientY)<GESTURE_MOVE_THRESHOLD)return;
         d.moved=true;
         // Any motion before hold completes commits to picking the TOP card.
         if(d.timer!==null){window.clearTimeout(d.timer);d.timer=null;}
@@ -1174,8 +1198,23 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
       if(d.timer!==null)window.clearTimeout(d.timer);
       drag.current=null;clearHighlight();
-      // Merely selecting or holding still is not a move.
-      if(!d.moved)return;
+      // A hold-and-DRAG takes the entire stack. Holding and RELEASING
+      // opens the same action panel as a touchpad two-finger/right click.
+      if(!d.moved){
+        if(d.held){
+          openGestureMenu.current(d.id,event.clientX,event.clientY);
+          return;
+        }
+        const timestamp=Date.now();
+        if(d.card&&isDoubleCardTap(lastTap.current,d.id,timestamp,event.clientX,event.clientY)){
+          lastTap.current=null;
+          const object=currentState.current.objects.find(o=>o.id===d.id);
+          if(object?.kind==='card'||object?.kind==='deck')
+            callbacks.current.onCardAction(d.id,'tap');
+        }else lastTap.current={id:d.id,at:timestamp,x:event.clientX,y:event.clientY};
+        return;
+      }
+      lastTap.current=null;
       const dx=d.x-d.startX,dy=d.y-d.startY;
       if(d.whole){
         for(const m of d.members)oldLocations.current.set(m.id,{x:m.x+dx,y:m.y+dy});
@@ -1531,6 +1570,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     const down=(event:PointerEvent)=>{
+      if(event.target===session.current?.app.canvas)setGestureMenu(null);
       // Cards, stacks, eye and opponent arrows still receive Pixi events,
       // but grabbing empty space must never pan a locked matchup.
       if(isBattleView(viewRef.current.kind))return;
@@ -1610,6 +1650,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const reset=()=>{selectView({kind:'overview',opponent:null});resetCamera.current();};
     const key=(event:KeyboardEvent)=>{
+      if(event.key==='Escape'){setGestureMenu(null);lastTap.current=null;}
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
       if(currentKind.current==='tcg'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
@@ -1659,6 +1700,43 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
+    {gestureMenu&&(()=>{
+      const item=state.objects.find(o=>o.id===gestureMenu.id);
+      if(!item)return null;
+      const ownerLocked=!!item.owner&&item.owner!=='local'&&item.owner!==actorId;
+      const actions=cardGestureOptions(item,state.kind);
+      const fire=(action:CardGestureAction)=>{
+        if(action==='inspect'){setGestureMenu(m=>m?{...m,inspect:!m.inspect}:null);return;}
+        if(ownerLocked)return;
+        callbacks.current.onGestureAction(item.id,action);
+        if(action!=='counter-add'&&action!=='counter-remove')setGestureMenu(null);
+      };
+      return <div className="tcg-card-gesture-layer" onPointerDown={e=>e.stopPropagation()}>
+        <div className="tcg-card-action-menu" style={{left:gestureMenu.x,top:gestureMenu.y}}
+          role="dialog" aria-label={'Card actions for '+item.name}>
+          <header><span><strong>{item.name}</strong><small>{item.zone} · {item.kind}
+            {item.counters?' · '+item.counters+' counters':''}</small></span>
+            <button type="button" aria-label="Close card actions"
+              onClick={()=>setGestureMenu(null)}>×</button></header>
+          {ownerLocked&&<p className="tcg-menu-locked">This card belongs to another player. Its actions are locked.</p>}
+          {(['quick','piles','other'] as const).map(group=>{
+            const options=actions.filter(a=>a.group===group);
+            return options.length>0?<section key={group}>
+              <small className="tcg-menu-group">{group==='quick'?'CARD':group==='piles'?'PILES':'MORE'}</small>
+              <div className="tcg-card-action-grid">{options.map(option=>
+                <button key={option.action} type="button"
+                  disabled={ownerLocked&&option.action!=='inspect'}
+                  onClick={()=>fire(option.action)}>{option.label}</button>)}</div>
+            </section>:null;
+          })}
+          {gestureMenu.inspect&&<div className="tcg-card-inspect">
+            {item.faceUrl&&<img src={item.faceUrl} alt={item.name}/>}
+            <p>{item.description||'No additional card details.'}</p>
+          </div>}
+          <footer>Drag: move one · Hold + drag: stack · Double-tap: tap/untap</footer>
+        </div>
+      </div>;
+    })()}
     {/* Our own name/seat tag lives in the unified book shelf outside
         the canvas in ALL views. Do not create a duplicate bottom tag. */}
     {eyeView.kind==='targeting'&&<div className="opponent-target-prompt" role="status">
