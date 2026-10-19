@@ -1,5 +1,5 @@
 
-import {TCGS,configFor,normalizeTcgCard,type CatalogCard,type TcgId} from './tcgCatalog.ts';
+import {TCGS,configFor,normalizeTcgCard,cachedTcgCatalog,type CatalogCard,type TcgId} from './tcgCatalog.ts';
 export type ImportRow={name:string;quantity:number;section:string;raw:string;setCode?:string;number?:string;cardId?:string};
 export type ImportData={rows:ImportRow[];name:string;format:string;hint:TcgId|null;ignored:string[];source:string};
 export type ImportMatch={matched:{row:ImportRow;card:CatalogCard;section:string}[];missing:ImportRow[]};
@@ -317,9 +317,12 @@ export async function detectDeckGame(
  const explicit=structuralHint(parsed);
  if(explicit)return explicit;
  if(!parsed.rows.length)return {game:null,confidence:'uncertain',reason:'No card entries'};
- const existing=TCGS.map(g=>({
-  game:g.id,
-  score:new Set(matchDeckImport(parsed,loaded[g.id]||[],g.id).matched.map(
+ const indexes=await Promise.all(TCGS.map(async g=>({
+  game:g.id,cards:loaded[g.id]?.length?loaded[g.id]:await cachedTcgCatalog(g.id)
+ })));
+ if(signal.aborted)throw new DOMException('Aborted','AbortError');
+ const existing=indexes.map(({game,cards})=>({
+  game,score:new Set(matchDeckImport(parsed,cards,game).matched.map(
    item=>normalizeCardName(item.row.name))).size
  })).sort((a,b)=>b.score-a.score);
  if(existing[0].score>=2&&existing[0].score>existing[1].score*1.5)
@@ -339,6 +342,26 @@ export async function detectDeckGame(
  if(parsed.rows.length===1&&checked[0]?.score===1&&checked[1].score===0)
   return {game:checked[0].game,confidence:'strong',
    reason:'Unique exact card match from '+configFor(checked[0].game).provider};
+ // The public One Piece API has bulk lists but no stable exact-name search.
+ // Probe its core set index at most ONCE, only after other cheap checks
+ // have been inconclusive, to avoid burdening the volunteer-run service.
+ try{
+  const response=await fetch('https://optcgapi.com/api/allSetCards/',{
+   signal,headers:{Accept:'application/json'}
+  });
+  if(response.ok){
+   const raw:unknown=await response.json(),body=obj(raw);
+   const found=Array.isArray(raw)?raw:Array.isArray(body.data)?body.data:
+    Array.isArray(body.results)?body.results:[];
+   const normalized=found.map(item=>normalizeTcgCard('onepiece',item))
+    .filter((item):item is CatalogCard=>item!==null);
+   const count=new Set(matchDeckImport(parsed,normalized,'onepiece').matched.map(
+    hit=>normalizeCardName(hit.row.name))).size;
+   if(count>=2&&count>(checked[0]?.score||0))
+    return {game:'onepiece',confidence:'strong',
+     reason:count+' One Piece cards verified against the OPTCG set catalogue'};
+  }
+ }catch(e){if(signal.aborted)throw e;/* Provider unavailable; do not guess. */}
  return {game:null,confidence:'uncertain',
   reason:'Card names did not confidently identify one TCG. Select the game below to continue.'};
 }
