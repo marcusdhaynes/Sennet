@@ -451,6 +451,16 @@ export async function loadTcgCatalog(
   throw error;
  }
 }
+/** Read available catalogues for cross-TCG identification without network.
+ * The detection phase never triggers enormous MTG bulk downloads just to
+ * guess which game a pasted list might belong to.
+ */
+export async function cachedTcgCatalog(game:TcgId):Promise<CatalogCard[]>{
+ const inMemory=cacheMemory.get(game);
+ if(inMemory)return inMemory;
+ const disk=await readCache(game);
+ return disk?.cards||[];
+}
 export async function detailCard(game:TcgId,id:string,signal:AbortSignal){
  if(game!=='pokemon')return null;
  const data=await json('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(id.split(':').slice(1).join(':')),signal);
