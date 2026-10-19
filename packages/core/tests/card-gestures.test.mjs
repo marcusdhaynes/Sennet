@@ -74,7 +74,10 @@ test('Touch menu sends TCG cards to hand, top/bottom deck and discard determinis
  assert.equal(moved.x,deckCell.x);assert.equal(moved.y,deckCell.y);
  assert.throws(()=>run(initial,'SET_ZONE',{id:card.id,matSeat:cardSeat,zone:'INVALID'},11),/Invalid destination/);
  assert.throws(()=>run(initial,'SET_ZONE',{id:card.id,matSeat:12,zone:'HAND'},12),/Invalid destination mat/);
- assert.deepEqual(replay(initial,[{id:'zone-1',actor:'local',type:'SET_ZONE',payload:{id:card.id,matSeat:cardSeat,zone:'HAND'}}]),
-  run(initial,'SET_ZONE',{id:card.id,matSeat:cardSeat,zone:'HAND'},13)
-   &&replay(initial,[{id:'zone-1',actor:'local',type:'SET_ZONE',payload:{id:card.id,matSeat:cardSeat,zone:'HAND'}}]));
+ const command={id:'zone-1',actor:'local',type:'SET_ZONE',payload:{
+  id:card.id,matSeat:cardSeat,zone:'HAND'
+ }};
+ const once=applyCommand(initial,command);
+ assert.deepEqual(replay(initial,[command]),once,'Zone gestures replay identically');
+ assert.equal(once.seq,initial.seq+1);
 });
