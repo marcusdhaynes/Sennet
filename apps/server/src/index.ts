@@ -123,7 +123,10 @@ wss.on('connection',ws=>{
         persist(session.room);
         // Event-only transport for public moves. Private draws and deck ordering require
         // an authoritative per-view snapshot to prevent transmitting hidden information.
-        if(['DRAW','SHUFFLE'].includes(command.type)){
+        // Moving a card into a private hand/deck requires actor-specific
+        // snapshots, exactly like drawing or shuffling, so spectators never
+        // retain the card's identity in a public event replay.
+        if(['DRAW','SHUFFLE','SET_ZONE'].includes(command.type)){
           for(const client of entry.sockets)projectedSnapshot(session.room,client);
         } else {
           broadcast(session.room,{type:'event',event:record});
