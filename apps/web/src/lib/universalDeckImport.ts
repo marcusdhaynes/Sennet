@@ -240,3 +240,104 @@ export function matchDeckImport(parsed:ImportData,cards:readonly CatalogCard[],g
  }
  return {matched,missing};
 }
+
+/** Heuristics are used only where multiple independent cues agree.
+ * One-piece and other ambiguous card names require provider confirmation.
+ */
+function structuralHint(parsed:ImportData):Detection|null{
+ if(parsed.hint)return {game:parsed.hint,confidence:'certain',reason:'Game specified by the imported file'};
+ const numberIds=parsed.rows.filter(r=>/^\d{5,12}$/.test(r.cardId||r.name));
+ if(numberIds.length>=2&&numberIds.length===parsed.rows.length)
+  return {game:'yugioh',confidence:'certain',reason:'Yu-Gi-Oh! deck passcodes'};
+ const scores=new Map<TcgId,number>();
+ const add=(game:TcgId)=>scores.set(game,(scores.get(game)||0)+1);
+ for(const row of parsed.rows){
+  const id=row.setCode||row.cardId||'';
+  if(/^(?:OP|ST|EB|PRB)\d{2}[-_]\d{3}|^P-\d{3}/i.test(id))add('onepiece');
+  if(/^GD\d{2}[-_]\d{3}/i.test(id))add('gundam');
+  if(/^OGN[-_]\d+/i.test(id))add('riftbound');
+ }
+ // Verified Lorcana identifiers covering the user-provided sample.
+ // Other names are identified through the live Lorcast lookup instead.
+ const lorcanaSample=new Set([
+  'mother gothel selfish manipulator','the queens castle mirror chamber',
+  'jafar striking illusionist','hidden inkcaster',
+  'ursulas garden full of the unfortunate','diablo devoted herald',
+  'genie main attraction','amethyst chromicon',
+  'peter pan never land prankster','transport pod','show me more',
+  'the return of hercules','donald duck perfect gentleman',
+  'white agony plains golden lagoon','webby vanderquack junior prospector',
+  'pocahontas following the wind','mystical inkcaster',
+  'genie magical researcher','ring of stones place of legends',
+  'dunbroch family tapestry','the great illuminary abandoned laboratory'
+ ]);
+ for(const row of parsed.rows)if(lorcanaSample.has(normalizeCardName(row.name)))add('lorcana');
+ const ranking=[...scores].sort((a,b)=>b[1]-a[1]);
+ if(ranking[0]&&ranking[0][1]>=2&&(!ranking[1]||ranking[0][1]>ranking[1][1]*1.5))
+  return {game:ranking[0][0],confidence:'strong',
+   reason:ranking[0][1]+' recognizable card names or TCG-specific IDs'};
+ return null;
+}
+async function probeProvider(game:TcgId,rows:ImportRow[],signal:AbortSignal):Promise<number>{
+ if(game==='riftbound'||game==='onepiece')return 0;
+ let score=0;
+ for(const row of rows.slice(0,3)){
+  if(signal.aborted)throw new DOMException('Aborted','AbortError');
+  const name=row.name,query=encodeURIComponent(name);
+  let url='';
+  if(game==='lorcana')url='https://api.lorcast.com/v0/cards/search?q='+query;
+  if(game==='mtg')url='https://api.scryfall.com/cards/search?q='+
+    encodeURIComponent('!"'+name+'"')+'&unique=cards';
+  if(game==='pokemon')url='https://api.tcgdex.net/v2/en/cards?name='+query;
+  if(game==='gundam')url='https://api.gcgapi.com/v1/cards?name='+query+'&limit=12';
+  if(game==='yugioh')url='https://db.ygoprodeck.com/api/v7/cardinfo.php?fname='+query;
+  if(!url)continue;
+  try{
+   const response=await fetch(url,{signal,headers:{Accept:'application/json'}});
+   if(response.ok){
+    const raw:unknown=await response.json(),data=obj(raw);
+    const items=Array.isArray(raw)?raw:Array.isArray(data.results)?data.results:
+     Array.isArray(data.data)?data.data:[];
+    const normalized=items.map(i=>normalizeTcgCard(game,i)).filter(
+     (c):c is CatalogCard=>c!==null);
+    const probeData:ImportData={rows:[row],source:'Lookup',name:'',format:'',hint:game,ignored:[]};
+    if(matchDeckImport(probeData,normalized,game).matched.length)score++;
+   }
+  }catch(e){if(signal.aborted)throw e;/* Network/CORS outages are not evidence. */}
+  if(game==='lorcana'||game==='mtg')
+   await new Promise<void>(resolve=>setTimeout(resolve,115)); // provider pacing
+ }
+ return score;
+}
+export async function detectDeckGame(
+ parsed:ImportData,loaded:Partial<Record<TcgId,readonly CatalogCard[]>>,
+ signal:AbortSignal
+):Promise<Detection>{
+ const explicit=structuralHint(parsed);
+ if(explicit)return explicit;
+ if(!parsed.rows.length)return {game:null,confidence:'uncertain',reason:'No card entries'};
+ const existing=TCGS.map(g=>({
+  game:g.id,
+  score:new Set(matchDeckImport(parsed,loaded[g.id]||[],g.id).matched.map(
+   item=>normalizeCardName(item.row.name))).size
+ })).sort((a,b)=>b.score-a.score);
+ if(existing[0].score>=2&&existing[0].score>existing[1].score*1.5)
+  return {game:existing[0].game,confidence:'strong',
+   reason:existing[0].score+' card names matched a loaded catalogue'};
+ const samples=[...new Map(parsed.rows.map(r=>[normalizeCardName(r.name),r])).values()]
+  .filter(r=>r.name.length>3).slice(0,3);
+ const candidates=TCGS.map(g=>g.id).filter(g=>g!=='riftbound'&&g!=='onepiece');
+ const checked=await Promise.all(candidates.map(async game=>({
+  game,score:Math.max(existing.find(x=>x.game===game)?.score||0,
+   await probeProvider(game,samples,signal))
+ })));
+ checked.sort((a,b)=>b.score-a.score);
+ if(checked[0]?.score>=2&&checked[0].score>checked[1].score)
+  return {game:checked[0].game,confidence:'strong',
+   reason:checked[0].score+' card names verified by '+configFor(checked[0].game).provider};
+ if(parsed.rows.length===1&&checked[0]?.score===1&&checked[1].score===0)
+  return {game:checked[0].game,confidence:'strong',
+   reason:'Unique exact card match from '+configFor(checked[0].game).provider};
+ return {game:null,confidence:'uncertain',
+  reason:'Card names did not confidently identify one TCG. Select the game below to continue.'};
+}
