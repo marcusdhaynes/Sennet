@@ -1524,8 +1524,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         resetCamera.current(); // reveal every available opponent to select
       }
     };
+    const onCardMenu=(target:EventTarget|null)=>target instanceof Element&&
+      !!target.closest('.tcg-card-action-menu');
     const selectOpponent=(event:PointerEvent)=>{
-      if(viewRef.current.kind!=='targeting'||event.button!==0)return;
+      if(onCardMenu(event.target)||viewRef.current.kind!=='targeting'||event.button!==0)return;
       const current=session.current;
       if(!current)return;
       const rect=current.app.canvas.getBoundingClientRect();
@@ -1569,6 +1571,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       updateView.current();
     };
     const wheel=(event:WheelEvent)=>{
+      // Action tray owns its own scroll; never zoom or pan the table
+      // while scrolling the tray on a touchpad or with a mouse wheel.
+      if(onCardMenu(event.target))return;
       event.preventDefault();
       // Block wheel zoom, trackpad scroll/pinch and Shift+wheel pan.
       if(isBattleView(viewRef.current.kind))return;
@@ -1583,6 +1588,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       }
     };
     const down=(event:PointerEvent)=>{
+      if(onCardMenu(event.target))return; // Menu taps never initiate tabletop pan.
       if(event.target===session.current?.app.canvas)setGestureMenu(null);
       // All modes track touch pointers, including locked Castle/Eye views.
       // A second finger always cancels any pending card move or stack
