@@ -1002,26 +1002,44 @@ test('Eye, Castle, Sword and Shield straddle the exact top line of PLAY 03',()=>
   assert.equal(VIEW_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
 });
 
-test('TCG gear matches Eye/Castle size and is anchored to personal mat bottom-right',()=>{
+test('TCG gear exactly bisects both borders at own bottom-right corner in every view',()=>{
   const gear=tcgSettingsButtonPosition();
-  assert.equal(gear.x,TCG_MAT_WIDTH/2-PLAYMAT_BOTTOM_BUTTON_OFFSET);
+  assert.equal(gear.x,TCG_MAT_WIDTH/2,
+    'Gear center must coincide exactly with the RIGHT edge, not be inset');
   assert.equal(gear.y,TCG_MAT_HEIGHT/2,
-    'Gear center straddles HAND bottom border, not the browser viewport');
-  assert.ok(gear.x+VIEW_BUTTON_HIT_RADIUS<=TCG_MAT_WIDTH/2,
-    'Full hit circle stays within the playmat right edge');
-  assert.ok(gear.y+VIEW_BUTTON_HIT_RADIUS<=
-    TCG_MAT_HEIGHT/2+BATTLEFIELD_PLAYMAT_PADDING,
-    'Existing battle mode padding must include the entire gear hit circle');
-  assert.ok(gear.x>viewButtonPosition('castle').x);
+    'Gear center must coincide exactly with the HAND BOTTOM edge');
+  assert.equal(VIEW_BUTTON_RADIUS,16,'Gear uses the shared 32-unit control circle');
+  assert.ok(BATTLEFIELD_PLAYMAT_PADDING>=VIEW_BUTTON_HIT_RADIUS,
+    'Existing balanced battle-mode padding must clear gear hit circle on both edges');
+  // Centering at the corner leaves precisely one half of the circle
+  // beyond each border, unlike the old inset-right design.
+  assert.equal(gear.x+VIEW_BUTTON_RADIUS,TCG_MAT_WIDTH/2+VIEW_BUTTON_RADIUS);
+  assert.equal(gear.y+VIEW_BUTTON_RADIUS,TCG_MAT_HEIGHT/2+VIEW_BUTTON_RADIUS);
   for(let viewer=0;viewer<12;viewer++){
-    // No dependency on viewport geometry or opposing seats: controls
-    // follow the local orientation of THIS seat's own mat in all modes.
     const where=tcgMatOrigin(viewer);
     const world=tcgMatWorld(gear.x,gear.y,viewer);
     const local=tcgMatLocal(world.x,world.y,viewer);
-    assert.ok(Math.abs(local.x-gear.x)<1e-7,'Local gear x must survive table rotation');
-    assert.ok(Math.abs(local.y-gear.y)<1e-7,'Local gear y must survive table rotation');
+    assert.ok(Math.abs(local.x-gear.x)<1e-7,'Corner x survives seat rotation');
+    assert.ok(Math.abs(local.y-gear.y)<1e-7,'Corner y survives seat rotation');
     assert.ok(Number.isFinite(where.angle));
+    for(const viewport of [
+      {width:320,height:620},{width:768,height:1024},
+      {width:1366,height:768},{width:1920,height:1080}
+    ]){
+      const castle=castleGridLayout(viewer,{},'all',null,viewport);
+      const me=castle.mats.get(viewer);
+      assert.ok(me);
+      const scale=castle.cameraScale;
+      // With the personal mat fixed at the lower left, both axes
+      // retain at least a full hit radius of visibility.
+      const visibleW=viewport.width/scale,visibleH=viewport.height/scale;
+      const centerScreenX=-visibleW/2+BATTLEFIELD_PLAYMAT_PADDING+TCG_MAT_WIDTH/2;
+      const centerScreenY=visibleH/4;
+      assert.ok(centerScreenX+gear.x+VIEW_BUTTON_HIT_RADIUS<=visibleW/2,
+        'Gear cannot be clipped against the right viewport edge');
+      assert.ok(centerScreenY+gear.y+VIEW_BUTTON_HIT_RADIUS<=visibleH/2,
+        'Gear cannot be clipped against the bottom viewport edge');
+    }
   }
 });
 
