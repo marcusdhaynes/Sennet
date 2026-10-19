@@ -34,13 +34,14 @@ const card=(game:TcgId,id:unknown,name:unknown,opts:Partial<CatalogCard>={}):Cat
 export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
  const x=rec(value);if(!x||!Object.keys(x).length)return null;
  const imageUris=rec(x.image_uris),digital=rec(imageUris.digital),set=rec(x.set);
- if(game==='lorcana')return card(game,x.id,x.name,{
+ if(game==='lorcana')return card(game,x.id,
+  [s(x.name),s(x.version)].filter(Boolean).join(' - '),{
   number:s(x.collector_number),set:s(set.name||set.code),rarity:s(x.rarity),
   type:words(x.type).join(' / '),types:words(x.type),
   colors:words(x.ink),cost:s(x.cost),text:s(x.text),
   image:img(digital.small||digital.normal),price:n(rec(x.prices).usd),
   legalities:Object.fromEntries(Object.entries(rec(x.legalities)).map(([k,v])=>[k,s(v)])),
-  attributes:{Inkable:s(x.inkwell),Strength:s(x.strength),Willpower:s(x.willpower),Lore:s(x.lore)}
+  attributes:{Inkable:s(x.inkwell),Strength:s(x.strength),Willpower:s(x.willpower),Lore:s(x.lore),'Set Code':s(set.code)}
  });
  if(game==='gundam')return card(game,x.product_id||x.card_number,x.name,{
   number:s(x.card_number),set:s(x.set_name||x.set_code),rarity:s(x.rarity),
@@ -58,7 +59,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
    text:s(x.oracle_text||first.oracle_text),image:img(rec(x.image_uris).small||facesUris.small),
    price:n(rec(x.prices).usd),legalities:Object.fromEntries(
     Object.entries(rec(x.legalities)).map(([k,v])=>[k,s(v)])),
-   attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist)}
+   attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist),'Set Code':s(x.set)}
   });
  }
  if(game==='onepiece')return card(game,
