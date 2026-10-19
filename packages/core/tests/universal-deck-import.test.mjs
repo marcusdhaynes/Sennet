@@ -112,3 +112,43 @@ test('No unreliable blind game guess for a list of unrelated / unknown cards',as
   assert.equal(result.confidence,'uncertain');
  }finally{globalThis.fetch=fetchOld;}
 });
+
+
+test('Pokémon Live headings with accents group cards instead of becoming fake entries',()=>{
+ const content='Pokémon: 13\n4 Charizard ex OBF 125\nTrainer: 30\n4 Nest Ball SVI 181\nEnergy: 17\n12 Basic Fire Energy';
+ const result=parseDeckImport(content,'pokemon.txt');
+ assert.equal(result.rows.length,3);
+ assert.deepEqual(result.rows.map(r=>r.name),['Charizard ex','Nest Ball','Basic Fire Energy']);
+ assert.deepEqual(result.rows.map(r=>r.quantity),[4,4,12]);
+ assert.equal(result.rows[0].setCode,'OBF');
+ assert.ok(result.rows.every(r=>r.section==='Main'));
+});
+test('MTGO .dek XML resolves numerical CatID against Scryfall MTGO ID',()=>{
+ const text='<Deck><Cards CatID="12345" Quantity="4" Sideboard="false" />'+
+  '<Cards CatID="87654" Quantity="2" Sideboard="true" /></Deck>';
+ const parsed=parseDeckImport(text,'legacy.dek');
+ assert.equal(parsed.rows.length,2);
+ assert.deepEqual(parsed.rows.map(r=>r.quantity),[4,2]);
+ assert.equal(parsed.rows[1].section,'Sideboard');
+ const data=[
+  normalizeTcgCard('mtg',{id:'a-uuid',name:'Forest',mtgo_id:12345}),
+  normalizeTcgCard('mtg',{id:'b-uuid',name:'Lightning Bolt',mtgo_id:87654})
+ ];
+ const matches=matchDeckImport(parsed,data,'mtg');
+ assert.equal(matches.matched.length,2);
+ assert.equal(matches.matched[1].card.name,'Lightning Bolt');
+});
+test('Cached game catalogue can identify ordinary card names without provider access',async()=>{
+ const list=parseDeckImport('4 Unique Example Spell\n2 Legendary Example Unit');
+ const data=[
+  normalizeTcgCard('gundam',{product_id:'gd123',name:'Unique Example Spell'}),
+  normalizeTcgCard('gundam',{product_id:'gd124',name:'Legendary Example Unit'})
+ ];
+ const saved=globalThis.fetch;
+ globalThis.fetch=async()=>{throw Error('Provider offline')};
+ try{
+  const result=await detectDeckGame(list,{gundam:data},empty);
+  assert.equal(result.game,'gundam');
+  assert.equal(result.confidence,'strong');
+ }finally{globalThis.fetch=saved;}
+});
