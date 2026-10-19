@@ -304,6 +304,27 @@ export default function App(){
           if(action==='flip')takeAction('FLIP',{id});
           else takeAction('ROTATE',{id,degrees:card.rotation%180>=90?-90:90});
         }}
+        onGestureAction={(id,action)=>{
+          const card=current.current.objects.find(o=>o.id===id);
+          if(!card)return;
+          if(action==='tap')takeAction('ROTATE',{id,degrees:card.rotation%180>=90?-90:90});
+          else if(action==='flip')takeAction('FLIP',{id});
+          else if(action==='rotate-cw')takeAction('ROTATE',{id,degrees:90});
+          else if(action==='rotate-ccw')takeAction('ROTATE',{id,degrees:-90});
+          else if(action==='rotate-180')takeAction('ROTATE',{id,degrees:180});
+          else if(action==='counter-add')takeAction('ADJUST_COUNTER',{id,delta:1});
+          else if(action==='counter-remove')takeAction('ADJUST_COUNTER',{id,delta:-1});
+          else if(action==='duplicate')takeAction('CLONE',{id,newId:createId()});
+          else if(action==='remove'){
+            if(window.confirm('Remove '+card.name+' from the table?'))takeAction('DELETE',{id});
+          }else if(action==='hand'||action==='deck-top'||action==='deck-bottom'||action==='discard'){
+            takeAction('SET_ZONE',{id,matSeat:seat,
+              zone:action==='hand'?'HAND':action==='discard'?'DISCARD':'DECK',
+              bottom:action==='deck-bottom'});
+          }else if(action==='draw')takeAction('DRAW',{matSeat:seat});
+          else if(action==='shuffle')takeAction('SHUFFLE',{seed:Date.now()%10000000,matSeat:seat});
+          else if(action==='roll')takeAction('ROLL',{id,seed:Date.now()%10000000});
+        }}
         stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
