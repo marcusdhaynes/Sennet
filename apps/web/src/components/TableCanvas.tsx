@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -115,7 +115,7 @@ function drawTcgMats(
   onFocusCastleSeat:(seat:number)=>void,
   selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
   eyeHoldMs:number,selectedEnemy:number|null
 ){
@@ -445,6 +445,42 @@ function drawTcgMats(
       modeMark.position.set(11,11);modeMark.eventMode='none';
       castle.addChild(modeMark);
       mat.addChild(castle);
+      // Gear stays physically attached to the lower-right border of
+      // the viewer's playmat in ALL modes (overview, Eye, Castle).
+      // It shares exactly the Eye/Castle button and hit radii.
+      const settings=new Container();
+      const position=tcgSettingsButtonPosition();
+      settings.position.set(position.x,position.y);
+      settings.eventMode='static';
+      settings.cursor='pointer';
+      settings.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
+      settings.addChild(new Graphics()
+        .circle(0,0,VIEW_BUTTON_RADIUS).fill({color:0x183a33,alpha:.96})
+        .stroke({color:0xe4cf9d,alpha:1,width:1.5}));
+      // Eight-tooth fine-line gear, centered on the same 32-unit disk.
+      const gear=new Graphics();
+      for(let i=0;i<32;i++){
+        const angle=i*Math.PI/16-Math.PI/2;
+        const radius=i%4===1||i%4===2?10.8:8.2;
+        const x=Math.cos(angle)*radius,y=Math.sin(angle)*radius;
+        if(i===0)gear.moveTo(x,y);else gear.lineTo(x,y);
+      }
+      gear.closePath().fill({color:0xf4e4bd});
+      gear.circle(0,0,4).fill(0x183a33)
+        .circle(0,0,2.8).stroke({color:0xf4e4bd,width:.85});
+      gear.eventMode='none';
+      settings.addChild(gear);
+      settings.on('pointerdown',e=>{
+        if(e.button!==0)return;
+        e.stopPropagation();
+        onControlDown(e.pointerId); // Never pan or drag the tabletop.
+      });
+      settings.on('pointertap',e=>{
+        if(e.button!==0)return;
+        e.stopPropagation();
+        onOpenTcgSettings();
+      });
+      mat.addChild(settings);
     }
     // Every other mat in Opponent Mode owns its own centered Sword and
     // Shield controls. The Eye remains exclusive to the viewer's mat.
@@ -541,7 +577,7 @@ function makeDuelSeatLayers(
 }
 function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
   duelOpponent:number|null,castleActive:boolean,castleMode:CastleMode|'focus',
   castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,
   viewport:{width:number;height:number},
@@ -591,7 +627,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
       castleMode,castleBaseMode,focused,viewport,selectedEnemy);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
-    onEyeTap,onEyeHold,onCastleTap,onCastleHold,castleActive,castleMode,
+    onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,layers,
     eyeHoldMs,selectedEnemy);
   for(let i=0;i<12;i++){
@@ -824,7 +860,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -864,7 +900,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const activeFocusAnimation=useRef<number|null>(null);
   const controlPointer=useRef<number|null>(null);
   const hoverTimers=useRef(new Set<number>());
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onCardAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onCardAction,onMergeCenter,onViewChange};
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onMergeCenter,onViewChange};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
@@ -957,6 +993,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       ()=>castleTapHandler.current(),()=>castleHoldHandler.current(),
+      ()=>callbacks.current.onOpenTcgSettings(),
        (direction,sourceSeat)=>cycleOpponentHandler.current(direction,sourceSeat),
       (targetSeat,choice)=>toggleRelationHandler.current(targetSeat,choice),
       targetSeat=>castleFocusHandler.current(targetSeat),
