@@ -28,8 +28,8 @@ jobs:
           GITHUB_PAGES: 'true'
       - name: Verify the case-sensitive GitHub Pages asset base
         run: |
-          grep -Eq 'src="/Sennet/assets/[^"]+\\.js"' apps/web/dist/index.html
-          grep -Eq 'href="/Sennet/assets/[^"]+\\.css"' apps/web/dist/index.html
+          grep -Eq 'src="/Sennet/assets/[^"]+\.js"' apps/web/dist/index.html
+          grep -Eq 'href="/Sennet/assets/[^"]+\.css"' apps/web/dist/index.html
           if grep -q '="/sennet/' apps/web/dist/index.html; then
             echo "ERROR: lowercase /sennet/ would break the canonical /Sennet/ Pages URL" >&2
             exit 1
