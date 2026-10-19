@@ -364,6 +364,17 @@ export function viewButtonPosition(control:'eye'|'castle'):{
     y:TCG_PLAY03_TOP_LINE_Y
   };
 }
+/** Gear belongs to the viewing player's OWN mat, not the screen edge.
+ * Like Eye/Castle, its center straddles the physical mat border.
+ * The shared bottom-edge padding accommodates the full hit circle in
+ * Castle and Eye views, while the right inset keeps it in the mat.
+ */
+export function tcgSettingsButtonPosition():{x:number;y:number}{
+  return {
+    x:TCG_MAT_WIDTH/2-PLAYMAT_BOTTOM_BUTTON_OFFSET,
+    y:TCG_MAT_HEIGHT/2
+  };
+}
 /** Shared visual colors: consistent inactive role identity, unmistakable
  * vibrant selected states, and contrasting outlines.
  */
