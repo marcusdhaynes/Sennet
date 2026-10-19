@@ -134,14 +134,20 @@ async function readCache(game:TcgId):Promise<{time:number;cards:CatalogCard[]}|n
  const db=await database();if(!db)return null;
  return new Promise(resolve=>{try{const tx=db.transaction('catalogs','readonly');
   const req=tx.objectStore('catalogs').get(game);
-  req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>resolve(null);}
+  req.onsuccess=()=>{
+   const saved=req.result;
+   // Legacy Lorcast caches omitted each character's separate version,
+   // making imported full titles impossible to match. Refresh those
+   // records once while leaving the other six cached games untouched.
+   resolve(game==='lorcana'&&saved?.schema!==2?null:saved||null);
+  };req.onerror=()=>resolve(null);}
   catch{resolve(null);}
  });
 }
 async function writeCache(game:TcgId,cards:CatalogCard[]){
  const db=await database();if(!db)return;
  try{const tx=db.transaction('catalogs','readwrite');
-   tx.objectStore('catalogs').put({time:Date.now(),cards},game);
+   tx.objectStore('catalogs').put({time:Date.now(),cards,schema:2},game);
  }catch{/* Quota and private browsing must never block the builder. */}
 }
 const wait=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{
