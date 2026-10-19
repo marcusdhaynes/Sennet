@@ -1,4 +1,4 @@
-import {configFor,type CatalogCard,type TcgId} from './tcgCatalog';
+import {configFor,type CatalogCard,type TcgId} from './tcgCatalog.ts';
 export interface DeckEntry{card:CatalogCard;section:string;quantity:number;owned:number;notes:string;tags:string[]}
 export interface SavedDeck{id:string;game:TcgId;name:string;format:string;description:string;updated:number;entries:DeckEntry[]}
 const STORAGE='sennet.deck-workspace.v1';
