@@ -445,9 +445,10 @@ function drawTcgMats(
       modeMark.position.set(11,11);modeMark.eventMode='none';
       castle.addChild(modeMark);
       mat.addChild(castle);
-      // Gear stays physically attached to the lower-right border of
-      // the viewer's playmat in ALL modes (overview, Eye, Castle).
-      // It shares exactly the Eye/Castle button and hit radii.
+      // The gear circle is CENTERED on the exact bottom-right corner
+      // where the viewer's HAND bottom border meets its right edge.
+      // It stays on the mat in every view, with the same 32-unit diameter
+      // and 19-unit hit radius as Eye and Castle.
       const settings=new Container();
       const position=tcgSettingsButtonPosition();
       settings.position.set(position.x,position.y);
