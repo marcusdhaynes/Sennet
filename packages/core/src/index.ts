@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -873,6 +873,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     zone:['TABLE','DECK','HAND','DISCARD'].includes(String(input.zone)) ? input.zone as Zone : 'TABLE',
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
+    ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
     ...(Number.isInteger(input.matSeat)&&Number(input.matSeat)>=0&&Number(input.matSeat)<SEATS ? {matSeat:Number(input.matSeat)} : {}),
     ...(kind==='die'?{sides:clamp(Math.floor(finite(input.sides,6)),2,100),value:clamp(Math.floor(finite(input.value,1)),1,100)}:{}),
@@ -900,7 +901,7 @@ export function cardStackMembers(state:GameState,id:string):TableObject[] {
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -908,10 +909,25 @@ export function validateCommand(state: GameState, command: Command): string | nu
   }
   const id=String(command.payload.id ?? '');
   const target=state.objects.find(o=>o.id===id);
-  if (['MOVE','MOVE_STACK','ROTATE','FLIP','DELETE','CLONE','ROLL'].includes(command.type)) {
+  if (['MOVE','MOVE_STACK','ROTATE','FLIP','DELETE','CLONE','ROLL','ADJUST_COUNTER','SET_ZONE'].includes(command.type)) {
     if(!target) return 'Object does not exist';
     if(target.locked) return 'Object is locked';
     if (target.owner && target.owner!==command.actor && state.kind==='tcg') return 'This card belongs to another player';
+  }
+  if(command.type==='ADJUST_COUNTER'){
+    if(!Number.isInteger(command.payload.delta)||Math.abs(Number(command.payload.delta))>999)
+      return 'Invalid counter adjustment';
+  }
+  if(command.type==='SET_ZONE'){
+    if(state.kind!=='tcg'||!target||!['card','deck'].includes(target.kind))
+      return 'Only TCG cards can change piles';
+    if(!['HAND','DECK','DISCARD'].includes(String(command.payload.zone)))
+      return 'Invalid destination zone';
+    const seat=command.payload.matSeat;
+    if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS)
+      return 'Invalid destination mat';
+    if(state.players.length&&state.players.find(p=>p.id===command.actor)?.seat!==seat)
+      return 'You can only move cards into your own piles';
   }
   if(command.type==='MOVE_STACK') {
     const stack=cardStackMembers(state,id);
@@ -1003,6 +1019,33 @@ export function applyCommand(state: GameState, command: Command): GameState {
         }
       }
       message=`Moved stack of ${cards.length} cards`;
+    }break;
+    case 'ADJUST_COUNTER':if(obj){
+      obj.counters=clamp((obj.counters??0)+Number(p.delta),0,999);
+      message=obj.name+' · '+obj.counters+' counters';
+    }break;
+    case 'SET_ZONE':if(obj){
+      const zone=p.zone as 'HAND'|'DECK'|'DISCARD',seat=Number(p.matSeat);
+      const position=zone==='DECK'?[1,2]:zone==='DISCARD'?[1,0]:[3,1];
+      const cell=tcgMatCells(seat).find(c=>c.row===position[0]&&c.column===position[1])!;
+      obj.x=cell.x;obj.y=cell.y;obj.zone=zone;obj.matSeat=seat;
+      obj.faceUp=zone==='DISCARD';obj.owner=command.actor;
+      if(zone==='DECK'){
+        const others=objects.filter(other=>other.id!==obj.id&&other.zone==='DECK'&&other.matSeat===seat);
+        if(p.bottom===true){
+          obj.order=1+Math.max(-1,...others.map(other=>other.order));
+        }else{
+          for(const other of others)other.order++;
+          obj.order=0;
+        }
+      }
+      if(zone==='HAND'){
+        const existing=objects.filter(other=>other.id!==obj.id&&other.zone==='HAND'&&other.matSeat===seat);
+        const local=tcgMatLocal(cell.x,cell.y,seat);
+        const point=tcgMatWorld(local.x+((existing.length)%7-3)*(TCG_MAT.cardWidth+2),local.y,seat);
+        obj.x=point.x;obj.y=point.y;
+      }
+      message=obj.name+' → '+(zone==='DISCARD'?'discard':zone==='DECK'?'deck':'hand');
     }break;
     case 'ROTATE': if(obj){obj.rotation=((obj.rotation+finite(p.degrees,30))%360+360)%360;message=`Rotated ${obj.name}`;}break;
     case 'FLIP':if(obj){obj.faceUp=!obj.faceUp;message=`Flipped ${obj.name}`;}break;
