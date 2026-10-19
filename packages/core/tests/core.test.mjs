@@ -1,7 +1,7 @@
 // Run after: node --experimental-strip-types --test packages/core/tests/*.test.mjs (Node >=22.16)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,castleIndependentFocusLayout,castleArrowsVisible,castleAllySeats,nextCastleAllySeat,nextCastleFocusedSeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
+import {createGame,applyCommand,replay,cardStackMembers,nearestFrameIndex,viewerTableRotation,playerSeatRotation,projectForActor,parseGamePack,gameFromPack,tcgMatCells,tcgMatRegions,centerMergeKey,tcgSnapPoint,tcgMatOrigin,opponentAtTablePoint,opposingMatLayout,alliedMatLayout,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleFocusedLayout,castleIndependentFocusLayout,castleArrowsVisible,castleAllySeats,nextCastleAllySeat,nextCastleFocusedSeat,bestCastleGridShape,CASTLE_MAX_ALLIES,CASTLE_GRID_GAP,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,matchupMatLayout,ALLY_MAT_GAP,OPPONENT_RELATION_BUTTON_OFFSET,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,OPPONENT_RELATION_COLORS,opponentRelationButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET,PLAYMAT_BOTTOM_BUTTON_Y,TCG_HAND_BOTTOM_LINE_Y,TCG_PLAY03_TOP_LINE_Y,viewButtonPosition,tcgSettingsButtonPosition,toggleOpponentRelation,neighboringOpponentSeat,tcgMatWorld,tcgMatLocal,MIN_TABLE_ZOOM,MAX_TABLE_ZOOM,clampTableZoom,clampTablePan,TCG_ZONE_LABELS,TCG_ROW_COLORS,tcgRegionLabel,isTcgRemoveDrop,defaultPlaymatAppearance,normalizePlaymatAppearance,playmatAppearanceForSeat,playmatSectionIndex,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,BOARD_CENTER,TABLE_APOTHEM} from '../src/index.ts';
 const c=(type,payload={},actor='P1')=>({id:`${type}-${Math.random()}`,actor,type,payload});
 test('12-seat angular sprite selection wraps correctly',()=>{
   assert.equal(nearestFrameIndex(0,0,12),0);
@@ -1000,6 +1000,29 @@ test('Eye, Castle, Sword and Shield straddle the exact top line of PLAY 03',()=>
   assert.equal(VIEW_BUTTON_CASTLE_OFFSET,PLAYMAT_BOTTOM_BUTTON_OFFSET);
   assert.equal(VIEW_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_RADIUS);
   assert.equal(VIEW_BUTTON_HIT_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
+});
+
+test('TCG gear matches Eye/Castle size and is anchored to personal mat bottom-right',()=>{
+  const gear=tcgSettingsButtonPosition();
+  assert.equal(gear.x,TCG_MAT_WIDTH/2-PLAYMAT_BOTTOM_BUTTON_OFFSET);
+  assert.equal(gear.y,TCG_MAT_HEIGHT/2,
+    'Gear center straddles HAND bottom border, not the browser viewport');
+  assert.ok(gear.x+VIEW_BUTTON_HIT_RADIUS<=TCG_MAT_WIDTH/2,
+    'Full hit circle stays within the playmat right edge');
+  assert.ok(gear.y+VIEW_BUTTON_HIT_RADIUS<=
+    TCG_MAT_HEIGHT/2+BATTLEFIELD_PLAYMAT_PADDING,
+    'Existing battle mode padding must include the entire gear hit circle');
+  assert.ok(gear.x>viewButtonPosition('castle').x);
+  for(let viewer=0;viewer<12;viewer++){
+    // No dependency on viewport geometry or opposing seats: controls
+    // follow the local orientation of THIS seat's own mat in all modes.
+    const where=tcgMatOrigin(viewer);
+    const world=tcgMatWorld(gear.x,gear.y,viewer);
+    const local=tcgMatLocal(world.x,world.y,viewer);
+    assert.ok(Math.abs(local.x-gear.x)<1e-7,'Local gear x must survive table rotation');
+    assert.ok(Math.abs(local.y-gear.y)<1e-7,'Local gear y must survive table rotation');
+    assert.ok(Number.isFinite(where.angle));
+  }
 });
 
 test('all 12 seats anchor control centers to their own PLAY 03 upper boundary',()=>{
