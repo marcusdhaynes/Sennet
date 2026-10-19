@@ -1,7 +1,8 @@
 import {useDeferredValue,useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {ArrowDownToLine,BarChart3,Check,Download,FileInput,Filter,Layers,Plus,RefreshCw,Save,Search,Settings2,Trash2,Upload,X} from 'lucide-react';
 import {configFor,detailCard,loadTcgCatalog,TCGS,type CatalogCard,type CatalogUpdate,type TcgId} from '../lib/tcgCatalog';
-import {changeDeckEntry,deckChecks,deckQuantity,deckStats,newDeck,parseTextDeck,patchDeckEntry,readDecks,saveDecks,toTextDeck,type SavedDeck} from '../lib/deckWorkspace';
+import {changeDeckEntry,deckChecks,deckQuantity,deckStats,newDeck,patchDeckEntry,readDecks,saveDecks,toTextDeck,type SavedDeck} from '../lib/deckWorkspace';
+import {parseDeckImport,detectDeckGame,matchDeckImport,type ImportData,type ImportMatch,type Detection} from '../lib/universalDeckImport';
 type Props={onClose:()=>void;onLoadOnTable:(deck:SavedDeck)=>void;initialGame?:TcgId;
  snapMerged:boolean;onSnapMerged:(value:boolean)=>void;
  stackHoldMs:number;onStackHoldMs:(value:number)=>void;
@@ -45,9 +46,15 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  const [compact,setCompact]=useState(()=>{
   try{return localStorage.getItem('sennet.tcg.compact.v1')==='on';}catch{return false;}
  });
- const [importText,setImportText]=useState(''),[unmatched,setUnmatched]=useState<string[]>([]);
+ const [importText,setImportText]=useState('');
+ const [importChoice,setImportChoice]=useState<TcgId|'auto'>('auto');
+ const [importPending,setImportPending]=useState<{parsed:ImportData;game:TcgId;detection:Detection}|null>(null);
+ const [importResolved,setImportResolved]=useState<ImportMatch|null>(null);
+ const [importStatus,setImportStatus]=useState('');
+ const [importRunning,setImportRunning]=useState(false);
  const [notice,setNotice]=useState(''),[refresh,setRefresh]=useState(0);
  const controller=useRef<AbortController|null>(null);
+ const importAbort=useRef<AbortController|null>(null);
  const forceReload=useRef(false);
  const config=configFor(game);
  const active=decks.find(d=>d.id===activeId&&d.game===game);
@@ -142,29 +149,95 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   download(basename+'.'+extension,extension==='txt'?toTextDeck(active):JSON.stringify(active,null,2),
    extension==='json'?'application/json':'text/plain');
  };
- const importList=()=>{
-  if(!active)return;
-  const parsed=parseTextDeck(importText,cards,section);
-  setUnmatched(parsed.missing);
-  edit(start=>parsed.matches.reduce((current,item)=>
-   changeDeckEntry(current,item.card,config.sections.some(s=>s===item.section)?item.section:section,item.quantity),start));
-  message('Imported '+parsed.matches.length+' lines; '+parsed.missing.length+' unmatched');
+
+ const startImport=async(text:string,source:string)=>{
+  importAbort.current?.abort();
+  const cancel=new AbortController();importAbort.current=cancel;
+  setImportPending(null);setImportResolved(null);setImportRunning(true);
+  setImportStatus('Reading deck format and identifying the TCG…');
+  try{
+   if(source.toLowerCase().endsWith('.json')||text.trim().startsWith('{')){
+    try{
+     const raw=JSON.parse(text) as SavedDeck;
+     if(TCGS.some(t=>t.id===raw.game)&&Array.isArray(raw.entries)&&
+       raw.entries.every(e=>e?.card?.game===raw.game&&e.card.id&&e.quantity>0)){
+      // Native Sennet exports contain all card metadata, so restore them
+      // with full fidelity even if the provider API is temporarily offline.
+      const copy:SavedDeck={...newDeck(raw.game),name:String(raw.name||'Imported deck').slice(0,90),
+       format:String(raw.format||configFor(raw.game).formats[0]),
+       description:String(raw.description||'').slice(0,1000),
+       entries:raw.entries.slice(0,1000).map(e=>({...e,quantity:Math.min(99,e.quantity)}))};
+      setDecks(d=>[copy,...d]);pickGame(copy.game);setActiveId(copy.id);
+      setImportStatus('Native Sennet deck restored · '+copy.entries.length+' entries');
+      message('Restored '+configFor(copy.game).name+' deck with all card details');
+      return;
+     }
+    }catch{/* Use the cross-platform importer for other JSON exports. */}
+   }
+   const parsed=parseDeckImport(text,source);
+   if(!parsed.rows.length){
+    setImportStatus(parsed.ignored.join(' · ')||'No card entries found in this decklist.');return;
+   }
+   const recognition:Detection=importChoice==='auto'
+     ?await detectDeckGame(parsed,{[game]:cards},cancel.signal)
+     :{game:importChoice,confidence:'certain',reason:'TCG selected by you'};
+   if(cancel.signal.aborted)return;
+   if(!recognition.game){
+    setImportStatus(recognition.reason+' Choose a TCG below and retry.');return;
+   }
+   const target=recognition.game;
+   setImportPending({parsed,game:target,detection:recognition});
+   setImportStatus('Detected '+configFor(target).name+' · '+recognition.reason+
+     '. Matching '+parsed.rows.length+' entries against the card catalogue…');
+   // Switching the game loads that provider's full catalogue. Do not
+   // import into the previously selected game by accident.
+   if(target!==game)pickGame(target);
+  }catch(e){
+   if(!cancel.signal.aborted)setImportStatus(e instanceof Error?e.message:String(e));
+  }finally{
+   if(!cancel.signal.aborted)setImportRunning(false);
+  }
  };
- const importJson=async(event:ChangeEvent<HTMLInputElement>)=>{
+ useEffect(()=>{
+  if(!importPending||importPending.game!==game||loading)return;
+  if(!cards.length||cards[0].game!==game){
+   if(error)setImportStatus('Could not load '+config.name+': '+error+
+     '. Refresh its catalogue, then retry the import.');
+   return;
+  }
+  const resolved=matchDeckImport(importPending.parsed,cards,game);
+  setImportResolved(resolved);
+  setImportStatus(config.name+' identified · '+resolved.matched.length+
+    ' matched lines · '+resolved.missing.length+' need review.');
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[importPending,game,cards,loading,error]);
+ const commitImport=()=>{
+  if(!importPending||!importResolved?.matched.length)return;
+  const {parsed,game:target}=importPending;
+  const fresh=newDeck(target);
+  fresh.name=(parsed.name||'Imported '+configFor(target).name+' deck').slice(0,90);
+  if(configFor(target).formats.some(f=>f.toLowerCase()===parsed.format.toLowerCase()))
+   fresh.format=parsed.format;
+  const finished=importResolved.matched.reduce((deck,{row,card,section})=>
+   changeDeckEntry(deck,card,section,row.quantity),fresh);
+  setDecks(prev=>[finished,...prev]);pickGame(target);setActiveId(finished.id);
+  setImportStatus('Saved new '+configFor(target).name+' deck · '+
+   importResolved.matched.length+' card lines');
+  message('Imported deck · '+importResolved.matched.length+' matched, '+
+   importResolved.missing.length+' unmatched');
+  setImportPending(null);setImportResolved(null);setView('cards');
+ };
+ const importFile=async(event:ChangeEvent<HTMLInputElement>)=>{
   const file=event.target.files?.[0];event.target.value='';if(!file)return;
   try{
-   if(file.size>4_000_000)throw Error('Deck file too large.');
-   const parsed=JSON.parse(await file.text()) as SavedDeck;
-   if(!TCGS.some(t=>t.id===parsed.game)||!Array.isArray(parsed.entries))throw Error('Not a Sennet deck JSON');
-   const data:SavedDeck={...newDeck(parsed.game),
-    name:String(parsed.name||'Imported deck').slice(0,90),
-    format:String(parsed.format||configFor(parsed.game).formats[0]),
-    description:String(parsed.description||''),
-    entries:parsed.entries.filter(e=>e?.card?.game===parsed.game&&e.card.id&&
-      configFor(parsed.game).sections.some(s=>s===e.section)&&e.quantity>0).slice(0,1000)};
-   setDecks(d=>[data,...d]);setGame(data.game);setActiveId(data.id);
-   message('Imported '+data.entries.length+' entries');
-  }catch(e){message(e instanceof Error?e.message:'Invalid file');}
+   if(file.size>3_000_000)throw Error('Deck file is too large (3 MB limit).');
+   // Binary MTGO .dek exports may be zipped; we never guess at them.
+   const content=await file.text();
+   if(content.includes('\uFFFD')&&file.name.toLowerCase().endsWith('.dek'))
+    throw Error('Binary .dek cannot be read directly; export a text/CSV/XML decklist.');
+   setImportText(content);
+   await startImport(content,file.name);
+  }catch(e){setImportStatus(e instanceof Error?e.message:String(e));}
  };
  return <div className="tcg-builder-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
  <section className="tcg-builder" role="dialog" aria-modal="true" aria-label="Universal TCG deck builder">
@@ -264,11 +337,45 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
       <label>Notes<textarea rows={3} value={active?.description||''} onChange={e=>edit(d=>({...d,description:e.target.value,updated:Date.now()}))}/></label>
      </div>}
      {view==='import'&&<div className="tcgb-import">
-      <p className="tcgb-help">Paste quantity + name, one card per line. Section headers such as [Main], [Extra], [Leader] are supported.</p>
-      <textarea rows={10} value={importText} onChange={e=>setImportText(e.target.value)} placeholder={'[Main]\n4 Example Card'}/>
-      <button disabled={!cards.length} onClick={importList}><FileInput size={14}/> Import text list</button>
-      {unmatched.length>0&&<div className="tcgb-missing"><b>{unmatched.length} unmatched</b>{unmatched.slice(0,30).map((x,i)=><small key={i}>{x}</small>)}</div>}
-      <label className="tcgb-file"><Upload size={14}/> Import Sennet deck JSON<input accept=".json,application/json" type="file" onChange={importJson}/></label>
+      <p className="tcgb-help">Auto-detects the TCG from card names, set identifiers, or the file format. Paste card lists, or upload TXT, CSV, JSON, YDK, DEC, DCK, XML, COD and Markdown deck exports.</p>
+      <textarea rows={9} value={importText} aria-label="Universal decklist input"
+       onChange={e=>{setImportText(e.target.value);setImportPending(null);setImportResolved(null);setImportStatus('');}}
+       placeholder={'4 Mother Gothel - Selfish Manipulator\n4 The Queen\'s Castle - Mirror Chamber\n2 Jafar - Striking Illusionist'}/>
+      <label>Identify game<select aria-label="Deck import game detection" value={importChoice}
+       onChange={e=>setImportChoice(e.target.value as TcgId|'auto')}>
+       <option value="auto">Auto-detect TCG</option>
+       {TCGS.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+      </select></label>
+      <div className="tcgb-import-actions">
+       <button onClick={()=>void startImport(importText,'Pasted decklist')}
+        disabled={importRunning||!importText.trim()}>
+        <FileInput size={14}/>{importRunning?'Identifying…':'Detect & preview'}</button>
+       <label className="tcgb-file"><Upload size={14}/> Upload deck file
+        <input type="file" accept=".txt,.csv,.json,.ydk,.dec,.dek,.dck,.xml,.cod,.md,.tsv,.deck"
+         onChange={event=>void importFile(event)}/></label>
+      </div>
+      {importStatus&&<p className="tcgb-import-status" role="status">{importStatus}</p>}
+      {importPending&&<div className="tcgb-import-preview">
+       <strong>{configFor(importPending.game).name}</strong>
+       <small>{importPending.detection.confidence} detection · {importPending.parsed.rows.length} lines</small>
+       {importResolved&&<>
+        <div className="tcgb-import-counts">
+         <span>{importResolved.matched.length} matched</span>
+         <span>{importResolved.missing.length} unmatched</span>
+        </div>
+        {importResolved.missing.length>0&&<div className="tcgb-missing">
+         <b>Needs review — these cards will NOT be silently replaced:</b>
+         {importResolved.missing.slice(0,60).map((row,i)=><small key={i}>{row.raw}</small>)}
+        </div>}
+        {importPending.parsed.ignored.length>0&&<div className="tcgb-missing">
+         <b>Unrecognized lines:</b>
+         {importPending.parsed.ignored.slice(0,20).map((row,i)=><small key={i}>{row}</small>)}
+        </div>}
+        <button className="tcgb-load" disabled={!importResolved.matched.length}
+         onClick={commitImport}>Create new deck with {importResolved.matched.length} matched lines</button>
+       </>}
+      </div>}
+      <p className="tcgb-help">Imports never overwrite existing decks. If a provider or format cannot be recognized, choose a TCG manually. Private deck URLs and proprietary binary formats require an export file.</p>
      </div>}
     </div>
     <footer className="tcgb-actions"><button onClick={()=>exportDeck('txt')}><Download size={14}/> TXT</button>
