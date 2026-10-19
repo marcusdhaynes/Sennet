@@ -771,6 +771,16 @@ function createPiece(o:TableObject,isSelected:boolean){
     const t=label(o.name.length>7?'✦':o.name, o.name.length>7?25:11,0x172c2a,'bold');t.position.set(0,-4);box.addChild(t);
   }
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
+  if((o.counters??0)>0){
+    const counter=new Container();
+    counter.position.set(27,-37);counter.eventMode='none';
+    counter.addChild(new Graphics().circle(0,0,14)
+      .fill({color:0x1f3d31,alpha:.98})
+      .stroke({color:0xf1d39a,width:2}));
+    const number=label(String(o.counters),13,0xffebbc,'bold');
+    number.eventMode='none';counter.addChild(number);
+    box.addChild(counter);
+  }
   return box;
 }
 /** In opposing view, player identification retracts off-screen while a
@@ -1057,7 +1067,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         Assets.load(url).then(texture=>{
           if(piece.destroyed||!session.current)return;
           const sprite=new Sprite(texture);sprite.anchor.set(.5);const scale=Math.min(74/texture.width,105/texture.height);sprite.scale.set(scale);
-          piece.addChild(sprite);
+          // Keep counters visible above asynchronously loaded card artwork.
+          if((obj.counters??0)>0&&piece.children.length){
+            piece.addChildAt(sprite,piece.children.length-1);
+          }else piece.addChild(sprite);
         }).catch(()=>{/* Fallback stays visible when creator's hosting is down or CORS blocks fetch. */});
       }
       if(!readonly&&!obj.locked){
