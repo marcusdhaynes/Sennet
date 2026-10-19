@@ -318,7 +318,7 @@ export async function detectDeckGame(
  if(explicit)return explicit;
  if(!parsed.rows.length)return {game:null,confidence:'uncertain',reason:'No card entries'};
  const indexes=await Promise.all(TCGS.map(async g=>({
-  game:g.id,cards:loaded[g.id]?.length?loaded[g.id]:await cachedTcgCatalog(g.id)
+  game:g.id,cards:loaded[g.id]?.length?loaded[g.id]!:await cachedTcgCatalog(g.id)
  })));
  if(signal.aborted)throw new DOMException('Aborted','AbortError');
  const existing=indexes.map(({game,cards})=>({
