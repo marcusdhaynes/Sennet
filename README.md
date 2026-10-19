@@ -40,9 +40,9 @@ npm run preview
 
 ## Open Sennet on the web
 
-Your project is hosted at [marcusdhaynes/sennet](https://github.com/marcusdhaynes/sennet). The playable URL is **https://marcusdhaynes.github.io/sennet/**.
+Your project is hosted at [marcusdhaynes/Sennet](https://github.com/marcusdhaynes/Sennet). The playable URL is **https://marcusdhaynes.github.io/Sennet/**.
 
-**One-time setup:** Open [Settings → Pages](https://github.com/marcusdhaynes/sennet/settings/pages). Under **Build and deployment**, select **GitHub Actions** as the Source. Then open [Deploy Sennet Web](https://github.com/marcusdhaynes/sennet/actions/workflows/pages.yml), choose **Run workflow** on `main`, and check the deployment result. Future pushes to `main` automatically rebuild and publish Sennet.
+**One-time setup:** Open [Settings → Pages](https://github.com/marcusdhaynes/Sennet/settings/pages). Under **Build and deployment**, select **GitHub Actions** as the Source. Then open [Deploy Sennet Web](https://github.com/marcusdhaynes/Sennet/actions/workflows/pages.yml), choose **Run workflow** on `main`, and check the deployment result. Future pushes to `main` automatically rebuild and publish Sennet.
 
 GitHub Pages hosts the playable local/offline web interface. Real-time multiplayer requires deploying `apps/server` to a separate HTTPS/WSS service; Pages does not run servers. The starter relay is only suitable for development/testing until its security checklist has been addressed.
 
