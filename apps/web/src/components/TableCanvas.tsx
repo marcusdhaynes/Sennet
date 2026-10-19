@@ -1584,20 +1584,22 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const down=(event:PointerEvent)=>{
       if(event.target===session.current?.app.canvas)setGestureMenu(null);
-      // Cards, stacks, eye and opponent arrows still receive Pixi events,
-      // but grabbing empty space must never pan a locked matchup.
-      if(isBattleView(viewRef.current.kind))return;
+      // All modes track touch pointers, including locked Castle/Eye views.
+      // A second finger always cancels any pending card move or stack
+      // hold before the two touches can be mistaken for two card drags.
       if(event.pointerType==='touch'){
         pointers.current.set(event.pointerId,{x:event.clientX,y:event.clientY});
         if(pointers.current.size>=2){
-          // Two touches switch to view manipulation, even if the first was
-          // touching a card; do not commit a partial card drag.
           cancelActiveDrag.current();
           panPointer.current=null;
+          lastTap.current=null;
           if(snapHighlight.current&&!snapHighlight.current.destroyed)snapHighlight.current.clear();
           host.classList.remove('is-panning');
         }
       }
+      // Cards, stacks, eye and opponent arrows remain interactive in
+      // locked matchups; only camera gestures are disabled.
+      if(isBattleView(viewRef.current.kind))return;
       // Pixi's piece pointerdown is dispatched on the canvas before this
       // bubbling handler. Its active object drag takes priority over panning.
       if(drag.current?.pointerId===event.pointerId||controlPointer.current===event.pointerId)return;
