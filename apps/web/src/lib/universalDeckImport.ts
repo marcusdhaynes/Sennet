@@ -61,7 +61,7 @@ function parsePlain(text:string,source:string):ImportData{
    into=/extra/i.test(raw)?'Extra':/side/i.test(raw)?'Sideboard':'Main';
    ydk=true;hint='yugioh';continue;
   }
-  const header=raw.match(/^\[(.+)\]$|^\/\/\s*(main|sideboard|commander|extra|maybeboard)\s*$|^#{1,3}\s*([a-z !&/]+)\s*$|^([a-z !&/]+?)(?:\s*(?:\(\d+\)|:\s*\d+))?\s*:?\s*$/i);
+  const header=raw.match(/^\[(.+)\]$|^\/\/\s*(main|sideboard|commander|extra|maybeboard)\s*$|^#{1,3}\s*([a-z !&/]+)\s*$|^([\p{L} !&/'-]+?)(?:\s*(?:\(\d+\)|:\s*\d+))?\s*:?\s*$/iu);
   const label=header?.[1]||header?.[2]||header?.[3]||header?.[4]||'';
   const zone=section(label);
   if(zone){into=zone;continue;}
@@ -160,7 +160,7 @@ function xmlDeck(text:string,source:string):ImportData{
   return m?.[1]||'';
  };
  let area='Main';
- for(const match of text.matchAll(/<zone\b[^>]*>|<\/zone>|<card\b[^>]*\/?>/gi)){
+ for(const match of text.matchAll(/<zone\b[^>]*>|<\/zone>|<cards?\b[^>]*\/?>/gi)){
   const tag=match[0];
   if(/^<zone/i.test(tag)){area=section(attr(tag,'name'))||'Main';continue;}
   if(/^<\/zone/i.test(tag)){area='Main';continue;}
@@ -216,7 +216,7 @@ export function matchDeckImport(parsed:ImportData,cards:readonly CatalogCard[],g
   if(card.game!==game)continue;
   const name=normalizeCardName(card.name);
   const names=byName.get(name)||[];names.push(card);byName.set(name,names);
-  for(const key of [card.id,card.id.split(':').slice(1).join(':'),card.number]){
+  for(const key of [card.id,card.id.split(':').slice(1).join(':'),card.number,card.attributes['MTGO ID']]){
    if(!key)continue;
    const id=normalizeCardName(key);
    const list=byId.get(id)||[];list.push(card);byId.set(id,list);
