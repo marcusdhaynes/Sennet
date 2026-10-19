@@ -364,14 +364,14 @@ export function viewButtonPosition(control:'eye'|'castle'):{
     y:TCG_PLAY03_TOP_LINE_Y
   };
 }
-/** Gear belongs to the viewing player's OWN mat, not the screen edge.
- * Like Eye/Castle, its center straddles the physical mat border.
- * The shared bottom-edge padding accommodates the full hit circle in
- * Castle and Eye views, while the right inset keeps it in the mat.
+/** The gear's CENTER is the exact bottom-right corner of the viewer's
+ * own playmat: the right edge meets the HAND bottom edge. Its hit circle
+ * straddles BOTH borders equally. Eye/Castle viewport padding already
+ * reserves 22 units, enough for the full 19-unit hit radius.
  */
 export function tcgSettingsButtonPosition():{x:number;y:number}{
   return {
-    x:TCG_MAT_WIDTH/2-PLAYMAT_BOTTOM_BUTTON_OFFSET,
+    x:TCG_MAT_WIDTH/2,
     y:TCG_MAT_HEIGHT/2
   };
 }
