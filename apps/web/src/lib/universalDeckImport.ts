@@ -1,5 +1,5 @@
 
-import {TCGS,configFor,normalizeTcgCard,type CatalogCard,type TcgId} from './tcgCatalog';
+import {TCGS,configFor,normalizeTcgCard,type CatalogCard,type TcgId} from './tcgCatalog.ts';
 export type ImportRow={name:string;quantity:number;section:string;raw:string;setCode?:string;number?:string;cardId?:string};
 export type ImportData={rows:ImportRow[];name:string;format:string;hint:TcgId|null;ignored:string[];source:string};
 export type ImportMatch={matched:{row:ImportRow;card:CatalogCard;section:string}[];missing:ImportRow[]};
