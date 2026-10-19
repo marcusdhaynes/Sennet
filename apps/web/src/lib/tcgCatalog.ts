@@ -59,7 +59,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
    text:s(x.oracle_text||first.oracle_text),image:img(rec(x.image_uris).small||facesUris.small),
    price:n(rec(x.prices).usd),legalities:Object.fromEntries(
     Object.entries(rec(x.legalities)).map(([k,v])=>[k,s(v)])),
-   attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist),'Set Code':s(x.set)}
+   attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist),'Set Code':s(x.set),'MTGO ID':s(x.mtgo_id)}
   });
  }
  if(game==='onepiece')return card(game,
