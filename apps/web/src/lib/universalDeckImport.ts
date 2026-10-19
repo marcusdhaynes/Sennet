@@ -140,7 +140,8 @@ function structured(value:unknown,source:string):ImportData{
  const entries=inner.entries||doc.entries;
  if(Array.isArray(entries))gather(entries,'Main');
  else{
-  const groups=obj(inner.boards||doc.boards||inner.sections||doc.sections||inner);
+  const groups=obj(inner.boards||doc.boards||inner.sections||doc.sections||
+   (Object.keys(inner).length?inner:doc));
   let any=false;
   for(const [name,value] of Object.entries(groups)){
    const zone=section(name);if(!zone)continue;
