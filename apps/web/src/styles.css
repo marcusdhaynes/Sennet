@@ -720,3 +720,42 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  .tcgb-import-actions{flex-direction:column}
  .tcgb-import-actions .tcgb-file{width:100%}
 }
+
+
+/* Touch-first contextual card actions. The pointer never has to leave the
+   tabletop for any physical card command. */
+.tcg-card-gesture-layer{position:absolute;inset:0;z-index:72;pointer-events:none}
+.tcg-card-action-menu{position:absolute;pointer-events:auto;width:min(294px,calc(100% - 16px));
+ max-height:min(440px,calc(100% - 16px));overflow:auto;overscroll-behavior:contain;
+ border-radius:13px;border:1px solid #c5ae83;
+ color:#f0e7d0;background:linear-gradient(145deg,#253f36,#122720);
+ box-shadow:0 12px 36px #03120eee,0 0 0 1px #d7be8136 inset;
+ padding:9px 10px;touch-action:pan-y}
+.tcg-card-action-menu button{touch-action:manipulation;cursor:pointer;font:inherit}
+.tcg-card-action-menu header{display:flex;align-items:start;gap:9px;justify-content:space-between;
+ border-bottom:1px solid #61705b;padding:2px 0 7px}
+.tcg-card-action-menu header span{min-width:0;display:flex;flex-direction:column}
+.tcg-card-action-menu header strong{font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.tcg-card-action-menu header small{font-size:10px;color:#bdc9b9}
+.tcg-card-action-menu header button{border:1px solid #647b65;background:#223d31;
+ color:#f2e3c3;border-radius:50%;height:25px;width:25px;flex:none}
+.tcg-card-action-menu section{padding:6px 0 3px}
+.tcg-menu-group{font:700 9px Orbitron,system-ui;letter-spacing:.1em;color:#d2bf92}
+.tcg-card-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin-top:5px}
+.tcg-card-action-grid button{background:#315244;border:1px solid #67806a;color:#f6efdf;
+ font-size:11px;border-radius:6px;padding:7px 5px;min-height:31px;
+ white-space:normal;line-height:1.2}
+.tcg-card-action-grid button:hover,.tcg-card-action-grid button:focus-visible{
+ background:#57725a;border-color:#e8cb96;outline:none}
+.tcg-card-action-grid button:disabled{opacity:.4;cursor:not-allowed}
+.tcg-card-action-menu footer{font-size:10px;line-height:1.5;color:#c1c8ae;
+ border-top:1px solid #536a55;padding-top:7px;margin-top:7px}
+.tcg-card-inspect{margin:6px 0 3px;background:#0f2620;border-radius:7px;
+ border:1px solid #5d785c;padding:7px;overflow-wrap:anywhere}
+.tcg-card-inspect img{display:block;width:min(150px,100%);max-height:210px;object-fit:contain;margin:auto}
+.tcg-card-inspect p{font-size:11px;line-height:1.4}
+.tcg-menu-locked{font-size:10px;color:#f2ba95;margin:8px 0}
+@media(max-width:520px){
+ .tcg-card-action-menu{position:absolute!important;top:auto!important;bottom:8px!important;
+  left:8px!important;right:8px;width:auto;max-height:min(56dvh,410px);border-radius:14px}
+}
