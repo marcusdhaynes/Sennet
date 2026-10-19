@@ -1030,9 +1030,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
+    // Every TCG seat has its own physical DECK pocket; sending a card
+    // to the top/bottom via gestures must not leave an extra visible card
+    // because its source ID uses a different prefix than that deck.
+    const pileKey=(o:TableObject)=>state.kind==='tcg'?
+      'seat-'+String(o.matSeat??seat):o.id.split('-')[0];
     const deckTop=new Map<string,TableObject>();
-    for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))if(!deckTop.has(o.id.split('-')[0]))deckTop.set(o.id.split('-')[0],o);
-    const visible=state.objects.filter(o=>o.zone!=='DECK'||deckTop.has(o.id.split('-')[0])&&deckTop.get(o.id.split('-')[0])?.id===o.id);
+    for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))
+      if(!deckTop.has(pileKey(o)))deckTop.set(pileKey(o),o);
+    const visible=state.objects.filter(o=>o.zone!=='DECK'||
+      deckTop.get(pileKey(o))?.id===o.id);
     visible.sort((a,b)=>Number(a.kind==='board')-Number(b.kind==='board')); // Boards drawn behind movable pieces
     visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
     for(const obj of visible){
