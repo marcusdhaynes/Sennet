@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD}
  from '../../../apps/web/src/lib/cardGestures.ts';
-import {applyCommand,createGame,createId,cardStackMembers,replay,tcgMatCells}
+import {applyCommand,createGame,createId,cardStackMembers,replay,tcgMatCells,projectForActor}
  from '../src/index.ts';
 const run=(state,type,payload,serial=1,actor='local')=>
  applyCommand(state,{id:'gesture-'+serial+'-'+createId(),actor,type,payload});
@@ -80,4 +80,31 @@ test('Touch menu sends TCG cards to hand, top/bottom deck and discard determinis
  const once=applyCommand(initial,command);
  assert.deepEqual(replay(initial,[command]),once,'Zone gestures replay identically');
  assert.equal(once.seq,initial.seq+1);
+});
+
+
+test('Shared TCG gestures keep another player\'s hand and deck contents private',()=>{
+ const initial=createGame('tcg');
+ const card=initial.objects.find(o=>o.kind==='card'&&o.zone==='DECK');
+ assert.ok(card);
+ const state=run(initial,'SET_ZONE',{id:card.id,matSeat:0,zone:'HAND'},17);
+ const owner=projectForActor(state,'local').objects.find(o=>o.id===card.id);
+ const spectator=projectForActor(state,'spectator').objects.find(o=>o.id===card.id);
+ assert.equal(owner.name,card.name);
+ assert.equal(spectator.name,'Hidden card');
+ assert.equal(spectator.faceUp,false);
+ assert.equal(spectator.faceUrl,undefined);
+ assert.equal(spectator.description,undefined);
+ const deck=run(state,'SET_ZONE',{id:card.id,matSeat:0,zone:'DECK'},18);
+ const hidden=projectForActor(deck,'local').objects.find(o=>o.id===card.id);
+ assert.equal(hidden.name,'Face-down card');
+});
+test('Counter and pile gestures cannot modify locked or opponent-owned cards',()=>{
+ const initial=createGame('tcg');
+ const card=initial.objects.find(o=>o.kind==='card');
+ assert.ok(card);
+ const owned={...initial,objects:initial.objects.map(o=>o.id===card.id?
+  {...o,owner:'different-user'}:o)};
+ assert.throws(()=>run(owned,'SET_ZONE',{id:card.id,matSeat:0,zone:'HAND'},21),/belongs to another player/);
+ assert.throws(()=>run(owned,'ADJUST_COUNTER',{id:card.id,delta:1},22),/belongs to another player/);
 });
