@@ -1234,3 +1234,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  display:flex;align-items:center;justify-content:center;
  white-space:nowrap;overflow:visible;
 }
+
+/* Keep the local player's numbered tab underneath the radial in stacking
+   order; the drawer remains clickable wherever the wheel does not overlap. */
+.pixi-host .sennet-player-tag-anchor{z-index:70}
+.pixi-host .sennet-radial-overlay{z-index:82}
+.card-radial-wheel.is-half.is-collapsed .sennet-radial-center circle{
+ stroke:#f2d7a3;stroke-width:5;
+}
