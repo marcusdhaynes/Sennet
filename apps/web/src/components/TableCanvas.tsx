@@ -639,8 +639,8 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     // in the versus mode, preserving the full play area for cards.
     if(layers)continue;
     const angle=i*Math.PI/6-Math.PI/2;
-    const x=BOARD_CENTER+(TABLE_APOTHEM+4)*Math.cos(angle);
-    const y=BOARD_CENTER+(TABLE_APOTHEM+4)*Math.sin(angle);
+    const x=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle);
+    const y=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle);
     const mine=i===seat;
     // The local seat is represented by its interactive book-drawer tag.
     if(mine)continue;
@@ -655,18 +655,6 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);
-  }
-  // Redraw the table's ACTUAL outer rim on top of the Pixi seat plates.
-  // No artificial HTML lip: the genuine wood/bevel obscures their inner edge.
-  if(!layers){
-    const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
-    const outline=Array.from({length:12},(_,i)=>{
-      const a=i*Math.PI/6-Math.PI/2-Math.PI/12;
-      return [BOARD_CENTER+radius*Math.cos(a),BOARD_CENTER+radius*Math.sin(a)];
-    }).flat();
-    board.addChild(new Graphics().poly(outline)
-      .stroke({color:0x110f0c,width:18})
-      .poly(outline.map(v=>v)).stroke({color:COLORS.wood,width:10}));
   }
   return layers;
 }
@@ -1048,8 +1036,8 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         }
 
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
-        const localChair=new Point(BOARD_CENTER+(TABLE_APOTHEM+4)*Math.cos(angle),
-          BOARD_CENTER+(TABLE_APOTHEM+4)*Math.sin(angle));
+        const localChair=new Point(BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle),
+          BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle));
         const chairParent=duelLayers.current?.get(seatRef.current)??board;
         const point=chairParent.toGlobal(localChair);
         const tableCenter=board.toGlobal(new Point(BOARD_CENTER,BOARD_CENTER));
