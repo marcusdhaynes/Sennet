@@ -5,8 +5,8 @@ export type CardGestureAction=
   'discard'|'remove'|'draw'|'shuffle'|'roll'|'inspect';
 export type GestureOption={action:CardGestureAction;label:string;group:'quick'|'piles'|'other'};
 export const GESTURE_DOUBLE_TAP_MS=315;
-export const GESTURE_HOLD_MS=550;
-export const GESTURE_MOVE_THRESHOLD=7;
+export const GESTURE_HOLD_MS=250;
+export const GESTURE_MOVE_THRESHOLD=13;
 export function isDoubleCardTap(
  last:{id:string;at:number;x:number;y:number}|null,
  id:string,at:number,x:number,y:number
