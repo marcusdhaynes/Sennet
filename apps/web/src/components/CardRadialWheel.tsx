@@ -5,6 +5,7 @@ type Props={
  x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;docked?:boolean;tapLabel?:'Tap'|'Untap';
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
+ onMoveDock?:(position:{x:number;y:number})=>void;
 };
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
@@ -26,7 +27,32 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap'}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap',onMoveDock}:Props){
+ const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
+ const dragActive=useRef(false);
+ const dragPoint=useRef<{id:number;x:number;y:number;originX:number;originY:number;startX:number;startY:number}|null>(null);
+ const startDockDrag=(event:React.PointerEvent<HTMLButtonElement>)=>{
+   if(!docked||!onMoveDock)return;
+   event.preventDefault();event.stopPropagation();
+   dragActive.current=true;
+   dragPoint.current={id:event.pointerId,x:event.clientX,y:event.clientY,originX:x,originY:y,startX:event.clientX,startY:event.clientY};
+   event.currentTarget.setPointerCapture(event.pointerId);
+ };
+ const dragDock=(event:React.PointerEvent<HTMLButtonElement>)=>{
+   const d=dragPoint.current;if(!d||event.pointerId!==d.id)return;
+   const nextX=d.originX+event.clientX-d.startX,nextY=d.originY+event.clientY-d.startY;
+   setDragOffset({x:nextX,y:nextY});
+ };
+ const finishDockDrag=(event:React.PointerEvent<HTMLButtonElement>)=>{
+   const d=dragPoint.current;if(!d||event.pointerId!==d.id)return;
+   dragPoint.current=null;dragActive.current=false;
+   const wanted={x:d.originX+event.clientX-d.startX,y:d.originY+event.clientY-d.startY};
+   const width=window.innerWidth,height=window.innerHeight;
+   const home={x:width-88,y:height-88};
+   // Only magnetize near the original home; all other coordinates stay free.
+   const snapped=Math.hypot(wanted.x-home.x,wanted.y-home.y)<42?home:wanted;
+   onMoveDock?.(snapped);setDragOffset(null);
+ };
  const [category,setCategory]=useState<number|null>(null);
  const [collapsed,setCollapsed]=useState(false);
  const centerTimer=useRef<number|null>(null);
@@ -82,7 +108,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
- return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')} style={{width:size,height:size,left:x-size/2,top:y-size/2}}
+ return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')} style={{width:size,height:size,left:(dragOffset?.x??x)-size/2,top:(dragOffset?.y??y)-size/2,transition:dragOffset?'none':'left .2s ease-out, top .2s ease-out'}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
   <svg viewBox="0 0 400 400" role="img" aria-label="Position, Scale and State action wheel">
@@ -133,6 +159,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{collapsed?'Hold to expand':category===null?'Hold to shrink':RADIAL_CATEGORIES[category]}</text>
    </g>
   </svg>
+  {docked&&<button className="sennet-radial-drag-handle" type="button" aria-label="Move radial wheel" title="Drag to move wheel" onPointerDown={startDockDrag} onPointerMove={dragDock} onPointerUp={finishDockDrag} onPointerCancel={finishDockDrag}>⠿</button>}
   {!docked&&<button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
  </div>;
 }
