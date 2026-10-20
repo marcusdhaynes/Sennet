@@ -34,6 +34,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
  const [section,setSection]=useState('Main'),[page,setPage]=useState(1);
  const [chosen,setChosen]=useState<CatalogCard|null>(null);
  const [view,setView]=useState<'cards'|'stats'|'import'>('cards');
+ const [mobilePanel,setMobilePanel]=useState<'browse'|'deck'>('browse');
  const [showFilters,setShowFilters]=useState(false);
  const [settingsOpen,setSettingsOpen]=useState(false);
  const [showImages,setShowImages]=useState(()=>{
@@ -253,7 +254,11 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
     onClick={()=>setSettingsOpen(v=>!v)} aria-label="Open TCG settings"><Settings2 size={16}/><span>Settings</span></button>
    <button title="Close" aria-label="Close TCG settings" onClick={onClose}><X size={19}/></button>
   </header>
-  <div className="tcgb-main">
+  <nav className="tcgb-mobile-navigation" aria-label="Mobile deck builder navigation">
+    <button className={mobilePanel==='browse'?'active':''} aria-pressed={mobilePanel==='browse'} onClick={()=>setMobilePanel('browse')}><Search size={17}/> Browse cards</button>
+    <button className={mobilePanel==='deck'?'active':''} aria-pressed={mobilePanel==='deck'} onClick={()=>setMobilePanel('deck')}><Layers size={17}/> My deck <span>{active?deckQuantity(active):0}</span></button>
+   </nav>
+  <div className={'tcgb-main tcgb-mobile-'+mobilePanel}>
    <section className="tcgb-library">
     <div className="tcgb-searchrow">
      <label className="tcgb-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search names, texts, effects, numbers…" aria-label="Search cards"/></label>
