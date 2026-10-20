@@ -1380,7 +1380,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       }).sort((a,b)=>sizeOf(a).w*sizeOf(a).h-sizeOf(b).w*sizeOf(b).h);
       const parent=candidates[0];
       // An object cannot attach to its own descendant.
-      let current=parent,cyclic=false;
+      let current:TableObject|undefined=parent,cyclic=false;
       while(current){
         if(current.id===child.id){cyclic=true;break;}
         current=objects.find(o=>o.id===current!.carrierId);
