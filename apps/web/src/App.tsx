@@ -137,7 +137,7 @@ export default function App(){
   const viewedGame=replayAt===null?game:replay(initial,history.slice(0,replayIndex+1));
   function inform(message:string){setNotice(message);window.setTimeout(()=>setNotice(s=>s===message?'':s),4500);}
   function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next){
-    if(!connection.current&&current.current.kind!=='sandbox'){
+    if(!connection.current&&(current.current.objects.length>0||history.length>0)){
       const previous:SavedSession={
         id:sessionId.current,title:nameFor(current.current.kind),
         updated:Date.now(),game:current.current,initial,history,seat
