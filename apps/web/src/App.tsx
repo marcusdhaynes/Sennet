@@ -27,8 +27,6 @@ const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
 ];
 const ACTOR_KEY='sennet.actor.v1';
 const RECENT_KEY='sennet.recent.v1';
-const STACK_HOLD_KEY='sennet.stack-hold-ms.v1';
-const STACK_HOLD_DEFAULT_MS=1000;
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
 const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
 const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
@@ -76,15 +74,6 @@ function storedMergeHoverMs():number{
   }catch{/* Storage unavailable. */}
   return MERGE_DELAY_DEFAULT;
 }
-const STACK_HOLD_MIN_MS=250;
-const STACK_HOLD_MAX_MS=5000;
-function storedStackHoldMs():number{
-  try{
-    const saved=Number(localStorage.getItem(STACK_HOLD_KEY));
-    return Number.isFinite(saved)&&saved>=STACK_HOLD_MIN_MS&&saved<=STACK_HOLD_MAX_MS
-      ?Math.round(saved/50)*50:STACK_HOLD_DEFAULT_MS;
-  }catch{return STACK_HOLD_DEFAULT_MS;}
-}
 function emptyTable():GameState{return {...createGame('sandbox'),objects:[],players:[],message:'A fresh table. Open a book to begin.'};}
 function localActor(){try{let id=localStorage.getItem(ACTOR_KEY);if(!id){id='player_'+createId();localStorage.setItem(ACTOR_KEY,id);}return id;}catch{return 'player-local';}}
 function recentGames():SavedSession[]{try{const value=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');return Array.isArray(value)?value.slice(0,8):[];}catch{return [];}}
@@ -105,7 +94,6 @@ export default function App(){
   const [settingsPage,setSettingsPage]=useState<SettingsPage>('general');
   const [selected,setSelected]=useState<string|null>(null);
   const [seat,setSeat]=useState(0);
-  const [stackHoldMs,setStackHoldMs]=useState<number>(storedStackHoldMs);
   const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
   const [mergeHoverMs,setMergeHoverMs]=useState(storedMergeHoverMs);
   // Resolve identity before reading appearance. One player's saved playmat
@@ -174,9 +162,6 @@ export default function App(){
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
   useEffect(()=>()=>connection.current?.close(),[]);
-  useEffect(()=>{
-    try{localStorage.setItem(STACK_HOLD_KEY,String(stackHoldMs));}catch{/* Private browsing can disable storage. */}
-  },[stackHoldMs]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
@@ -337,7 +322,7 @@ export default function App(){
           takeAction('BATCH_CARD_ACTION',{action:'move',ids,anchorId,x,y,
             snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
-        stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
+        mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
@@ -356,7 +341,6 @@ export default function App(){
       onLoadOnTable={loadStudioDeck}
       snapMerged={playmat.snapMerged}
       onSnapMerged={value=>setPlaymat(p=>({...p,snapMerged:value}))}
-      stackHoldMs={stackHoldMs} onStackHoldMs={setStackHoldMs}
       mergeHoverMs={mergeHoverMs} onMergeHoverMs={setMergeHoverMs}/>}
     {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
@@ -421,15 +405,8 @@ export default function App(){
               <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 to reset. Double-clicking does not change the zoom. The Eye on the top line of your Play 03 zone focuses it; hold for 0.25 seconds to choose an opponent. In Opponent Mode, each other visible player's mat has two circular controls whose centers sit directly on the top line of its Play 03 zone, from that player's perspective: Sword (Enemy, across the divider) and Shield (Ally, alongside you, facing the same way). Your own Play 03 zone has an evenly centered Eye/Castle pair directly on its top boundary. The Eye works exactly as before. Tap Castle to open or close the divided battlefield; unclassified seats disappear. Hold Castle for 0.25 seconds to switch BOTH sides together between Single View (one Ally and one Enemy, each with independent left/right cycling arrows) and All View (all Allies and all Enemies in their respective optimized grids). Click an Ally or Enemy mat to focus that player on their side without changing the opposite side's All grid or existing focus. Focus both sides to display only your full-size mat, one Ally, and one Enemy, with each focused player's relation buttons and same-side cycling arrows. Focus is neither All nor Single, and the next Castle hold continues the previous mode toggle. Your mat remains full-size and fixed to the left in both views, with existing spacing preserved; Enemies stay above the divider. Click Sword or Shield on the specific player's mat to change that player's relationship. They are mutually exclusive, toggle off on a second click, and are remembered separately per opponent on this browser. Eye is strictly one-on-one with the selected opponent always across the divide, regardless of Ally or Enemy classification. Castle always shows marked Enemies across from you and marked Allies beside you; All View shows both groups in grids, while Single View shows one player from each group with independent left/right arrows. Without a Sword or Shield selection, a chosen Eye opponent appears across from you by default.  The left and right circular arrows centered on the opponent's exact side borders between rows 2 and 3 cycle through opponents by their full-table seat positions: left counter-clockwise, right clockwise, skipping your seat. The opponent-view camera is locked: mouse/touchpad wheel, drag, pinch and zoom/reset shortcuts cannot pan or zoom. Cards and match controls remain interactive. The player areas fill the screen, and the Eye and Castle remain merge-button-sized along the top line of Play 03. All PLAY and HAND rows have six additional half-slot card anchors between their original seven horizontal positions. Player names and seat numbers stay tucked behind the top and bottom screen edges: hover over a small, semi-transparent caret tab for 0.25 seconds to reveal its compact name/seat label. Tag transparency uses the merge-button setting. They stay open while hovered and retract 1 second after the pointer leaves, unless clicked to pin. Tap the eye again for the full table or hold it to return to your mat alone. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
               <div className="reader-block">
                 <h3>Card stacks</h3>
-                <p>Drag immediately to take only the top card. Hold over a stack without moving to pick up every card together, then drag the stack.</p>
-                <label htmlFor="stack-hold-duration">Hold to pick up stack — <strong>{(stackHoldMs/1000).toFixed(2)} seconds</strong>
-                  <input id="stack-hold-duration" aria-label="Stack pickup hold duration" type="range" min={STACK_HOLD_MIN_MS} max={STACK_HOLD_MAX_MS} step={50} value={stackHoldMs}
-                    onChange={event=>setStackHoldMs(Number(event.target.value))}/>
-                </label>
-                <div className="tool-buttons">
-                  <button onClick={()=>setStackHoldMs(STACK_HOLD_DEFAULT_MS)}>Reset to 1 second</button>
-                </div>
-                <p>Personal preference saved in this browser. Moving before the timer expires cancels full-stack pickup.</p>
+                <p>A stationary <strong>0.25-second hold</strong> starts selection mode. Tap more cards or stacks once to add them; tap selected cards to remove them. Drag any selected card to move the entire selection together. A small <strong>13 px</strong> breakaway threshold resists accidental motion.</p>
+                <p>Hold a selected card for another 0.25 seconds to open the compact radial wheel. Slide outward and release to apply one of its nine actions to every selected card. Moving before the hold completes drags the selection instead. After a first stationary hold, moving brings up the wheel. These timings are deliberately fixed for consistent touch and trackpad behavior.</p>
               </div>
               <div className="reader-block">
                 <h3>TCG center-section controls</h3>
