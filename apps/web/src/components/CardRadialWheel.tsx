@@ -79,14 +79,14 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   <svg viewBox="0 0 400 400" role="img" aria-label="Position, Scale and Location action wheel">
    <circle cx={200} cy={200} r={198} fill="#0c1016" fillOpacity=".42"/>
    {RADIAL_CATEGORIES.map((name,i)=>{
-    const mid=i*120+60,p=point(91,mid),active=category===i;
+    const mid=i*120+60,p=point(94,mid),active=category===i;
     return <g key={name} tabIndex={0} role="button" aria-label={name+' actions'}
      onPointerEnter={()=>{state.current.category=i;setCategory(i);}}
      onClick={()=>{state.current.category=i;setCategory(i);}}
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,i*120,i*120+120)}
       fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
-     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="18" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
+     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="15" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
@@ -103,7 +103,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
      {selected&&<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
-       textAnchor="middle" fontSize="15" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
+       textAnchor="middle" fontSize="12" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
        {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
     </g>;
@@ -113,6 +113,6 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    <text x="200" y="207" fill="#dfcaea" fontSize="14" textAnchor="middle">{count===1?'CARD SELECTED':'CARDS SELECTED'}</text>
    <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{category===null?'Choose a ring':RADIAL_CATEGORIES[category]}</text>
   </svg>
-  <button className="card-radial-close" type="button" aria-label="Close wheel" onClick={onCancel}>×</button>
+  <button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>
  </div>;
 }
