@@ -5,6 +5,7 @@ type Props={
  x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;docked?:boolean;tapLabel?:'Tap'|'Untap';
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
+ onMoveDock?:(position:{x:number;y:number})=>void;
 };
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
@@ -26,7 +27,7 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap'}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap',onMoveDock}:Props){
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
  const [category,setCategory]=useState<number|null>(null);
  const [collapsed,setCollapsed]=useState(false);
@@ -134,6 +135,13 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
        const finish=(ev:PointerEvent)=>{
          if(ev.pointerId!==e.pointerId)return;
          clearCenterTimer();
+         const position={x:x+ev.clientX-startX,y:y+ev.clientY-startY};
+         if(docked&&Math.hypot(ev.clientX-startX,ev.clientY-startY)>12){
+           const home={x:Math.max(76,window.innerWidth-88),y:Math.max(76,window.innerHeight-88)};
+           // The magnet is deliberately tiny: only drops within 24 px snap home.
+           const final=Math.hypot(position.x-home.x,position.y-home.y)<=24?home:position;
+           onMoveDock?.(final);
+         }
          setDragOffset(null);
          window.removeEventListener('pointermove',move);
          window.removeEventListener('pointerup',finish);
