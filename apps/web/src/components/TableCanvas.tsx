@@ -14,29 +14,38 @@ const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
  * The integral is continuous: objects can pass through the wall with sustained
  * dragging but never hit an artificial hard stop or teleport across it. */
 function resistTrayWalls(start:{x:number;y:number},target:{x:number;y:number},seat:number){
- const origin=tcgMatOrigin(seat),c=Math.cos(origin.angle),sn=Math.sin(origin.angle);
- const local=(p:{x:number;y:number})=>{const dx=p.x-origin.x,dy=p.y-origin.y;
-   return {x:dx*c+dy*sn,y:-dx*sn+dy*c};};
+ // A wall costs 42 world units of pointer travel on EACH crossing.
+ // Unlike the previous tiny arctangent effect, this is felt immediately,
+ // then yields naturally when the pointer pushes beyond that threshold.
+ const o=tcgMatOrigin(seat),c=Math.cos(o.angle),sn=Math.sin(o.angle);
+ const local=(p:{x:number;y:number})=>{const x=p.x-o.x,y=p.y-o.y;return {x:x*c+y*sn,y:-x*sn+y*c};};
  const a=local(start),b=local(target);
  const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
  const bottom=TCG_MAT_HEIGHT/2;
  const width=TCG_MAT.cardWidth;
- const band=7,strength=.68;
- const soften=(from:number,to:number,wall:number)=>
-   strength*band*(Math.atan((to-wall)/band)-Math.atan((from-wall)/band));
+ const wallCost=42,band=5;
+ const resist=(from:number,to:number,wall:number)=>{
+   const delta=to-from;
+   if(Math.abs(delta)<1e-5)return 0;
+   const dir=Math.sign(delta);
+   const distance=dir*(wall-from);
+   if(distance<0||distance>Math.abs(delta))return 0;
+   // A smooth progressive push through the wall rather than a hard stop.
+   const beyond=Math.abs(delta)-distance;
+   return dir*wallCost*(1-Math.exp(-beyond/band));
+ };
  let x=b.x,y=b.y;
  for(const side of [-1,1]){
-   const cx=side*(TCG_MAT_WIDTH/2+width/2+3);
-   const lo=cx-width/2-4,hi=cx+width/2+4;
-   // Each rectangle has a resistant inner AND outer wall, including ends.
-   if(Math.max(a.y,b.y)>=top-10&&Math.min(a.y,b.y)<=bottom+10){
-     for(const wall of [lo,hi])x-=soften(a.x,b.x,wall);
+   const center=side*(TCG_MAT_WIDTH/2+width/2+3);
+   const lo=center-width/2-4,hi=center+width/2+4;
+   if(Math.max(a.y,b.y)>top&&Math.min(a.y,b.y)<bottom){
+     x-=resist(a.x,b.x,lo)+resist(a.x,b.x,hi);
    }
-   if(Math.max(a.x,b.x)>=lo-10&&Math.min(a.x,b.x)<=hi+10){
-     for(const wall of [top,bottom])y-=soften(a.y,b.y,wall);
+   if(Math.max(a.x,b.x)>lo&&Math.min(a.x,b.x)<hi){
+     y-=resist(a.y,b.y,top)+resist(a.y,b.y,bottom);
    }
  }
- return {x:origin.x+x*c-y*sn,y:origin.y+x*sn+y*c};
+ return {x:o.x+x*c-y*sn,y:o.y+x*sn+y*c};
 }
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
@@ -268,55 +277,39 @@ function drawTcgMats(
       } as const;
       const [cover,foil,spine]=palettes[bookDesign];
       const book=new Container();book.position.set(bx,by);book.eventMode='static';book.cursor='grab';
-      // Layered miniature hardcover: beveled boards, visible ivory page block,
-      // leather spine, corner furniture, gilt tooling and raised medallion.
+      // Restrained miniature codex: thick ivory page block and real cover
+      // overhangs, shadowed spine, subtle corner tooling, raised central seal.
       const face=new Graphics()
-        .roundRect(-bw/2+2,-bh/2+4,bw+1,bh,4)
-        .fill({color:0x2a1b15}).stroke({color:0x080708,width:1.5})
-        .roundRect(-bw/2+4,-bh/2+1,bw-3,bh-1,3)
-        .fill({color:0xf1deb3}).stroke({color:0xb9a382,width:1})
-        .roundRect(-bw/2+3,-bh/2+3,bw-5,bh-7,2)
-        .stroke({color:0xc7b590,width:.65,alpha:.9})
-        .roundRect(-bw/2-2,-bh/2-3,bw,bh,4)
-        .fill({color:cover}).stroke({color:foil,width:1.3})
-        .roundRect(-bw/2-2,-bh/2-3,8,bh,3)
-        .fill({color:spine}).stroke({color:foil,width:.7})
-        .roundRect(-bw/2+9,-bh/2+3,bw-17,bh-12,2)
-        .stroke({color:foil,width:1,alpha:.95})
-        .roundRect(-bw/2+12,-bh/2+6,bw-23,bh-18,2)
-        .stroke({color:foil,width:.5,alpha:.68});
-      for(const v of [-1,1]){
-        for(const h of [-1,1]){
-          const x=v<0?-bw/2+10:bw/2-8;
-          const y=h<0?-bh/2+5:bh/2-9;
-          face.circle(x,y,1.7).fill({color:foil})
-            .circle(x,y,.65).fill({color:0x402c25});
-        }
+        .roundRect(-bw/2+3,-bh/2+5,bw+1,bh,4)
+        .fill({color:0x17100d,alpha:.9})
+        .roundRect(-bw/2+4,-bh/2+1,bw-3,bh-1,2)
+        .fill({color:0xe2cfaa}).stroke({color:0x957a58,width:.75})
+        .roundRect(-bw/2+4,-bh/2+4,bw-3,bh-7,2)
+        .stroke({color:0xb59b73,width:.55})
+        .roundRect(-bw/2-2,-bh/2-4,bw,bh,4)
+        .fill({color:cover}).stroke({color:spine,width:1.6})
+        .roundRect(-bw/2-2,-bh/2-4,7,bh,3)
+        .fill({color:spine}).stroke({color:foil,width:.65})
+        .roundRect(-bw/2+8,-bh/2+3,bw-16,bh-13,3)
+        .stroke({color:foil,width:1.1,alpha:.8});
+      // Four tiny studs and tasteful gilded corner arcs.
+      for(const dx of [-1,1])for(const dy of [-1,1]){
+        const x=dx<0?-bw/2+11:bw/2-7;
+        const y=dy<0?-bh/2+7:bh/2-12;
+        face.circle(x,y,1.6).fill({color:foil});
       }
-      if(bookDesign==='tiny'||bookDesign==='strapped'){
-        face.roundRect(-bw/2-2,-bh/2+8,bw,8,1)
-          .fill({color:spine,alpha:.9}).stroke({color:foil,width:.7});
-        face.roundRect(-bw/2-2,bh/2-13,bw,7,1)
-          .fill({color:spine,alpha:.9}).stroke({color:foil,width:.7});
+      if(bookDesign==='strapped'||bookDesign==='tiny'){
+        face.roundRect(-bw/2-2,-bh/2+8,bw,5,1).fill({color:spine,alpha:.92})
+          .roundRect(-bw/2-2,bh/2-13,bw,5,1).fill({color:spine,alpha:.92});
       }
-      if(bookDesign==='dragon'||bookDesign==='journal'){
-        face.moveTo(10,-bh/2+9).lineTo(bw/2-12,-3)
-          .lineTo(10,bh/2-14).stroke({color:foil,width:1.4,alpha:.8});
-      }
-      if(bookDesign==='arcane'){
-        for(let i=0;i<8;i++){
-          const theta=i*Math.PI/4;
-          face.moveTo(3+Math.cos(theta)*11,-2+Math.sin(theta)*11)
-            .lineTo(3+Math.cos(theta)*15,-2+Math.sin(theta)*15)
-            .stroke({color:foil,width:.85});
-        }
-      }
-      const emblem=label(bookDesign==='dragon'?'♜':bookDesign==='arcane'?'✧':'✦',
-        15,foil,'bold');
-      emblem.position.set(3,-2);
-      const titlePlate=label('SENNET',5.3,foil,'bold');
-      titlePlate.position.set(3,bh/2-15);
-      book.addChild(face,emblem,titlePlate);
+      const seal=new Graphics().circle(3,-4,10)
+        .fill({color:spine}).stroke({color:foil,width:1.25})
+        .circle(3,-4,7.4).stroke({color:foil,width:.5,alpha:.75});
+      const emblem=label(bookDesign==='dragon'?'✦':bookDesign==='arcane'?'✧':'◆',11,foil,'bold');
+      emblem.position.set(3,-4);
+      const titlePlate=label('SENNET',5.8,foil,'bold');
+      titlePlate.position.set(3,bh/2-14);
+      book.addChild(face,seal,emblem,titlePlate);
       let release:((event:PointerEvent)=>void)|null=null;
       book.on('pointerdown',e=>{
         if(e.button!==0)return;
