@@ -700,8 +700,37 @@ export function castleIndependentFocusLayout(
   for(const seat of drawnEnemies)displayed[seat]='enemy';
   // Keep the SAME viewport-based camera, viewer anchor and per-half grid
   // rectangles as All, independent of which side is single or focused.
-  return castleGridLayout(viewerSeat,displayed,'all',
+  const layout=castleGridLayout(viewerSeat,displayed,'all',
     allyFocus??activeAlly,viewport,padding);
+  // Castle presentation needs to use the spare width between the viewer and
+  // both wings. The baseline grid used that space as empty air because the
+  // viewer was hard-coded to scale 1. Grow the viewer into the clearance,
+  // without moving the allies or changing their uniform grid scales.
+  const own=layout.mats.get(viewerSeat);
+  if(own){
+    const scale=layout.cameraScale;
+    const visibleW=Math.max(1,viewport.width)/scale;
+    const visibleH=Math.max(1,viewport.height)/scale;
+    const rot=viewerTableRotation(viewerSeat);
+    const project=(p:CastleMatPlacement)=>{
+      const dx=p.x-BOARD_CENTER,dy=p.y-BOARD_CENTER;
+      return {x:dx*Math.cos(rot)-dy*Math.sin(rot),
+        y:dx*Math.sin(rot)+dy*Math.cos(rot)};
+    };
+    const wingMats=[...layout.mats].filter(([id])=>displayed[id]==='ally')
+      .map(([,p])=>({pos:project(p),half:TCG_MAT_WIDTH*p.scale/2}));
+    const nearestLeft=Math.max(-visibleW/2,
+      ...wingMats.filter(m=>m.pos.x<0).map(m=>m.pos.x+m.half));
+    const nearestRight=Math.min(visibleW/2,
+      ...wingMats.filter(m=>m.pos.x>0).map(m=>m.pos.x-m.half));
+    const freeHalf=Math.min(-nearestLeft,nearestRight)-Math.max(0,padding);
+    const verticalHalf=visibleH/4-Math.max(0,padding);
+    const viewerScale=Math.max(1,Math.min(1.32,
+      2*freeHalf/TCG_MAT_WIDTH,2*verticalHalf/TCG_MAT_HEIGHT));
+    // Keep a real safety gap even in narrow portrait screens.
+    if(viewerScale>1)own.scale=viewerScale;
+  }
+  return layout;
 }
 /** Pure per-mat arrow policy. In Castle Single BOTH roles have
  * navigation. In mixed focus, a side's arrows stay active independently
