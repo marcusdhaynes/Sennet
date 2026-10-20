@@ -881,6 +881,10 @@ const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
+  // Docked radial follows the actual hand-zone boundary in playmat/world
+  // coordinates, not viewport dimensions. Camera zoom is its only scaling.
+  const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
+
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
   const [relations,setRelations]=useState<Record<number,OpponentRelation>>(()=>readOpponentRelations(actorId));
@@ -1016,6 +1020,19 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
+        const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
+        if(hand){
+          const bottom=new Point(
+            hand.x-Math.sin(hand.angle)*hand.height/2,
+            hand.y+Math.cos(hand.angle)*hand.height/2
+          );
+          const projected=board.toGlobal(bottom);
+          const next={x:projected.x,y:projected.y,size:TCG_MAT_WIDTH*.30*scale};
+          setDockGeometry(previous=>
+            Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
+            Math.abs(previous.size-next.size)<.35?previous:next);
+        }
+
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
         const localChair=new Point(BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),
           BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle));
@@ -1941,7 +1958,7 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
 
     {(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
-        x={wheelMode==='docked'?viewport.width/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?viewport.height-174:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?viewport.width*0.30:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?selectedIds.length:radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}
