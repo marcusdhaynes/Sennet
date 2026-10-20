@@ -252,3 +252,12 @@ test('Selected group stays rigid when dragging toward the board boundary',()=>{
  assert.equal(b.x-a.x,50,'Group drag must preserve x offset');
  assert.equal(b.y-a.y,50,'Group drag must preserve y offset');
 });
+
+test('Reveal exposes selected cards without toggling a face-up card back down',()=>{
+ const {local,ids}=stateWithCards();
+ const hidden={...local,objects:local.objects.map(o=>ids.slice(0,2).includes(o.id)?{...o,faceUp:false}:o)};
+ const shown=apply(hidden,'reveal',ids.slice(0,3));
+ assert.ok(ids.slice(0,3).every(id=>shown.objects.find(o=>o.id===id)?.faceUp===true));
+ const repeat=apply(shown,'reveal',ids.slice(0,3));
+ assert.ok(ids.slice(0,3).every(id=>repeat.objects.find(o=>o.id===id)?.faceUp===true));
+});
