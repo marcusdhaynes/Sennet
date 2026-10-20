@@ -5,7 +5,7 @@ import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import TcgDeckBuilder from './components/TcgDeckBuilder';
 import type {SavedDeck} from './lib/deckWorkspace';
-import {tcgCardBack} from './lib/tcgCatalog';
+import {tcgCardBack,cachedTcgCatalog} from './lib/tcgCatalog';
 import PlaymatEditor from './components/PlaymatEditor';
 import PersonalDrawer from './components/PersonalDrawer';
 import {RoomConnection} from './lib/network';
@@ -237,9 +237,37 @@ export default function App(){
     })));
     resetWith({...next,objects,message:deckName+' · '+objects.length+' cards'});
   }
-  function loadStudioDeck(deck:SavedDeck){
+  async function loadStudioDeck(deck:SavedDeck){
     if(isConnected){inform('To replace a live multiplayer table, disconnect first.');return;}
     if(replayAt!==null){inform('Exit replay first.');return;}
+    // Saved/imported decks may contain name-only cards or older catalogue
+    // entries with blank artwork. Resolve images before building table pieces.
+    const catalog=await cachedTcgCatalog(deck.game);
+    const byId=new Map(catalog.map(card=>[card.id,card]));
+    const byName=new Map(catalog.filter(card=>!!card.image)
+      .map(card=>[card.name.trim().toLowerCase(),card]));
+    const imageFor=new Map<string,string>();
+    for(const entry of deck.entries){
+      const card=entry.card;
+      let url=card.image||byId.get(card.id)?.image||
+        byName.get(card.name.trim().toLowerCase())?.image||'';
+      if(!url&&deck.game==='lorcana'){
+        try{
+          const q=encodeURIComponent(card.name);
+          const response=await fetch('https://api.lorcast.com/v0/cards/search?q='+q);
+          if(response.ok){
+            const data=await response.json() as {results?:Array<{name?:string;version?:string;
+              image_uris?:{digital?:{normal?:string;small?:string}}}>};
+            const match=data.results?.find(item=>
+              [item.name,item.version].filter(Boolean).join(' - ').toLowerCase()===
+              card.name.trim().toLowerCase());
+            url=match?.image_uris?.digital?.normal||
+              match?.image_uris?.digital?.small||'';
+          }
+        }catch{/* Keep the deck usable offline. */}
+      }
+      if(url)imageFor.set(card.id,url);
+    }
     const next=createGame('tcg');
     const cells=tcgMatCells(seat);
     const placement=(section:string)=>{
@@ -260,7 +288,7 @@ export default function App(){
           x:where.x,y:where.y,matSeat:seat,rotation:0,
           zone:entry.section==='Main'?'DECK' as const:'TABLE' as const,
           faceUp:entry.section!=='Main',color:'#a7a0c7',
-          ...(entry.card.image?{faceUrl:entry.card.image}:{}),
+          ...(imageFor.get(entry.card.id)?{faceUrl:imageFor.get(entry.card.id)}:{}),
           ...(tcgCardBack(deck.game)?{backUrl:tcgCardBack(deck.game)}:{}),
           description:entry.card.text.slice(0,250),order:order++
         }));
