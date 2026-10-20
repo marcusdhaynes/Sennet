@@ -1,8 +1,10 @@
 import {useEffect,useRef,useState} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
+import CardRadialWheel from './CardRadialWheel';
+import {wheelPosition,radialMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;stackHoldMs:number;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -872,7 +874,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -913,6 +915,30 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const controlPointer=useRef<number|null>(null);
   const hoverTimers=useRef(new Set<number>());
   const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
+  const [selectedIds,setSelectedIds]=useState<string[]>([]);
+  const selectedSet=useRef(new Set<string>());
+  const [radialWheel,setRadialWheel]=useState<{
+    x:number;y:number;size:number;pointerId:number|null;ids:string[];sendTo:boolean
+  }|null>(null);
+  const radialOpen=useRef(false);
+  radialOpen.current=!!radialWheel;
+  const wheelPointer=useRef<number|null>(null);
+  const showRadialWheel=useRef<(id:string,x:number,y:number,pointerId:number|null)=>void>(()=>{});
+  showRadialWheel.current=(id,x,y,pointerId)=>{
+    const rect=mount.current?.getBoundingClientRect();
+    if(!rect)return;
+    const size=Math.max(180,Math.min(370,rect.width-12,rect.height-12));
+    const pos=wheelPosition(x-rect.left,y-rect.top,rect.width,rect.height,size);
+    const ids=selectedSet.current.has(id)?[...selectedSet.current]:[id];
+    setRadialWheel({x:pos.x,y:pos.y,size,pointerId,ids,sendTo:false});
+    wheelPointer.current=pointerId;
+    setGestureMenu(null);
+    lastTap.current=null;
+  };
+  const updateSelection=(ids:string[])=>{
+    selectedSet.current=new Set(ids);
+    setSelectedIds(ids);
+  };
   const lastTap=useRef<{id:string;at:number;x:number;y:number}|null>(null);
   const openGestureMenu=useRef<(id:string,x:number,y:number)=>void>(()=>{});
   openGestureMenu.current=(id,x,y)=>{
@@ -924,12 +950,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     setGestureMenu({id,x:left,y:top,inspect:false});
     lastTap.current=null;
   };
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onMergeCenter,onViewChange};
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
     startClientX:number;startClientY:number;moved:boolean;
-    whole:boolean;held:boolean;members:{id:string;x:number;y:number}[];
+    whole:boolean;held:boolean;wheel:boolean;members:{id:string;x:number;y:number}[];
     timer:number|null;
   };
   const drag=useRef<ActiveDrag|null>(null);
@@ -1042,13 +1068,21 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       deckTop.get(pileKey(o))?.id===o.id);
     visible.sort((a,b)=>Number(a.kind==='board')-Number(b.kind==='board')); // Boards drawn behind movable pieces
     visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
+    // Selection contains only currently existing, visible members; never
+    // allow a stale deleted card ID into a later wheel action.
+    const validIds=new Set(state.objects.map(o=>o.id));
+    if([...selectedSet.current].some(id=>!validIds.has(id))){
+      const still=[...selectedSet.current].filter(id=>validIds.has(id));
+      selectedSet.current=new Set(still);
+      queueMicrotask(()=>setSelectedIds(still));
+    }
     for(const obj of visible){
       const assumedOwner=obj.matSeat??
         (obj.owner===actorId||obj.owner==='local'?seat:
           state.players.find(p=>p.id===obj.owner)?.seat)??
         (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges,true)?.seat:undefined);
       if(seatGroups&&!seatGroups.has(assumedOwner??-1))continue;
-      const piece=createPiece(obj,obj.id===selected);
+      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id));
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
         drag.current.visual=piece;
@@ -1057,6 +1091,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       // An owned piece faces its owner's seat; the remaining pieces face the local viewer.
       const ownerSeat=assumedOwner;
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
+      piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
@@ -1080,7 +1115,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           }else piece.addChild(sprite);
         }).catch(()=>{/* Fallback stays visible when creator's hosting is down or CORS blocks fetch. */});
       }
-      if(!readonly&&!obj.locked){
+      if(!readonly){
+        piece.eventMode='static';piece.cursor=obj.locked?'pointer':'grab';
         piece.on('pointerdown',(e)=>{
           // A short drag always grabs one card. Holding without motion
           // arms a stack pick, but never takes a card from another owner.
@@ -1088,36 +1124,47 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           e.stopPropagation();
           cancelActiveDrag.current();
           const members=cardStackMembers(state,obj.id);
-          const eligible=members.length>=2&&members.every(o=>!o.locked&&
+          const eligible=!obj.locked&&members.length>=2&&members.every(o=>!o.locked&&
             (state.kind!=='tcg'||!o.owner||o.owner===(state.players.length?actorId:'local')));
           setGestureMenu(null);
+          setRadialWheel(null);
+          const secondHold=selectedSet.current.has(obj.id);
           const active:ActiveDrag={
             id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board'&&obj.kind!=='deck-box',
             x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
-            whole:false,held:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
+            whole:false,held:false,wheel:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
             timer:null
           };
           drag.current=active;
           active.timer=window.setTimeout(()=>{
             if(drag.current!==active||active.moved)return;
             active.timer=null;active.held=true;
+            if(secondHold){
+              active.wheel=true;
+              showRadialWheel.current(obj.id,active.startClientX,active.startClientY,active.pointerId);
+              return;
+            }
+            const list=radialMembership(selectedSet.current,obj.id,
+              eligible?active.members.map(m=>m.id):[obj.id],false);
+            updateSelection(list);
             if(eligible){
               active.whole=true;
               if(!active.visual.destroyed)markHeldStack(active.visual,active.members.length);
-            }else if(!active.visual.destroyed){
-              const halo=new Graphics().ellipse(0,0,42,54)
-                .stroke({color:0xffdfa2,alpha:.95,width:2});
-              halo.eventMode='none';active.visual.addChild(halo);
             }
-          },eligible?Math.min(5000,Math.max(250,stackHoldMs)):GESTURE_HOLD_MS);
+          },Math.max(250,Math.min(1100,stackHoldMs)));
           callbacks.current.onSelect(obj.id);
         });
         piece.on('rightdown',e=>{
           e.stopPropagation();
           cancelActiveDrag.current();
           callbacks.current.onSelect(obj.id);
-          openGestureMenu.current(obj.id,e.clientX,e.clientY);
+          if(!selectedSet.current.has(obj.id)){
+            const members=cardStackMembers(currentState.current,obj.id);
+            updateSelection(radialMembership(selectedSet.current,obj.id,
+              members.length?members.map(m=>m.id):[obj.id],false));
+          }
+          showRadialWheel.current(obj.id,e.clientX,e.clientY,null);
         });
       }
     }
@@ -1137,7 +1184,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
-  },[state,seat,playerName,actorId,selected,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView,relations,viewport]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,stackHoldMs,mergeOpacity,mergeHoverMs,playmat,eyeView,relations,viewport]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -1161,6 +1208,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const d=drag.current,current=session.current;
       if(!d||d.pointerId!==event.pointerId||!current||!mount.current)return;
       if(!d.moved){
+        if(d.wheel)return;
         if(Math.hypot(event.clientX-d.startClientX,event.clientY-d.startClientY)<GESTURE_MOVE_THRESHOLD)return;
         d.moved=true;
         // Any motion before hold completes commits to picking the TOP card.
@@ -1218,13 +1266,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
       if(d.timer!==null)window.clearTimeout(d.timer);
       drag.current=null;clearHighlight();
-      // A hold-and-DRAG takes the entire stack. Holding and RELEASING
-      // opens the same action panel as a touchpad two-finger/right click.
+      // First hold selects; second hold opens the radial menu. Releasing
+      // a selection hold does not accidentally open an unrelated popup.
       if(!d.moved){
-        if(d.held){
-          openGestureMenu.current(d.id,event.clientX,event.clientY);
-          return;
-        }
+        if(d.wheel)return;
+        if(d.held)return;
         const timestamp=Date.now();
         if(d.card&&isDoubleCardTap(lastTap.current,d.id,timestamp,event.clientX,event.clientY)){
           lastTap.current=null;
@@ -1596,7 +1642,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const down=(event:PointerEvent)=>{
       if(onCardMenu(event.target))return; // Menu taps never initiate tabletop pan.
-      if(event.target===session.current?.app.canvas)setGestureMenu(null);
+      if(event.target===session.current?.app.canvas){
+        setGestureMenu(null);
+        if(radialOpen.current)setRadialWheel(null);
+      }
       // All modes track touch pointers, including locked Castle/Eye views.
       // A second finger always cancels any pending card move or stack
       // hold before the two touches can be mistaken for two card drags.
@@ -1728,6 +1777,36 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
+    {radialWheel&&<div className="sennet-radial-overlay">
+      <CardRadialWheel
+        x={radialWheel.x} y={radialWheel.y} size={radialWheel.size}
+        count={radialWheel.ids.length} pointerId={radialWheel.pointerId}
+        onChoose={action=>{
+          callbacks.current.onRadialAction(radialWheel.ids,action);
+          setRadialWheel(null);
+          wheelPointer.current=null;
+        }}
+        onSendTo={()=>setRadialWheel(w=>w?{...w,sendTo:true,pointerId:null}:null)}
+        onCancel={()=>{setRadialWheel(null);wheelPointer.current=null;}}
+      />
+      {radialWheel.sendTo&&<div className="sennet-wheel-destinations"
+        role="dialog" aria-label="Send selected cards to"
+        style={{left:radialWheel.x,top:radialWheel.y}}>
+        <strong>Send {radialWheel.ids.length} card(s) to</strong>
+        {([
+          ['HAND','Hand'],['DECK_TOP','Top of Deck'],['DECK_BOTTOM','Bottom of Deck'],
+          ['DISCARD','Discard'],['TABLE','Play Area']
+        ] as const).map(([zone,label])=>
+          <button key={zone} onClick={()=>{
+            callbacks.current.onRadialAction(radialWheel.ids,'send-to',zone);
+            setRadialWheel(null);
+          }}>{label}</button>)}
+        <button onClick={()=>setRadialWheel(w=>w?{...w,sendTo:false}:null)}>Back</button>
+      </div>}
+      <button className="sennet-wheel-clear" type="button" onClick={()=>{
+        updateSelection([]);setRadialWheel(null);
+      }}>Clear selection</button>
+    </div>}
     {gestureMenu&&(()=>{
       const item=state.objects.find(o=>o.id===gestureMenu.id);
       if(!item)return null;
