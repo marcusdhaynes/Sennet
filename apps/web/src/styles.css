@@ -1242,3 +1242,20 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel.is-half.is-collapsed .sennet-radial-center circle{
  stroke:#f2d7a3;stroke-width:5;
 }
+
+/* Permanent display hierarchy:
+   1. Pixi table/rim/cards/objects (one shared camera scene)
+   2. Table-edge player tags and the playmat radial
+   3. Open player-tag shelf above play controls
+   4. Portaled book menus, above the entire game regardless of nesting.
+   Never depend on a child's z-index escaping an ancestor's stacking context. */
+.table-world{isolation:isolate;z-index:0}
+.pixi-host{isolation:isolate}
+.pixi-host>canvas{position:relative;z-index:0}
+.pixi-host>.sennet-player-tag-anchor{z-index:70}
+.pixi-host>.sennet-radial-overlay{z-index:82}
+.pixi-host>.sennet-player-tag-anchor:has(.player-hub.is-open){z-index:120}
+body>.reader-backdrop{
+ position:fixed;inset:0;z-index:10000;
+ width:100vw;height:100dvh;
+}
