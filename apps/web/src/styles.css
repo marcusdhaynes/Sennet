@@ -942,3 +942,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  .tcgb-mobile-browse .tcgb-results.dense{gap:5px;padding:6px}
  .tcgb-mobile-browse .tcgb-result{padding:5px}
 }
+
+/* Collapsible action journal: small round control mirrors playmat merge buttons. */
+.sennet-log-toggle{position:absolute;bottom:14px;left:14px;z-index:75;width:32px;height:32px;
+ display:grid;place-items:center;border-radius:50%;padding:0;
+ border:1.5px solid #d9c58a;background:#1d4238de;color:#f5dfac;
+ box-shadow:0 2px 9px #071612bb;cursor:pointer;touch-action:manipulation}
+.sennet-log-toggle:hover,.sennet-log-toggle:focus-visible{background:#3c6251;outline:2px solid #dfca96;outline-offset:2px}
+.sennet-action-log{bottom:54px;left:12px;max-height:min(45dvh,380px)}
+.sennet-action-log-entries{max-height:min(40dvh,340px)}
+.sennet-action-log header button{margin-left:6px;padding:0 6px;border:0;border-radius:5px;background:transparent;color:#e9dfc3;cursor:pointer;font-size:18px}
+.sennet-log-share{color:#cbb98e;text-align:center;font-size:16px}
+@media(max-width:600px){.sennet-action-log{bottom:52px;left:8px;width:min(350px,calc(100vw - 16px));max-height:45dvh}.sennet-action-log-entries{max-height:40dvh}}
