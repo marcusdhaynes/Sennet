@@ -28,6 +28,14 @@ function multiline(label:string){
 }
 export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap'}:Props){
  const [category,setCategory]=useState<number|null>(null);
+ const [collapsed,setCollapsed]=useState(false);
+ const centerTimer=useRef<number|null>(null);
+ const clearCenterTimer=()=>{if(centerTimer.current!==null){window.clearTimeout(centerTimer.current);centerTimer.current=null;}};
+ const clearHighlight=()=>{state.current.category=null;state.current.action=null;setCategory(null);setAction(null);};
+ useEffect(()=>{const outside=(event:PointerEvent)=>{
+  if(!(event.target instanceof Node)||!document.querySelector('.card-radial-wheel')?.contains(event.target))clearHighlight();
+ };document.addEventListener('pointerdown',outside,true);return()=>document.removeEventListener('pointerdown',outside,true);},[]);
+ useEffect(()=>()=>clearCenterTimer(),[]);
  const [action,setAction]=useState<RadialAction|null>(null);
  const state=useRef({category:null as number|null,action:null as RadialAction|null});
  const track=(clientX:number,clientY:number)=>{
@@ -74,10 +82,11 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
- return <div className="card-radial-wheel" style={{width:size,height:size,left:x-size/2,top:y-size/2}}
+ return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')} style={{width:size,height:size,left:x-size/2,top:y-size/2}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
-  <svg viewBox="0 0 400 400" role="img" aria-label="Position, Scale and Location action wheel">
+  <svg viewBox="0 0 400 400" role="img" aria-label="Position, Scale and State action wheel">
+   <g className="sennet-radial-rings" aria-hidden={collapsed} style={{pointerEvents:collapsed?'none':'auto'}}>
    <circle cx={200} cy={200} r={198} fill="#0c1016" fillOpacity=".42"/>
    {RADIAL_CATEGORIES.map((name,i)=>{
     const mid=i*120+60,p=point(94,mid),active=category===i;
@@ -109,10 +118,20 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      </text>}
     </g>;
    }))}
+   </g>
+   <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Hold to expand wheel':'Hold to collapse wheel'}
+     onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
+       centerTimer.current=window.setTimeout(()=>{setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;},450);
+       const move=(ev:PointerEvent)=>{if(ev.pointerId===e.pointerId&&Math.hypot(ev.clientX-startX,ev.clientY-startY)>12)clearCenterTimer();};
+       const finish=(ev:PointerEvent)=>{if(ev.pointerId===e.pointerId){clearCenterTimer();window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);window.removeEventListener('pointercancel',finish);}};
+       window.addEventListener('pointermove',move);window.addEventListener('pointerup',finish);window.addEventListener('pointercancel',finish);
+     }}
+     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
    <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#baa2d2" strokeWidth="2"/>
    <text x="200" y="190" fill="#fff6e9" fontWeight="800" fontSize="24" textAnchor="middle">{count}</text>
    <text x="200" y="207" fill="#dfcaea" fontSize="14" textAnchor="middle">{count===1?'CARD SELECTED':'CARDS SELECTED'}</text>
-   <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{category===null?'Choose a ring':RADIAL_CATEGORIES[category]}</text>
+   <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{collapsed?'Hold to expand':category===null?'Hold to shrink':RADIAL_CATEGORIES[category]}</text>
+   </g>
   </svg>
   {!docked&&<button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
  </div>;
