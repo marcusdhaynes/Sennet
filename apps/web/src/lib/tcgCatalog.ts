@@ -17,9 +17,9 @@ export type DeckSection=string;
  * individual card entry does not supply a custom back image. */
 export function tcgCardBack(game:TcgId):string{
  const images:Record<TcgId,string>={
-  lorcana:'https://images.lorcast.com/card-backs/lorcana.webp',
+  lorcana:'',
   gundam:'',mtg:'https://cards.scryfall.io/back.png',
-  onepiece:'',pokemon:'https://assets.tcgdex.net/en/base/base1/1/low.webp',
+  onepiece:'',pokemon:'',
   riftbound:'',yugioh:''
  };
  return images[game]||'';
