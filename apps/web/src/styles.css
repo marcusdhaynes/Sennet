@@ -954,3 +954,18 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .sennet-action-log header button{margin-left:6px;padding:0 6px;border:0;border-radius:5px;background:transparent;color:#e9dfc3;cursor:pointer;font-size:18px}
 .sennet-log-share{color:#cbb98e;text-align:center;font-size:16px}
 @media(max-width:600px){.sennet-action-log{bottom:52px;left:8px;width:min(350px,calc(100vw - 16px));max-height:45dvh}.sennet-action-log-entries{max-height:40dvh}}
+
+/* Balanced opposing corner controls: journal bottom-left, recall bottom-right. */
+.sennet-log-toggle,.sennet-rewind-button{
+ position:absolute;bottom:max(12px,env(safe-area-inset-bottom));width:34px;height:34px;
+ border-radius:50%;padding:0;display:grid;place-items:center;
+ border:1px solid #cbb681;background:#1c3d34e8;color:#e9d5a9;
+ box-shadow:0 2px 7px #05150f99;z-index:75;line-height:1;transform:none;
+ transition:background .15s,border-color .15s;touch-action:manipulation
+}
+.sennet-log-toggle{left:max(12px,env(safe-area-inset-left));right:auto}
+.sennet-rewind-button{right:max(12px,env(safe-area-inset-right));left:auto;font-size:initial}
+.sennet-log-toggle svg,.sennet-rewind-button svg{width:18px;height:18px;display:block;flex:none}
+.sennet-log-toggle:hover,.sennet-rewind-button:hover{background:#31584a;border-color:#ead197}
+.sennet-action-log{left:max(12px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 43px)}
+@media(max-width:600px){.sennet-action-log{left:max(8px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 43px)}}
