@@ -1063,7 +1063,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
             hand.x-Math.sin(hand.angle)*hand.height/2,
             hand.y+Math.cos(hand.angle)*hand.height/2
           );
-          const projected=board.toGlobal(bottom);
+          const projected=(duelLayers.current?.get(seatRef.current)??board).toGlobal(bottom);
           const next={x:projected.x,y:projected.y,size:TCG_MAT_WIDTH*.30*scale};
           setDockGeometry(previous=>
             Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
