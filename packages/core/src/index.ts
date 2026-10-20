@@ -853,14 +853,16 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
       // placements onto one centerline.
       let nearestY=anchor.y;
       if(isCenter&&cell.lastRow>cell.row&&seatMaySnap){
-        const rowHeight=TCG_MAT_HEIGHT/4;
-        const count=cell.lastRow-cell.row+1;
-        let bestY=Infinity;
-        for(let i=0;i<count*2-1;i++){
-          const candidate=anchor.y+(i-(count-1))*rowHeight/2;
-          const distance=Math.abs(local.y-candidate);
-          if(distance<bestY){bestY=distance;nearestY=candidate;}
-        }
+        // Read the canonical unmerged row centers, including actual mat
+        // gaps; never approximate row stride from the whole mat height.
+        const rows=tcgMatCells(seat)
+          .filter(original=>original.column===1&&original.row>=cell.row&&
+            original.row<=cell.lastRow)
+          .map(original=>tcgMatLocal(original.x,original.y,seat).y);
+        const candidates=rows.flatMap((value,i)=>i<rows.length-1?
+          [value,(value+rows[i+1])/2]:[value]);
+        nearestY=candidates.reduce((best,value)=>
+          Math.abs(local.y-value)<Math.abs(local.y-best)?value:best,candidates[0]);
       }
       const spotDistance=Math.hypot(slotDistance,local.y-nearestY);
       if(best&&Math.abs(zoneDistance-bestZoneDistance)<=eps&&
