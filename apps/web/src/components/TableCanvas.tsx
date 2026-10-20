@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
+import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
@@ -10,43 +11,6 @@ const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 let activeBookPointer:number|null=null;
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
-/** Integrate a soft resistance band across each wall of the two wooden trays.
- * The integral is continuous: objects can pass through the wall with sustained
- * dragging but never hit an artificial hard stop or teleport across it. */
-function resistTrayWalls(start:{x:number;y:number},target:{x:number;y:number},seat:number){
- // A wall costs 42 world units of pointer travel on EACH crossing.
- // Unlike the previous tiny arctangent effect, this is felt immediately,
- // then yields naturally when the pointer pushes beyond that threshold.
- const o=tcgMatOrigin(seat),c=Math.cos(o.angle),sn=Math.sin(o.angle);
- const local=(p:{x:number;y:number})=>{const x=p.x-o.x,y=p.y-o.y;return {x:x*c+y*sn,y:-x*sn+y*c};};
- const a=local(start),b=local(target);
- const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
- const bottom=TCG_MAT_HEIGHT/2;
- const width=TCG_MAT.cardWidth;
- const wallCost=42,band=5;
- const resist=(from:number,to:number,wall:number)=>{
-   const delta=to-from;
-   if(Math.abs(delta)<1e-5)return 0;
-   const dir=Math.sign(delta);
-   const distance=dir*(wall-from);
-   if(distance<0||distance>Math.abs(delta))return 0;
-   // A smooth progressive push through the wall rather than a hard stop.
-   const beyond=Math.abs(delta)-distance;
-   return dir*wallCost*(1-Math.exp(-beyond/band));
- };
- let x=b.x,y=b.y;
- for(const side of [-1,1]){
-   const center=side*(TCG_MAT_WIDTH/2+width/2+3);
-   const lo=center-width/2-4,hi=center+width/2+4;
-   if(Math.max(a.y,b.y)>top&&Math.min(a.y,b.y)<bottom){
-     x-=resist(a.x,b.x,lo)+resist(a.x,b.x,hi);
-   }
-   if(Math.max(a.x,b.x)>lo&&Math.min(a.x,b.x)<hi){
-     y-=resist(a.y,b.y,top)+resist(a.y,b.y,bottom);
-   }
- }
- return {x:o.x+x*c-y*sn,y:o.y+x*sn+y*c};
-}
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
@@ -262,54 +226,16 @@ function drawTcgMats(
       }
     }
     if(seat===viewerSeat){
-      const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
-      const trayBottom=TCG_MAT_HEIGHT/2;
       const side=bookDock==='left'?-1:1;
-      const bw=TCG_MAT.cardWidth*.63,bh=TCG_MAT.cardHeight*.64;
+      // A closed hardcover's natural portrait ratio, projected onto the
+      // tabletop. Its 3D footprint uses practically all of the tray width.
+      const bw=TCG_MAT.cardWidth-18;
+      const bh=bw/.76;
+      const trayBottom=TCG_MAT_HEIGHT/2;
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
-      const by=trayBottom-bh/2-9+bookOffset.y;
-      const palettes={
-        tiny:[0x7e3035,0xd5a45d,0x251919],
-        dragon:[0x124960,0x3fbbcb,0x081c28],
-        journal:[0x751e35,0xc97999,0x2b1025],
-        arcane:[0x4a321f,0xe8c16c,0x271b15],
-        strapped:[0x70412a,0xa78960,0x332019]
-      } as const;
-      const [cover,foil,spine]=palettes[bookDesign];
-      const book=new Container();book.position.set(bx,by);book.eventMode='static';book.cursor='grab';
-      // Restrained miniature codex: thick ivory page block and real cover
-      // overhangs, shadowed spine, subtle corner tooling, raised central seal.
-      const face=new Graphics()
-        .roundRect(-bw/2+3,-bh/2+5,bw+1,bh,4)
-        .fill({color:0x17100d,alpha:.9})
-        .roundRect(-bw/2+4,-bh/2+1,bw-3,bh-1,2)
-        .fill({color:0xe2cfaa}).stroke({color:0x957a58,width:.75})
-        .roundRect(-bw/2+4,-bh/2+4,bw-3,bh-7,2)
-        .stroke({color:0xb59b73,width:.55})
-        .roundRect(-bw/2-2,-bh/2-4,bw,bh,4)
-        .fill({color:cover}).stroke({color:spine,width:1.6})
-        .roundRect(-bw/2-2,-bh/2-4,7,bh,3)
-        .fill({color:spine}).stroke({color:foil,width:.65})
-        .roundRect(-bw/2+8,-bh/2+3,bw-16,bh-13,3)
-        .stroke({color:foil,width:1.1,alpha:.8});
-      // Four tiny studs and tasteful gilded corner arcs.
-      for(const dx of [-1,1])for(const dy of [-1,1]){
-        const x=dx<0?-bw/2+11:bw/2-7;
-        const y=dy<0?-bh/2+7:bh/2-12;
-        face.circle(x,y,1.6).fill({color:foil});
-      }
-      if(bookDesign==='strapped'||bookDesign==='tiny'){
-        face.roundRect(-bw/2-2,-bh/2+8,bw,5,1).fill({color:spine,alpha:.92})
-          .roundRect(-bw/2-2,bh/2-13,bw,5,1).fill({color:spine,alpha:.92});
-      }
-      const seal=new Graphics().circle(3,-4,10)
-        .fill({color:spine}).stroke({color:foil,width:1.25})
-        .circle(3,-4,7.4).stroke({color:foil,width:.5,alpha:.75});
-      const emblem=label(bookDesign==='dragon'?'✦':bookDesign==='arcane'?'✧':'◆',11,foil,'bold');
-      emblem.position.set(3,-4);
-      const titlePlate=label('SENNET',5.8,foil,'bold');
-      titlePlate.position.set(3,bh/2-14);
-      book.addChild(face,seal,emblem,titlePlate);
+      const by=trayBottom-bh*.44-10+bookOffset.y;
+      const book=makePseudo3DBook(bookDesign,bw,bh);
+      book.position.set(bx,by);
       let release:((event:PointerEvent)=>void)|null=null;
       book.on('pointerdown',e=>{
         if(e.button!==0)return;
@@ -332,29 +258,9 @@ function drawTcgMats(
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
           if(Math.hypot(dx,dy)>4)moved=true;
-          // Book dragging uses its own pointer path: resist the tray's
-          // inside and outside walls here too, without hard clipping.
-          let x=originalX+dx,y=originalY+dy;
-          const walls=(from:number,to:number,edge:number)=>{
-            const d=to-from,dir=Math.sign(d);
-            if(!dir)return 0;
-            const before=dir*(edge-from);
-            if(before<0||before>Math.abs(d))return 0;
-            return dir*30*(1-Math.exp(-(Math.abs(d)-before)/6));
-          };
-          const left=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth-7;
-          const right=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth+7;
-          const innerLeft=-TCG_MAT_WIDTH/2-3;
-          const innerRight=TCG_MAT_WIDTH/2+3;
-          const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
-          if(Math.max(originalY,y)>top&&Math.min(originalY,y)<trayBottom){
-            for(const edge of [left,innerLeft,innerRight,right])
-              x-=walls(originalX,originalX+dx,edge);
-          }
-          if(Math.abs(originalX)>TCG_MAT_WIDTH/2){
-            y-=walls(originalY,originalY+dy,top);
-            y-=walls(originalY,originalY+dy,trayBottom);
-          }
+          // A book moves independently from the table and passes through
+          // wooden tray walls without friction, snapping, or pushback.
+          const x=originalX+dx,y=originalY+dy;
           book.position.set(x,y);
         };
         const onUp=(event:PointerEvent)=>{
@@ -377,7 +283,6 @@ function drawTcgMats(
       book.on('destroyed',()=>{if(release)activeBookPointer=null;});
       mat.addChild(book);
       // Capture the drag before the table background can initiate camera pan.
-      book.hitArea=new Rectangle(-bw/2-5,-bh/2-7,bw+10,bh+14);
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
@@ -1577,14 +1482,6 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const factor=Math.max(0,(distance-GESTURE_MOVE_THRESHOLD)/Math.max(1,distance));
       d.x=Math.max(0,Math.min(BOARD_W,d.startX+(point.x-origin.x)*factor));
       d.y=Math.max(0,Math.min(BOARD_W,d.startY+(point.y-origin.y)*factor));
-      // Apply gentle resistance to crossings of either side of each tray.
-      // Never block the move; a longer pull carries objects through.
-      if(currentKind.current==='tcg'){
-        const resisted=resistTrayWalls(
-          {x:d.startX,y:d.startY},{x:d.x,y:d.y},seatRef.current);
-        d.x=Math.max(0,Math.min(BOARD_W,resisted.x));
-        d.y=Math.max(0,Math.min(BOARD_W,resisted.y));
-      }
       const dx=d.x-d.startX,dy=d.y-d.startY;
       if(d.selection||d.whole){
         for(const m of d.members){
