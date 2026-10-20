@@ -352,7 +352,7 @@ test('adjacent merges combine into three- and four-row center areas, then undo c
   assert.deepEqual(state.centerMerges,[]);
 });
 
-test('merged center rows share seven horizontal snap positions across their combined height',()=>{
+test('merged center rows preserve original vertical card centers and snap half-row seams',()=>{
   const base=createGame('tcg');
   const state=applyCommand(base,c('SET_CENTER_MERGE',{seat:0,boundary:0,merged:true}));
   const region=tcgMatRegions(0,state.centerMerges).find(z=>z.column===1&&z.row===0);
@@ -363,9 +363,11 @@ test('merged center rows share seven horizontal snap positions across their comb
     const dest=tcgSnapPoint(input.x,input.y,state.centerMerges,true);
     assert.equal(dest.row,0);
     assert.equal(dest.slot,3);
-    assert.ok(Math.hypot(dest.x-region.x,dest.y-region.y)<1e-6);
+    assert.ok(Math.abs(dest.x-region.x)<1e-6);
+    assert.ok(Math.abs(dest.y-input.y)<1e-6,'Original row center is preserved');
     const card=applyCommand(state,c('MOVE',{id:'hero-a',x:input.x,y:input.y,snapMerged:true})).objects.find(z=>z.id==='hero-a');
-    assert.ok(Math.hypot(card.x-region.x,card.y-region.y)<1e-6);
+    assert.ok(Math.abs(card.x-region.x)<1e-6);
+    assert.ok(Math.abs(card.y-input.y)<1e-6);
   }
 });
 
@@ -594,7 +596,7 @@ test('combined center pockets are freeform by default and obey explicit per-comm
   assert.ok(Math.hypot(loose.x-pt.x,loose.y-pt.y)<.001);
   const snappedMove=applyCommand(state,c('MOVE',{id:'hero-a',...pt,snapMerged:true}));
   const snapped=snappedMove.objects.find(o=>o.id==='hero-a');
-  assert.ok(Math.hypot(snapped.y-area.y)<1);
+  assert.ok(Math.abs(snapped.y-area.y)<=TCG_MAT_HEIGHT/8+1);
   assert.ok(Math.hypot(snapped.x-pt.x,snapped.y-pt.y)>2);
   assert.deepEqual(replay(state,[c('MOVE',{id:'hero-a',...pt,snapMerged:true})]).objects.find(o=>o.id==='hero-a').x,snapped.x);
 });
