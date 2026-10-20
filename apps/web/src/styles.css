@@ -986,3 +986,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   user-select:text;
   -webkit-touch-callout:default;
 }
+
+/* Utility controls live inside the expanded personal drawer. */
+.player-hub-utilities{display:flex;gap:8px;justify-content:center;padding:8px 10px 10px;border-top:1px solid #bda47755}
+.player-hub-utilities button{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:1;min-height:32px;border:1px solid #bfa77c;border-radius:8px;background:#214439;color:#f1dfb9;cursor:pointer;font-size:12px}
+.player-hub-utilities button:hover{background:#3e6553}
+.sennet-wheel-mode-options{display:flex;flex-wrap:wrap;gap:10px;margin-top:9px}
+.sennet-wheel-mode-options label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:10px 13px;border:1px solid #8e8667;border-radius:10px;background:#1e392e;cursor:pointer}
+.sennet-wheel-mode-options input{accent-color:#d3bd85}
+.sennet-info-tip{cursor:help;font-size:16px;color:#dfcb9a;line-height:1}
+.sennet-info-tip:focus-visible{outline:2px solid #e8c58e;border-radius:50%}
+/* The dock occupies the lower right but leaves tabletop events accessible outside it. */
+.sennet-radial-overlay{pointer-events:none}
