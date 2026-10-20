@@ -34,7 +34,7 @@ export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRe
   const displayName=name.trim().replace(/^player(?:\s+|$)/i,'').trim();
   const shelfId='personal-player-books';
 
-  return <div ref={root} className={'player-hub'+(open?' is-open':'')}>
+  return <div ref={root} className={'player-hub'+(open?' is-open':'')} onPointerDown={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} onClick={event=>event.stopPropagation()}>
     <button type="button" className="player-hub-tab"
       onClick={()=>setOpen(previous=>!previous)}
       aria-controls={shelfId} aria-expanded={open}
