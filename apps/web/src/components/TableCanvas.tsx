@@ -256,7 +256,7 @@ function drawTcgMats(
       const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
       const trayBottom=TCG_MAT_HEIGHT/2;
       const side=bookDock==='left'?-1:1;
-      const bw=TCG_MAT.cardWidth*.43,bh=TCG_MAT.cardHeight*.55;
+      const bw=TCG_MAT.cardWidth*.63,bh=TCG_MAT.cardHeight*.64;
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
       const by=trayBottom-bh/2-9+bookOffset.y;
       const palettes={
@@ -268,17 +268,55 @@ function drawTcgMats(
       } as const;
       const [cover,foil,spine]=palettes[bookDesign];
       const book=new Container();book.position.set(bx,by);book.eventMode='static';book.cursor='grab';
-      const face=new Graphics().roundRect(-bw/2+2,-bh/2+3,bw,bh,5)
-        .fill({color:0xd4c5a5}).stroke({color:0x735741,width:2})
-        .roundRect(-bw/2,-bh/2-2,bw-3,bh,5).fill({color:cover})
-        .stroke({color:foil,width:1.6})
-        .roundRect(-bw/2,-bh/2-2,8,bh,2).fill({color:spine})
-        .roundRect(-bw/2+10,-bh/2+7,bw-24,bh-16,3).stroke({color:foil,width:1.5})
-        .moveTo(-bw/2+12,-bh/2+14).lineTo(bw/2-15,bh/2-13)
-        .moveTo(bw/2-15,-bh/2+14).lineTo(-bw/2+12,bh/2-13)
-        .stroke({color:foil,width:.7,alpha:.55});
-      if(bookDesign==='tiny'||bookDesign==='strapped')face.roundRect(-bw/2,-bh/2+7,bw-3,9,2).fill({color:spine,alpha:.9});
-      const emblem=label('✦',12,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
+      // Layered miniature hardcover: beveled boards, visible ivory page block,
+      // leather spine, corner furniture, gilt tooling and raised medallion.
+      const face=new Graphics()
+        .roundRect(-bw/2+2,-bh/2+4,bw+1,bh,4)
+        .fill({color:0x2a1b15}).stroke({color:0x080708,width:1.5})
+        .roundRect(-bw/2+4,-bh/2+1,bw-3,bh-1,3)
+        .fill({color:0xf1deb3}).stroke({color:0xb9a382,width:1})
+        .roundRect(-bw/2+3,-bh/2+3,bw-5,bh-7,2)
+        .stroke({color:0xc7b590,width:.65,alpha:.9})
+        .roundRect(-bw/2-2,-bh/2-3,bw,bh,4)
+        .fill({color:cover}).stroke({color:foil,width:1.3})
+        .roundRect(-bw/2-2,-bh/2-3,8,bh,3)
+        .fill({color:spine}).stroke({color:foil,width:.7})
+        .roundRect(-bw/2+9,-bh/2+3,bw-17,bh-12,2)
+        .stroke({color:foil,width:1,alpha:.95})
+        .roundRect(-bw/2+12,-bh/2+6,bw-23,bh-18,2)
+        .stroke({color:foil,width:.5,alpha:.68});
+      for(const v of [-1,1]){
+        for(const h of [-1,1]){
+          const x=v<0?-bw/2+10:bw/2-8;
+          const y=h<0?-bh/2+5:bh/2-9;
+          face.circle(x,y,1.7).fill({color:foil})
+            .circle(x,y,.65).fill({color:0x402c25});
+        }
+      }
+      if(bookDesign==='tiny'||bookDesign==='strapped'){
+        face.roundRect(-bw/2-2,-bh/2+8,bw,8,1)
+          .fill({color:spine,alpha:.9}).stroke({color:foil,width:.7});
+        face.roundRect(-bw/2-2,bh/2-13,bw,7,1)
+          .fill({color:spine,alpha:.9}).stroke({color:foil,width:.7});
+      }
+      if(bookDesign==='dragon'||bookDesign==='journal'){
+        face.moveTo(10,-bh/2+9).lineTo(bw/2-12,-3)
+          .lineTo(10,bh/2-14).stroke({color:foil,width:1.4,alpha:.8});
+      }
+      if(bookDesign==='arcane'){
+        for(let i=0;i<8;i++){
+          const theta=i*Math.PI/4;
+          face.moveTo(3+Math.cos(theta)*11,-2+Math.sin(theta)*11)
+            .lineTo(3+Math.cos(theta)*15,-2+Math.sin(theta)*15)
+            .stroke({color:foil,width:.85});
+        }
+      }
+      const emblem=label(bookDesign==='dragon'?'♜':bookDesign==='arcane'?'✧':'✦',
+        15,foil,'bold');
+      emblem.position.set(3,-2);
+      const titlePlate=label('SENNET',5.3,foil,'bold');
+      titlePlate.position.set(3,bh/2-15);
+      book.addChild(face,emblem,titlePlate);
       let release:((event:PointerEvent)=>void)|null=null;
       book.on('pointerdown',e=>{
         if(e.button!==0)return;
