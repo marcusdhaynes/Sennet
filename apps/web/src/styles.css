@@ -759,3 +759,32 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  .tcg-card-action-menu{position:absolute!important;top:auto!important;bottom:8px!important;
   left:8px!important;right:8px;width:auto;max-height:min(56dvh,410px);border-radius:14px}
 }
+
+
+/* Purple game-style context wheel: 3 inner categories, 9 outer actions.
+   The overlay is visually above the pressed card, but never traps ordinary
+   tabletop controls outside the wheel. */
+.sennet-radial-overlay{position:absolute;inset:0;z-index:82;pointer-events:none}
+.card-radial-wheel{position:absolute;pointer-events:auto;touch-action:none;
+ border-radius:50%;filter:drop-shadow(0 12px 25px #030308c9);
+ animation:sennet-wheel-enter .13s ease-out both}
+.card-radial-wheel svg{width:100%;height:100%;display:block;overflow:visible}
+.card-radial-wheel g[role=button]{outline:none;cursor:pointer}
+.card-radial-wheel g[role=button]:focus-visible path{stroke:#ffe8a9;stroke-width:4}
+.card-radial-wheel .card-radial-close{position:absolute;top:5%;left:50%;transform:translateX(-50%);
+ border:1px solid #b7a3d2;border-radius:50%;background:#20172b;
+ color:#fff;height:28px;width:28px;cursor:pointer;touch-action:manipulation}
+.sennet-wheel-clear{pointer-events:auto;position:absolute;left:50%;bottom:15px;transform:translateX(-50%);
+ padding:7px 13px;border:1px solid #bda6d6;border-radius:18px;background:#20172fed;color:#f4e5ff;
+ font:600 11px system-ui;cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.sennet-wheel-destinations{position:absolute;z-index:2;pointer-events:auto;
+ transform:translate(-50%,-50%);width:min(230px,76vw);display:flex;flex-direction:column;gap:5px;
+ background:#221631;border:1px solid #c3a7e2;border-radius:12px;
+ box-shadow:0 10px 30px #000c;padding:12px;color:#f4e5ff;
+ max-height:min(290px,65vh);overflow:auto;overscroll-behavior:contain}
+.sennet-wheel-destinations strong{text-align:center;font:700 12px system-ui;margin-bottom:4px}
+.sennet-wheel-destinations button{border:1px solid #8c70a9;border-radius:6px;
+ background:#453064;color:#fff;font:600 12px system-ui;
+ padding:8px 7px;cursor:pointer;touch-action:manipulation}
+.sennet-wheel-destinations button:hover{background:#71519b}
+@keyframes sennet-wheel-enter{from{opacity:0;transform:scale(.89)}to{opacity:1;transform:scale(1)}}
