@@ -194,7 +194,7 @@ function drawTcgMats(
       } as const;
       const [wood,rim,well,shine]=finishes[playmat.sideBoxStyle??'walnut'];
       for(const side of [-1,1]){
-        const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=0;
+        const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=TCG_MAT_HEIGHT/2-trayH/2;
         const tray=new Graphics()
           .roundRect(cx-trayW/2-4,cy-trayH/2-5,trayW+8,trayH+10,7)
           .fill({color:wood}).stroke({color:shine,width:1.6})
