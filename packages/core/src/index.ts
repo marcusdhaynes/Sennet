@@ -717,7 +717,8 @@ export function castleIndependentFocusLayout(
       return {x:dx*Math.cos(rot)-dy*Math.sin(rot),
         y:dx*Math.sin(rot)+dy*Math.cos(rot)};
     };
-    const wingMats=[...layout.mats].filter(([id])=>displayed[id]==='ally')
+    const stable=castleGridLayout(viewerSeat,relations,'all',activeAlly,viewport,padding);
+    const wingMats=[...stable.mats].filter(([id])=>relations[id]==='ally')
       .map(([,p])=>({pos:project(p),half:TCG_MAT_WIDTH*p.scale/2}));
     const nearestLeft=Math.max(-visibleW/2,
       ...wingMats.filter(m=>m.pos.x<0).map(m=>m.pos.x+m.half));
@@ -728,7 +729,7 @@ export function castleIndependentFocusLayout(
     const viewerScale=Math.max(1,Math.min(1.32,
       2*freeHalf/TCG_MAT_WIDTH,2*verticalHalf/TCG_MAT_HEIGHT));
     // Keep a real safety gap even in narrow portrait screens.
-    if(viewerScale>1)own.scale=viewerScale;
+    if(viewerScale>1+1e-8)own.scale=viewerScale;
   }
   return layout;
 }
