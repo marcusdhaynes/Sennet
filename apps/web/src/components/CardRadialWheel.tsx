@@ -20,9 +20,8 @@ function sector(inside:number,outside:number,a:number,b:number){
   'L',innerEnd.x,innerEnd.y,'A',inside,inside,0,large,0,innerStart.x,innerStart.y,'Z'].join(' ');
 }
 function multiline(label:string){
- if(label==='Restore Original Size')return ['Restore','Original Size'];
- if(label==='Scale 50% Smaller')return ['50%','Smaller'];
- if(label==='Scale 50% Bigger')return ['50%','Bigger'];
+ if(label==='Original')return ['Original'];
+ if(label==='−50%'||label==='+50%')return [label];
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
@@ -86,7 +85,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,i*120,i*120+120)}
       fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
-     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="14" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
+     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="20" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
@@ -103,15 +102,15 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
      {selected&&<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
-       textAnchor="middle" fontSize="12" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
+       textAnchor="middle" fontSize="17" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
        {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
     </g>;
    }))}
    <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#baa2d2" strokeWidth="2"/>
-   <text x="200" y="190" fill="#fff6e9" fontWeight="800" fontSize="18" textAnchor="middle">{count}</text>
-   <text x="200" y="207" fill="#dfcaea" fontSize="11" textAnchor="middle">{count===1?'CARD SELECTED':'CARDS SELECTED'}</text>
-   <text x="200" y="224" fill="#bca9c9" fontSize="10" textAnchor="middle">{category===null?'Choose a ring':RADIAL_CATEGORIES[category]}</text>
+   <text x="200" y="190" fill="#fff6e9" fontWeight="800" fontSize="24" textAnchor="middle">{count}</text>
+   <text x="200" y="207" fill="#dfcaea" fontSize="14" textAnchor="middle">{count===1?'CARD SELECTED':'CARDS SELECTED'}</text>
+   <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{category===null?'Choose a ring':RADIAL_CATEGORIES[category]}</text>
   </svg>
   <button className="card-radial-close" type="button" aria-label="Close wheel" onClick={onCancel}>×</button>
  </div>;
