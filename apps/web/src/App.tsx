@@ -15,7 +15,7 @@ import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,remember
 type Book = 'sennet'|'games'|'settings';
 type GamePage = 'all'|'recent'|'library'|'tools';
 type SettingsPage = 'general'|'playmat'|'multiplayer'|'scripting';
-type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[]};
+type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[];seat?:number};
 const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
   {id:'sandbox',label:'Sandbox',description:'An open table with no rules.',symbol:'◈'},
   {id:'boardgame',label:'Board Games',description:'Boards, tiles, pawns and strategy.',symbol:'♟'},
@@ -29,6 +29,7 @@ const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
 const ACTOR_KEY='sennet.actor.v1';
 const RECENT_KEY='sennet.recent.v1';
 const LAST_SESSION_KEY='sennet.last-play-session.v1';
+const REWIND_SESSION_KEY='sennet.rewind-play-session.v1';
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
 const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
 const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
@@ -136,6 +137,14 @@ export default function App(){
   const viewedGame=replayAt===null?game:replay(initial,history.slice(0,replayIndex+1));
   function inform(message:string){setNotice(message);window.setTimeout(()=>setNotice(s=>s===message?'':s),4500);}
   function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next){
+    if(!connection.current&&current.current.kind!=='sandbox'){
+      const previous:SavedSession={
+        id:sessionId.current,title:nameFor(current.current.kind),
+        updated:Date.now(),game:current.current,initial,history,seat
+      };
+      try{localStorage.setItem(REWIND_SESSION_KEY,JSON.stringify(previous));}
+      catch{/* Continue without persistence when browser storage is full. */}
+    }
     if(connection.current)disconnect();
     sessionId.current=id;current.current=next;setInitial(origin);setGame(next);setHistory(past);setSelected(null);setReplayAt(null);setBook(null);
   }
@@ -182,11 +191,11 @@ export default function App(){
     if(isConnected)return;
     const snapshot:SavedSession={
       id:sessionId.current,title:nameFor(game.kind),updated:Date.now(),
-      initial,game,history:history.slice(-500)
+      initial,game,history:history.slice(-500),seat
     };
     try{localStorage.setItem(LAST_SESSION_KEY,JSON.stringify(snapshot));}
     catch{/* Storage quota or private session: current play remains usable. */}
-  },[game,history,initial,isConnected]);
+  },[game,history,initial,isConnected,seat]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
@@ -372,9 +381,14 @@ export default function App(){
     <button className="sennet-rewind-button" type="button" title="Restore last play session"
       aria-label="Rewind to your last saved play session"
       onClick={()=>{
-        const saved=lastSession();
-        if(saved){loadRecent(saved);setSeat(saved.game.objects.find(o=>o.matSeat!==undefined)?.matSeat??seat);}
-        else inform('No saved play session yet.');
+        let saved:SavedSession|null=null;
+        try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
+        catch{/* Ignore a corrupted previous session. */}
+        saved??=lastSession();
+        if(saved?.game&&Array.isArray(saved.game.objects)){
+          loadRecent(saved);
+          setSeat(saved.seat??seat);
+        }else inform('No saved play session yet.');
       }}>↶</button>
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
