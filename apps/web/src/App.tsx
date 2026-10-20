@@ -5,6 +5,7 @@ import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import TcgDeckBuilder from './components/TcgDeckBuilder';
 import type {SavedDeck} from './lib/deckWorkspace';
+import {tcgCardBack} from './lib/tcgCatalog';
 import PlaymatEditor from './components/PlaymatEditor';
 import PersonalDrawer from './components/PersonalDrawer';
 import {RoomConnection} from './lib/network';
@@ -260,6 +261,7 @@ export default function App(){
           zone:entry.section==='Main'?'DECK' as const:'TABLE' as const,
           faceUp:entry.section!=='Main',color:'#a7a0c7',
           ...(entry.card.image?{faceUrl:entry.card.image}:{}),
+          ...(tcgCardBack(deck.game)?{backUrl:tcgCardBack(deck.game)}:{}),
           description:entry.card.text.slice(0,250),order:order++
         }));
       });
