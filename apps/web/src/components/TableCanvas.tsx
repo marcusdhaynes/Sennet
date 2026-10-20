@@ -1956,7 +1956,7 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
 
-    {(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
+    {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?selectedIds.length:radialWheel!.ids.length}
