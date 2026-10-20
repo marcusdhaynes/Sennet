@@ -772,7 +772,7 @@ function createPiece(o:TableObject,isSelected:boolean){
     box.addChild(new Graphics().circle(0,-4,24).fill(rgb(o.color)).stroke({color:0xffffff,width:1,alpha:.37}));
     const t=label(o.name.length>7?'✦':o.name, o.name.length>7?25:11,0x172c2a,'bold');t.position.set(0,-4);box.addChild(t);
   }
-  if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
+  // Selection is indicated through the existing card border only.
   if(o.locked){
     const lock=label('LOCKED',8,0xffd496,'bold');
     lock.position.set(0,51);lock.eventMode='none';box.addChild(lock);
@@ -1202,7 +1202,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           };
           drag.current=active;
           setGestureMenu(null);
-          setRadialWheel(null);
           // A hold is recognized ONLY after 250ms of no movement.
           // Movement before the timer drags the existing selected group
           // through a 13px resistance zone, without spawning a wheel.
@@ -1744,7 +1743,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const down=(event:PointerEvent)=>{
       if(onCardMenu(event.target))return; // Menu taps never initiate tabletop pan.
-      if(event.target===session.current?.app.canvas){
+      // Pixi targets live on the canvas. A selected card's pointerdown
+      // sets drag.current before this host handler executes: it must not
+      // be misclassified as an empty-space click.
+      if(event.target===session.current?.app.canvas&&!drag.current&&
+        controlPointer.current!==event.pointerId){
         setGestureMenu(null);
         if(radialOpen.current)setRadialWheel(null);
         if(selectedSet.current.size){
@@ -1884,8 +1887,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
-    {!radialWheel&&selectedIds.length>0&&<div className="sennet-card-selection-status"
-      role="status"><span><b>{selectedIds.length}</b> selected · Tap to add · Drag to move · Hold for wheel · Click empty space to deselect</span></div>}
+
     {radialWheel&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={radialWheel.x} y={radialWheel.y} size={radialWheel.size}
@@ -1900,20 +1902,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         onSendTo={()=>setRadialWheel(w=>w?{...w,sendTo:true,pointerId:null}:null)}
         onCancel={()=>{setRadialWheel(null);wheelPointer.current=null;}}
       />
-      {radialWheel.sendTo&&<div className="sennet-wheel-destinations"
-        role="dialog" aria-label="Send selected cards to"
-        style={{left:radialWheel.x,top:radialWheel.y}}>
-        <strong>Send {radialWheel.ids.length} card(s) to</strong>
-        {([
-          ['HAND','Hand'],['DECK_TOP','Top of Deck'],['DECK_BOTTOM','Bottom of Deck'],
-          ['DISCARD','Discard'],['TABLE','Play Area']
-        ] as const).map(([zone,label])=>
-          <button key={zone} onClick={()=>{
-            callbacks.current.onRadialAction(radialWheel.ids,'send-to',zone);
-            setRadialWheel(null);
-          }}>{label}</button>)}
-        <button onClick={()=>setRadialWheel(w=>w?{...w,sendTo:false}:null)}>Back</button>
-      </div>}
+
 
     </div>}
     {gestureMenu&&(()=>{
