@@ -1019,3 +1019,13 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){
  .card-radial-wheel .sennet-radial-rings{transition:none}
 }
+
+/* Discreet grab handle for relocating the docked wheel; never overlaps actions. */
+.sennet-radial-drag-handle{
+ position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+ width:31px;height:19px;display:flex;align-items:center;justify-content:center;
+ border:1px solid #ad91c9;border-radius:12px;background:#21152f;
+ color:#ecd8ff;font-size:16px;line-height:1;padding:0;
+ cursor:grab;touch-action:none;z-index:3;box-shadow:0 2px 6px #0008
+}
+.sennet-radial-drag-handle:active{cursor:grabbing}
