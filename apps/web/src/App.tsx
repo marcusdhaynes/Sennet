@@ -251,21 +251,6 @@ export default function App(){
       const card=entry.card;
       let url=card.image||byId.get(card.id)?.image||
         byName.get(card.name.trim().toLowerCase())?.image||'';
-      if(!url&&deck.game==='lorcana'){
-        try{
-          const q=encodeURIComponent(card.name);
-          const response=await fetch('https://api.lorcast.com/v0/cards/search?q='+q);
-          if(response.ok){
-            const data=await response.json() as {results?:Array<{name?:string;version?:string;
-              image_uris?:{digital?:{normal?:string;small?:string}}}>};
-            const match=data.results?.find(item=>
-              [item.name,item.version].filter(Boolean).join(' - ').toLowerCase()===
-              card.name.trim().toLowerCase());
-            url=match?.image_uris?.digital?.normal||
-              match?.image_uris?.digital?.small||'';
-          }
-        }catch{/* Keep the deck usable offline. */}
-      }
       if(url)imageFor.set(card.id,url);
     }
     const next=createGame('tcg');
