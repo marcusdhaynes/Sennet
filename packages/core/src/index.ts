@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -873,6 +873,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     zone:['TABLE','DECK','HAND','DISCARD'].includes(String(input.zone)) ? input.zone as Zone : 'TABLE',
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
+    ...(input.scale!==undefined ? {scale:clamp(finite(input.scale,1),0.25,4)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
     ...(Number.isInteger(input.matSeat)&&Number(input.matSeat)>=0&&Number(input.matSeat)<SEATS ? {matSeat:Number(input.matSeat)} : {}),
@@ -901,7 +902,7 @@ export function cardStackMembers(state:GameState,id:string):TableObject[] {
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -913,6 +914,37 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(!target) return 'Object does not exist';
     if(target.locked) return 'Object is locked';
     if (target.owner && target.owner!==command.actor && state.kind==='tcg') return 'This card belongs to another player';
+  }
+  if(command.type==='BATCH_CARD_ACTION'){
+    if(state.kind!=='tcg')return 'Selection wheel is only available for TCG cards';
+    const raw=command.payload.ids;
+    if(!Array.isArray(raw)||!raw.length||raw.length>1000||
+       raw.some(id=>typeof id!=='string'||!id||id.length>80)||
+       new Set(raw).size!==raw.length)return 'Invalid selected card IDs';
+    const action=String(command.payload.action||'');
+    if(!['flip','rotate-cw','rotate-ccw','scale-original','scale-smaller',
+         'scale-bigger','shuffle','send-to','lock'].includes(action))
+      return 'Invalid wheel action';
+    const selected=raw.map(id=>state.objects.find(o=>o.id===id));
+    if(selected.some(o=>!o||!['card','deck','token','marker'].includes(o.kind)))
+      return 'Selection contains missing or unsupported cards';
+    if(selected.some(o=>o!.owner&&o!.owner!==command.actor))
+      return 'Selection includes another player\'s card';
+    if(action!=='lock'&&selected.some(o=>o!.locked))
+      return 'Selection contains a locked card';
+    if(action==='send-to'){
+      if(selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
+        return 'Only cards can be sent to a pile';
+      const destination=String(command.payload.destination);
+      if(!['HAND','DECK_TOP','DECK_BOTTOM','DISCARD','TABLE'].includes(destination))
+        return 'Invalid send-to destination';
+      const seat=Number(command.payload.matSeat);
+      if(!Number.isInteger(seat)||seat<0||seat>=SEATS)return 'Invalid destination mat';
+      if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
+        return 'You can only send cards to your own mat';
+    }
+    if(action==='shuffle'&&selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
+      return 'Only card stacks can be shuffled';
   }
   if(command.type==='ADJUST_COUNTER'){
     if(!Number.isInteger(command.payload.delta)||Math.abs(Number(command.payload.delta))>999)
@@ -1019,6 +1051,69 @@ export function applyCommand(state: GameState, command: Command): GameState {
         }
       }
       message=`Moved stack of ${cards.length} cards`;
+    }break;
+    case 'BATCH_CARD_ACTION':{
+      const ids=p.ids as string[],action=String(p.action);
+      const idSet=new Set(ids);
+      const picked=objects.filter(card=>idSet.has(card.id));
+      if(action==='flip')for(const card of picked)card.faceUp=!card.faceUp;
+      if(action==='rotate-cw'||action==='rotate-ccw'){
+        const step=action==='rotate-cw'?45:-45;
+        for(const card of picked)card.rotation=((card.rotation+step)%360+360)%360;
+      }
+      if(action==='scale-original')for(const card of picked)card.scale=1;
+      if(action==='scale-smaller')for(const card of picked)
+        card.scale=clamp((card.scale??1)*0.5,0.25,4);
+      if(action==='scale-bigger')for(const card of picked)
+        card.scale=clamp((card.scale??1)*1.5,0.25,4);
+      if(action==='lock'){
+        const lock=picked.some(card=>!card.locked);
+        for(const card of picked)card.locked=lock;
+      }
+      if(action==='shuffle'){
+        // Reassign the chosen cards' deck order as one atomic,
+        // seeded Fisher–Yates permutation. Outside cards stay put.
+        const ordered=[...picked].sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+        const shuffled=[...ordered];
+        const random=prng(finite(p.seed,1));
+        for(let i=shuffled.length-1;i>0;i--){
+          const j=Math.floor(random()*(i+1));
+          [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
+        }
+        // Unique ranks ensure tabletop stack order changes even when
+        // original order values all match.
+        shuffled.forEach((card,index)=>{card.order=ordered[0].order+index;});
+      }
+      if(action==='send-to'){
+        const destination=String(p.destination),seat=Number(p.matSeat);
+        const isDeck=destination==='DECK_TOP'||destination==='DECK_BOTTOM';
+        const zone:Zone=isDeck?'DECK':destination as Zone;
+        const rowCol=zone==='HAND'?[3,1]:zone==='DECK'?[1,2]:
+          zone==='DISCARD'?[1,0]:[2,1];
+        const cell=tcgMatCells(seat).find(c=>c.row===rowCol[0]&&c.column===rowCol[1])!;
+        const others=objects.filter(o=>!idSet.has(o.id)&&o.matSeat===seat&&o.zone==='DECK');
+        const base=destination==='DECK_BOTTOM'?
+          1+Math.max(-1,...others.map(o=>o.order)):0;
+        if(destination==='DECK_TOP')
+          for(const other of others)other.order+=picked.length;
+        for(let i=0;i<picked.length;i++){
+          const card=picked[i];card.zone=zone;card.matSeat=seat;
+          card.owner=command.actor;
+          card.faceUp=zone==='TABLE'||zone==='DISCARD';
+          card.x=cell.x;card.y=cell.y;
+          if(zone==='DECK')card.order=base+i;
+          else if(zone==='HAND'){
+            const local=tcgMatLocal(cell.x,cell.y,seat);
+            const point=tcgMatWorld(local.x+((i%7)-3)*(TCG_MAT.cardWidth+2),local.y,seat);
+            card.x=point.x;card.y=point.y;
+          }else if(zone==='TABLE'){
+            const local=tcgMatLocal(cell.x,cell.y,seat);
+            const point=tcgMatWorld(local.x+((i%7)-3)*(TCG_MAT.cardWidth+2),local.y,seat);
+            card.x=point.x;card.y=point.y;
+          }
+        }
+      }
+      message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
     }break;
     case 'ADJUST_COUNTER':if(obj){
       obj.counters=clamp((obj.counters??0)+Number(p.delta),0,999);
