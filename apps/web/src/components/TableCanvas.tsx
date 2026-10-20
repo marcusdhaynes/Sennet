@@ -1953,7 +1953,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
 
-    {drawer&&<div className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale} as React.CSSProperties}>{drawer}</div>}
+    {drawer&&<div data-outward={Math.abs(playerTagGeometry.x-viewport.width/2)>Math.abs(playerTagGeometry.y-viewport.height/2)?(playerTagGeometry.x>viewport.width/2?'right':'left'):(playerTagGeometry.y>viewport.height/2?'bottom':'top')} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
