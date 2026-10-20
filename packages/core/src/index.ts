@@ -996,7 +996,7 @@ export function validateCommand(state: GameState, command: Command): string | nu
        raw.some(id=>typeof id!=='string'||!id||id.length>80)||
        new Set(raw).size!==raw.length)return 'Invalid selected card IDs';
     const action=String(command.payload.action||'');
-    if(!['flip','rotate-cw','rotate-ccw','scale-original','scale-smaller',
+    if(!['flip','tap-toggle','rotate-cw','rotate-ccw','scale-original','scale-smaller',
          'scale-bigger','shuffle','send-to','lock','move'].includes(action))
       return 'Invalid wheel action';
     const selected=raw.map(id=>state.objects.find(o=>o.id===id));
@@ -1207,6 +1207,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
           applyPocketDrop(picked,tx,ty,snapped.seat);
       }
       if(action==='flip')for(const card of picked)card.faceUp=!card.faceUp;
+      if(action==='tap-toggle')for(const card of picked){
+        const current=((card.rotation%360)+360)%360;
+        card.rotation=current===0?90:0;
+      }
       if(action==='rotate-cw'||action==='rotate-ccw'){
         const step=action==='rotate-cw'?45:-45;
         for(const card of picked)card.rotation=((card.rotation+step)%360+360)%360;
