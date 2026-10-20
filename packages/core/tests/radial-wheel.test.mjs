@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {applyCommand,createGame,createId,replay,sanitizeObject}
  from '../src/index.ts';
-import {RADIAL_CATEGORIES,RADIAL_ACTIONS,radialHit,radialMembership,wheelPosition}
+import {RADIAL_CATEGORIES,RADIAL_ACTIONS,radialHit,radialMembership,radialTapMembership,wheelPosition}
  from '../../../apps/web/src/lib/radialWheel.ts';
 
 const command=(action,ids,extra={},actor='local')=>({
@@ -205,4 +205,33 @@ test('Selected card groups translate as one atomic event without shifting relati
  const blocked={...local,objects:local.objects.map(o=>
   o.id===targets[1]?{...o,locked:true}:o)};
  assert.throws(()=>apply(blocked,'move',targets,{anchorId:targets[0],x:10,y:10}),/locked/);
+});
+
+
+test('After first 250ms hold selection mode uses ONE tap per next card or stack',()=>{
+ const first=radialMembership(new Set(), 'a',['a','b'],false);
+ assert.deepEqual(first,['a','b']);
+ const second=radialTapMembership(new Set(first),'c',['c','d']);
+ assert.deepEqual(second,['a','b','c','d']);
+ // A short tap on an already selected stack deselects just its members.
+ assert.deepEqual(radialTapMembership(new Set(second),'a',['a','b']),['c','d']);
+ assert.deepEqual(radialTapMembership(new Set(['c']),'c',['c']),[]);
+});
+test('Stationary hold is 250ms, movement resistance starts after 13 screen pixels',async()=>{
+ const {GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD}=await import('../../../apps/web/src/lib/cardGestures.ts');
+ assert.equal(GESTURE_HOLD_MS,250);
+ assert.equal(GESTURE_MOVE_THRESHOLD,13);
+ assert.ok(GESTURE_MOVE_THRESHOLD>7,'Drag threshold must provide slight deliberate resistance');
+});
+test('Compact radial layout keeps outer actions in the requested order',()=>{
+ assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-ccw','flip','rotate-cw']);
+ assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['scale-smaller','scale-original','scale-bigger']);
+ assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['shuffle','send-to','lock']);
+ for(const [index,group] of RADIAL_ACTIONS.entries()){
+  for(const [position,action] of group.entries()){
+   const radians=(index*120+position*40+20)*Math.PI/180;
+   const hit=radialHit(160*Math.sin(radians),-160*Math.cos(radians));
+   assert.equal(hit.action,action.id);
+  }
+ }
 });
