@@ -14,7 +14,7 @@ import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,remember
 
 type Book = 'sennet'|'games'|'settings';
 type GamePage = 'all'|'recent'|'library'|'tools';
-type SettingsPage = 'general'|'playmat'|'multiplayer'|'scripting';
+type SettingsPage = 'general'|'playmat'|'deckbuilder'|'multiplayer'|'scripting';
 type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[];seat?:number};
 const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
   {id:'sandbox',label:'Sandbox',description:'An open table with no rules.',symbol:'◈'},
@@ -323,7 +323,7 @@ export default function App(){
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected}
-        onOpenTcgSettings={()=>{setBook(null);setTcgStudioOpen(true);}}
+        onOpenTcgSettings={()=>{setBook('settings');setSettingsPage('playmat');}}
         onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
         onCardAction={(id,action)=>{
           const card=game.objects.find(o=>o.id===id);
@@ -388,7 +388,24 @@ export default function App(){
           loadRecent(saved);
           setSeat(saved.seat??seat);
         }else inform('No saved play session yet.');
-      }}>↶</button>
+      }}>⟲</button>
+    <aside className="sennet-action-log" aria-label="Table action history">
+      <header><strong>Action log</strong><span>{history.length} events</span></header>
+      <div className="sennet-action-log-entries" role="log" aria-live="off">
+        {history.slice(-100).reverse().map(h=>{
+          const ids=[h.payload?.id,...(Array.isArray(h.payload?.ids)?h.payload.ids:[])].filter((v):v is string=>typeof v==='string');
+          const hidden=ids.some(id=>{const card=game.objects.find(o=>o.id===id);return card&&(card.zone==='HAND'||card.zone==='DECK')&&!card.faceUp;});
+          const player=game.players.find(p=>p.id===h.actor);
+          return <div className="sennet-action-log-entry" key={h.id}>
+            <span className="sennet-log-seq">#{h.seq}</span>
+            <span><strong>{player?.name??(h.actor==='local'?playerName:h.actor.slice(0,12))}</strong> · {h.type.toLowerCase().replaceAll('_',' ')}
+              <small>{new Date(h.at).toLocaleTimeString()} · {hidden?'Hidden card details':JSON.stringify(h.payload)}</small>
+            </span>
+            <button type="button" aria-label="Share action details" title="Reveal requires an authorized public action" disabled={hidden}>♧</button>
+          </div>;
+        })}
+      </div>
+    </aside>
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
@@ -452,7 +469,7 @@ export default function App(){
             </>}
           </>}
           {book==='settings'&&<>
-            <Tabs items={[{id:'general',label:'General'},{id:'playmat',label:'Playmat'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
+            <Tabs items={[{id:'general',label:'General'},{id:'playmat',label:'Playmat'},{id:'deckbuilder',label:'Deckbuilder'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Player {String(i+1).padStart(2,'0')}</option>)}</select></label></div>
               <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 to reset. Double-clicking does not change the zoom. The Eye on the top line of your Play 03 zone focuses it; hold for 0.25 seconds to choose an opponent. In Opponent Mode, each other visible player's mat has two circular controls whose centers sit directly on the top line of its Play 03 zone, from that player's perspective: Sword (Enemy, across the divider) and Shield (Ally, alongside you, facing the same way). Your own Play 03 zone has an evenly centered Eye/Castle pair directly on its top boundary. The Eye works exactly as before. Tap Castle to open or close the divided battlefield; unclassified seats disappear. Hold Castle for 0.25 seconds to switch BOTH sides together between Single View (one Ally and one Enemy, each with independent left/right cycling arrows) and All View (all Allies and all Enemies in their respective optimized grids). Click an Ally or Enemy mat to focus that player on their side without changing the opposite side's All grid or existing focus. Focus both sides to display only your full-size mat, one Ally, and one Enemy, with each focused player's relation buttons and same-side cycling arrows. Focus is neither All nor Single, and the next Castle hold continues the previous mode toggle. Your mat remains full-size and fixed to the left in both views, with existing spacing preserved; Enemies stay above the divider. Click Sword or Shield on the specific player's mat to change that player's relationship. They are mutually exclusive, toggle off on a second click, and are remembered separately per opponent on this browser. Eye is strictly one-on-one with the selected opponent always across the divide, regardless of Ally or Enemy classification. Castle always shows marked Enemies across from you and marked Allies beside you; All View shows both groups in grids, while Single View shows one player from each group with independent left/right arrows. Without a Sword or Shield selection, a chosen Eye opponent appears across from you by default.  The left and right circular arrows centered on the opponent's exact side borders between rows 2 and 3 cycle through opponents by their full-table seat positions: left counter-clockwise, right clockwise, skipping your seat. The opponent-view camera is locked: mouse/touchpad wheel, drag, pinch and zoom/reset shortcuts cannot pan or zoom. Cards and match controls remain interactive. The player areas fill the screen, and the Eye and Castle remain merge-button-sized along the top line of Play 03. All PLAY and HAND rows have six additional half-slot card anchors between their original seven horizontal positions. Player names and seat numbers stay tucked behind the top and bottom screen edges: hover over a small, semi-transparent caret tab for 0.25 seconds to reveal its compact name/seat label. Tag transparency uses the merge-button setting. They stay open while hovered and retract 1 second after the pointer leaves, unless clicked to pin. Tap the eye again for the full table or hold it to return to your mat alone. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
@@ -461,6 +478,12 @@ export default function App(){
                 <p>A stationary <strong>0.25-second hold</strong> starts selection mode. Tap more cards or stacks once to add them; tap selected cards to remove them. Drag any selected card to move the entire selection together. A small <strong>13 px</strong> breakaway threshold resists accidental motion.</p>
                 <p>Hold a selected card for another 0.25 seconds to open the compact radial wheel. Slide outward and release to apply one of its nine actions to every selected card. Moving before the hold completes drags the selection instead. After a first stationary hold, moving brings up the wheel. These timings are deliberately fixed for consistent touch and trackpad behavior.</p>
               </div>
+              <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
+              <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
+            </>}
+            {settingsPage==='playmat'&&
+              <><PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
+                merges={viewedGame.centerMerges??[]} seat={seat} inform={inform}/>
               <div className="reader-block">
                 <h3>TCG center-section controls</h3>
                 <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into a larger, freely usable area. Snapping inside merged sections is off by default and can be enabled under Playmat → Card placement. Hover and click − to separate the sections again.</p>
@@ -477,13 +500,9 @@ export default function App(){
                 <div className="tool-buttons"><button onClick={()=>{setMergeOpacity(MERGE_OPACITY_DEFAULT);setMergeHoverMs(MERGE_DELAY_DEFAULT);}}>Restore default appearance</button></div>
                 <p>Both preferences are saved in this browser. Merges themselves belong to the table and appear in saved games and replays.</p>
               </div>
-              <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
-              <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
-            </>}
-            {settingsPage==='playmat'&&
-              <PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
-                merges={viewedGame.centerMerges??[]} seat={seat} inform={inform}/>
+              </>
             }
+            {settingsPage==='deckbuilder'&&<div className="reader-block"><h2>Deckbuilder</h2><p>Build, import, and load decks directly onto the table.</p><button className="reader-primary" onClick={()=>{setBook(null);setTcgStudioOpen(true);}}>Open Deckbuilder</button></div>}
             {settingsPage==='multiplayer'&&<><div className="reader-heading"><div><h2>Multiplayer</h2><p>Join a room through a secure WebSocket relay. The public GitHub Pages site runs locally until a relay is configured.</p></div></div>
               <div className="reader-block"><div className="status-line">{isConnected?<Wifi size={16}/>:<WifiOff size={16}/>} {onlineStatus}</div><label>Server URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} placeholder="wss://your-sennet-relay.example"/></label><label>Room ID<input value={room} onChange={e=>setRoom(e.target.value)} placeholder="friends-table"/></label><div className="tool-buttons"><button onClick={joinRoom}><Wifi size={16}/> Join / Create</button><button onClick={disconnect}><WifiOff size={16}/> Disconnect</button><button onClick={()=>{const link=new URL(location.href);link.searchParams.set('room',room);navigator.clipboard?.writeText(link.href);inform('Invite link copied.');}}><Copy size={16}/> Copy invite</button></div></div>
             </>}
