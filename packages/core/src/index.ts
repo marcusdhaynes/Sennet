@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -946,6 +946,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     zone:['TABLE','DECK','HAND','DISCARD'].includes(String(input.zone)) ? input.zone as Zone : 'TABLE',
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
+    ...(typeof input.carrierId==='string'&&input.carrierId!==input.id ? {carrierId:textValue(input.carrierId,80)} : {}),
     ...(input.scale!==undefined ? {scale:clamp(Math.round(finite(input.scale,1)*2)/2,0.5,7)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
@@ -1082,6 +1083,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
   let turnSeat=state.turnSeat,round=state.round,mode=state.mode;
   let centerMerges=state.centerMerges??[];
   const obj=objects.find(o=>o.id===p.id);
+  const beforeById=new Map(state.objects.map(o=>[o.id,o]));
   // All physical card drops share the same destination rules, whether
   // one card, one stack or a multi-selection is dragged. Deck order and
   // orientation change atomically in the same replayable command.
@@ -1337,6 +1339,82 @@ export function applyCommand(state: GameState, command: Command): GameState {
     }
     case 'SET_MODE': mode=p.mode as PlayMode;message=`Mode: ${mode}`;break;
   }
+  // Carry smaller pieces as children of a larger card. Only a deliberate
+  // physical drop creates/replaces a carrier; rotating or moving a carrier
+  // transforms its descendants about the original carrier center.
+  const movingIds=new Set<string>();
+  if(command.type==='MOVE'||command.type==='MOVE_STACK'){
+    if(typeof p.id==='string')movingIds.add(p.id);
+    if(command.type==='MOVE_STACK'&&typeof p.id==='string')
+      for(const member of cardStackMembers(state,p.id))movingIds.add(member.id);
+  }
+  if(command.type==='BATCH_CARD_ACTION'&&p.action==='move'&&Array.isArray(p.ids))
+    for(const id of p.ids)if(typeof id==='string')movingIds.add(id);
+  const positionChanged=(a:TableObject,b:TableObject)=>
+    Math.hypot(a.x-b.x,a.y-b.y)>0.00001;
+  const carrying=objects.filter(o=>o.kind==='card'||o.kind==='deck');
+  const sizeOf=(o:TableObject)=>({
+    w:(o.kind==='card'||o.kind==='deck'?62:o.kind==='board'?310:52)*(o.scale??1),
+    h:(o.kind==='card'||o.kind==='deck'?88:o.kind==='board'?206:52)*(o.scale??1)
+  });
+  if(movingIds.size){
+    for(const child of objects){
+      if(!movingIds.has(child.id))continue;
+      const old=beforeById.get(child.id);
+      if(!old||!positionChanged(old,child))continue;
+      // Non-table destinations should never remain physically attached.
+      if(child.zone!=='TABLE'){delete child.carrierId;continue;}
+      const size=sizeOf(child);
+      const candidates=carrying.filter(parent=>{
+        if(parent.id===child.id||parent.zone!=='TABLE'||movingIds.has(parent.id))return false;
+        if((parent.matSeat??null)!==(child.matSeat??null))return false;
+        const larger=sizeOf(parent);
+        if(larger.w<=size.w+1||larger.h<=size.h+1)return false;
+        // Resolve positions in the carrier's rotated local coordinate system.
+        const theta=parent.rotation*Math.PI/180;
+        const dx=child.x-parent.x,dy=child.y-parent.y;
+        const lx=dx*Math.cos(theta)+dy*Math.sin(theta);
+        const ly=-dx*Math.sin(theta)+dy*Math.cos(theta);
+        return Math.abs(lx)<=larger.w/2-size.w/4 &&
+          Math.abs(ly)<=larger.h/2-size.h/4;
+      }).sort((a,b)=>sizeOf(a).w*sizeOf(a).h-sizeOf(b).w*sizeOf(b).h);
+      const parent=candidates[0];
+      // An object cannot attach to its own descendant.
+      let current=parent,cyclic=false;
+      while(current){
+        if(current.id===child.id){cyclic=true;break;}
+        current=objects.find(o=>o.id===current!.carrierId);
+      }
+      if(parent&&!cyclic)child.carrierId=parent.id;
+      else delete child.carrierId;
+    }
+  }
+  // Compose transforms in topological order to support nested carriers.
+  const visited=new Set<string>();
+  const updating=new Set<string>();
+  const propagate=(child:TableObject)=>{
+    if(visited.has(child.id)||updating.has(child.id))return;
+    updating.add(child.id);
+    const parent=objects.find(o=>o.id===child.carrierId);
+    if(parent){
+      propagate(parent);
+      const oldParent=beforeById.get(parent.id);
+      const oldChild=beforeById.get(child.id);
+      if(oldParent&&oldChild&&!movingIds.has(child.id)){
+        const delta=(parent.rotation-oldParent.rotation)*Math.PI/180;
+        const dx=oldChild.x-oldParent.x,dy=oldChild.y-oldParent.y;
+        child.x=clamp(parent.x+dx*Math.cos(delta)-dy*Math.sin(delta),0,BOARD_W);
+        child.y=clamp(parent.y+dx*Math.sin(delta)+dy*Math.cos(delta),0,BOARD_H);
+        child.rotation=((oldChild.rotation+parent.rotation-oldParent.rotation)%360+360)%360;
+      }
+    }
+    updating.delete(child.id);visited.add(child.id);
+  };
+  for(const piece of objects)propagate(piece);
+  // Deleted/removed carrier relationships are no longer valid.
+  for(const piece of objects)
+    if(piece.carrierId&&!objects.some(parent=>parent.id===piece.carrierId&&parent.zone==='TABLE'))
+      delete piece.carrierId;
   return {...state,objects,turnSeat,round,mode,centerMerges,seq:state.seq+1,message};
 }
 export function replay(initial:GameState,commands:readonly Command[]):GameState{return commands.reduce((s,c)=>applyCommand(s,c),initial);}
