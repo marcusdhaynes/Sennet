@@ -1243,7 +1243,14 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           showRadialWheel.current(d.id,d.startClientX,d.startClientY,d.pointerId);
           return;
         }
-        if(d.locked)return;
+        if(d.locked){
+          // Locked objects may be selected/unlocked but never dragged.
+          // Movement invalidates a stationary hold: don't spawn the wheel
+          // after the pointer has already crossed the resistance limit.
+          if(d.timer!==null){window.clearTimeout(d.timer);d.timer=null;}
+          d.moved=true;
+          return;
+        }
         d.moved=true;
         if(d.timer!==null){window.clearTimeout(d.timer);d.timer=null;}
       }
@@ -1301,6 +1308,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const d=drag.current;if(!d||d.pointerId!==event.pointerId)return;
       if(d.timer!==null)window.clearTimeout(d.timer);
       drag.current=null;clearHighlight();
+      // A locked card can be unlocked from its wheel, never moved.
+      if(d.locked&&d.moved)return;
       // A simple tap joins selection mode. No further holds required.
       if(!d.moved){
         if(d.wheel||d.held)return;
