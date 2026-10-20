@@ -380,7 +380,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
     <footer className="tcgb-actions"><button onClick={()=>exportDeck('txt')}><Download size={14}/> TXT</button>
      <button onClick={()=>exportDeck('json')}><Save size={14}/> JSON</button>
      <button className="tcgb-load" disabled={!active||!active.entries.length} onClick={()=>{
-      if(active&&window.confirm('Load this deck on the table? The current local game will be replaced.'))onLoadOnTable(active);
+      if(active)onLoadOnTable(active);
      }}><ArrowDownToLine size={14}/> Table</button>
      <button className="tcgb-delete" title="Delete deck" onClick={()=>{
       if(active&&window.confirm('Delete deck '+active.name+'?')){setDecks(ds=>ds.filter(d=>d.id!==active.id));setActiveId('');}
