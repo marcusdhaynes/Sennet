@@ -235,3 +235,19 @@ test('Compact radial layout keeps outer actions in the requested order',()=>{
   }
  }
 });
+
+
+test('Selected group stays rigid when dragging toward the board boundary',()=>{
+ const {local,ids}=stateWithCards();
+ const first=ids[0],second=ids[1];
+ const initial={...local,objects:local.objects.map(o=>
+   o.id===first?{...o,x:70,y:70}:o.id===second?{...o,x:120,y:120}:o)};
+ const changed=apply(initial,'move',[first,second],
+  {anchorId:first,x:-10000,y:-10000});
+ const a=changed.objects.find(o=>o.id===first);
+ const b=changed.objects.find(o=>o.id===second);
+ assert.equal(a.x,0);
+ assert.equal(a.y,0);
+ assert.equal(b.x-a.x,50,'Group drag must preserve x offset');
+ assert.equal(b.y-a.y,50,'Group drag must preserve y offset');
+});
