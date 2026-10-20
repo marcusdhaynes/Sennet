@@ -788,3 +788,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  padding:8px 7px;cursor:pointer;touch-action:manipulation}
 .sennet-wheel-destinations button:hover{background:#71519b}
 @keyframes sennet-wheel-enter{from{opacity:0;transform:scale(.89)}to{opacity:1;transform:scale(1)}}
+
+
+.sennet-card-selection-status{position:absolute;z-index:65;left:13px;bottom:16px;
+ display:flex;align-items:center;gap:12px;max-width:calc(100% - 26px);
+ background:#251c35ed;color:#f0e1fa;border:1px solid #a78ac5;
+ border-radius:21px;box-shadow:0 5px 15px #06030b8a;
+ padding:7px 9px 7px 14px;font:600 11px system-ui;pointer-events:auto}
+.sennet-card-selection-status b{color:#f9dda5}
+.sennet-card-selection-status button{border:1px solid #a88ac6;border-radius:15px;
+ color:#fff;background:#493360;padding:4px 9px;font:600 11px system-ui;cursor:pointer}
+@media(max-width:530px){
+ .sennet-card-selection-status{bottom:52px;font-size:10px}
+}
