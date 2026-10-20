@@ -1079,19 +1079,13 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         const localChair=new Point(BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle),
           BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle));
         // Seat tags belong to the TABLE, never the dynamically transformed playmat layers.
-        const battle=viewRef.current.kind==='castle'||viewRef.current.kind==='versus';
-        const ownLayer=battle?duelLayers.current?.get(seatRef.current):undefined;
-        const matOrigin=tcgMatOrigin(seatRef.current);
-        // In Castle/Eye the table rim is deliberately hidden: attach the tab
-        // to the bottom of the visible local mat instead of a phantom chair.
-        const point=ownLayer
-          ?ownLayer.toGlobal(new Point(matOrigin.x,matOrigin.y+TCG_MAT_HEIGHT/2+28))
-          :board.toGlobal(localChair);
+        // Player labels belong exclusively to the physical table, never to
+        // Castle/Eye opponent or viewer playmat layers.
+        const point=board.toGlobal(localChair);
         const tableCenter=board.toGlobal(new Point(BOARD_CENTER,BOARD_CENTER));
         const dx=point.x-tableCenter.x,dy=point.y-tableCenter.y;
-        const outward=ownLayer?'bottom' as const:Math.abs(dx)>Math.abs(dy)?(dx>0?'right' as const:'left' as const):(dy>0?'bottom' as const:'top' as const);
-        const width=ownLayer?TCG_MAT_WIDTH*scale*ownLayer.scale.x:
-          2*TABLE_APOTHEM*Math.tan(Math.PI/12)*scale;
+        const outward=Math.abs(dx)>Math.abs(dy)?(dx>0?'right' as const:'left' as const):(dy>0?'bottom' as const:'top' as const);
+        const width=2*TABLE_APOTHEM*Math.tan(Math.PI/12)*scale;
         setPlayerTagGeometry(previous=>Math.abs(previous.x-point.x)<.05&&Math.abs(previous.y-point.y)<.05&&Math.abs(previous.scale-scale)<.00001&&Math.abs(previous.width-width)<.05&&previous.outward===outward?previous:{x:point.x,y:point.y,scale,width,outward});
         if(callbacks.current.onViewChange&&
           (Math.abs(lastView.current.x-point.x)>.4||
