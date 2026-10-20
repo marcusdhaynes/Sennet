@@ -123,31 +123,46 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    </g>
    <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Drag or hold to expand wheel':'Drag or hold to collapse wheel'}
      onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
+       e.preventDefault();
        centerTimer.current=window.setTimeout(()=>{setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;},450);
+       let moved=false;
+       const bound=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
+       const bounds=()=>({x:Math.max(size/2,window.innerWidth-size/2),y:Math.max(size/2,window.innerHeight-size/2)});
        const move=(ev:PointerEvent)=>{
          if(ev.pointerId!==e.pointerId)return;
+         ev.stopImmediatePropagation();ev.preventDefault();
          const dx=ev.clientX-startX,dy=ev.clientY-startY;
-         if(Math.hypot(dx,dy)>12){
+         if(Math.hypot(dx,dy)>6)moved=true;
+         if(moved){
            clearCenterTimer();
-           if(docked)setDragOffset({x:x+dx,y:y+dy});
+           if(docked){
+             const max=bounds();
+             setDragOffset({x:bound(x+dx,size/2,max.x),y:bound(y+dy,size/2,max.y)});
+           }
          }
+       };
+       const cleanup=()=>{
+         window.removeEventListener('pointermove',move,true);
+         window.removeEventListener('pointerup',finish,true);
+         window.removeEventListener('pointercancel',finish,true);
        };
        const finish=(ev:PointerEvent)=>{
          if(ev.pointerId!==e.pointerId)return;
-         clearCenterTimer();
-         const position={x:x+ev.clientX-startX,y:y+ev.clientY-startY};
-         if(docked&&Math.hypot(ev.clientX-startX,ev.clientY-startY)>12){
-           const home={x:Math.max(76,window.innerWidth-88),y:Math.max(76,window.innerHeight-88)};
-           // The magnet is deliberately tiny: only drops within 24 px snap home.
-           const final=Math.hypot(position.x-home.x,position.y-home.y)<=24?home:position;
-           onMoveDock?.(final);
+         ev.stopImmediatePropagation();ev.preventDefault();
+         clearCenterTimer();cleanup();
+         if(docked&&moved){
+           const max=bounds();
+           const position={x:bound(x+ev.clientX-startX,size/2,max.x),y:bound(y+ev.clientY-startY,size/2,max.y)};
+           const home={x:bound(window.innerWidth-88,size/2,max.x),y:bound(window.innerHeight-88,size/2,max.y)};
+           // Home magnet is six pixels only; all other in-bounds placements persist.
+           onMoveDock?.(Math.hypot(position.x-home.x,position.y-home.y)<=6?home:position);
          }
          setDragOffset(null);
-         window.removeEventListener('pointermove',move);
-         window.removeEventListener('pointerup',finish);
-         window.removeEventListener('pointercancel',finish);
        };
-       window.addEventListener('pointermove',move);window.addEventListener('pointerup',finish);window.addEventListener('pointercancel',finish);
+       // Capture before the playmat's pan/zoom handlers see this pointer.
+       window.addEventListener('pointermove',move,{capture:true,passive:false});
+       window.addEventListener('pointerup',finish,{capture:true,passive:false});
+       window.addEventListener('pointercancel',finish,{capture:true,passive:false});
      }}
      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
    <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#baa2d2" strokeWidth="2"/>
