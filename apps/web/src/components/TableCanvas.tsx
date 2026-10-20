@@ -4,7 +4,7 @@ import CardRadialWheel from './CardRadialWheel';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+interface Props{wheelMode:'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -878,7 +878,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -930,6 +930,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const wheelPointer=useRef<number|null>(null);
   const showRadialWheel=useRef<(id:string,x:number,y:number,pointerId:number|null)=>void>(()=>{});
   showRadialWheel.current=(id,x,y,pointerId)=>{
+    if(wheelMode==='docked')return;
     const rect=mount.current?.getBoundingClientRect();
     if(!rect)return;
     const size=Math.max(172,Math.min(258,rect.width-12,rect.height-12));
@@ -1232,7 +1233,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           active.timer=window.setTimeout(()=>{
             if(drag.current!==active||active.moved)return;
             active.timer=null;active.held=true;
-            if(wasSelected){
+            if(wasSelected&&wheelMode==='hold'){
               active.wheel=true;
               showRadialWheel.current(obj.id,active.startClientX,
                 active.startClientY,active.pointerId);
@@ -1311,7 +1312,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         if(distance<GESTURE_MOVE_THRESHOLD)return;
         // Once a stationary first hold has selected the stack, sliding
         // the finger invokes the wheel; it never jerks the cards away.
-        if(d.held){
+        if(d.held&&wheelMode==='hold'){
           d.wheel=true;
           showRadialWheel.current(d.id,d.startClientX,d.startClientY,d.pointerId);
           return;
@@ -1926,18 +1927,19 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
 
-    {radialWheel&&<div className="sennet-radial-overlay">
+    {(wheelMode==='docked'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
-        x={radialWheel.x} y={radialWheel.y} size={radialWheel.size}
-        count={radialWheel.ids.length}
-        allLocked={radialWheel.ids.every(id=>state.objects.find(o=>o.id===id)?.locked)}
-        pointerId={radialWheel.pointerId}
+        x={wheelMode==='docked'?Math.max(98,viewport.width-112):radialWheel!.x} y={wheelMode==='docked'?Math.max(98,viewport.height-112):radialWheel!.y} size={wheelMode==='docked'?192:radialWheel!.size}
+        count={wheelMode==='docked'?selectedIds.length:radialWheel!.ids.length}
+        allLocked={(wheelMode==='docked'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
+        pointerId={wheelMode==='docked'?null:radialWheel!.pointerId}
         onChoose={action=>{
-          callbacks.current.onRadialAction(radialWheel.ids,action);
-          setRadialWheel(null);
+          const targets=wheelMode==='docked'?selectedIds:radialWheel!.ids;
+          if(targets.length)callbacks.current.onRadialAction(targets,action);
+          if(wheelMode==='hold')setRadialWheel(null);
           wheelPointer.current=null;
         }}
-        onCancel={()=>{setRadialWheel(null);wheelPointer.current=null;}}
+        onCancel={()=>{if(wheelMode==='hold')setRadialWheel(null);wheelPointer.current=null;}}
       />
 
 
