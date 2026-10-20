@@ -1182,3 +1182,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  max-height:420px;visibility:visible;opacity:1;pointer-events:auto;
  overflow:hidden;
 }
+
+/* Bookcase unfolds OUTWARD from whichever rim segment hosts the local seat.
+   The gold table tag stays stationary while its contents open off the felt. */
+.pixi-host .sennet-player-tag-anchor .player-hub-content,
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+  position:absolute;width:min(380px,calc(100vw - 24px));height:auto;
+  left:50%;top:auto;bottom:calc(100% + 7px);
+  transform:translateX(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="bottom"] .player-hub-content{
+  bottom:auto;top:calc(100% + 7px);left:50%;transform:translateX(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="left"] .player-hub-content{
+  left:auto;right:calc(100% + 7px);top:50%;bottom:auto;
+  transform:translateY(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="right"] .player-hub-content{
+  left:calc(100% + 7px);right:auto;top:50%;bottom:auto;
+  transform:translateY(-50%);
+}
