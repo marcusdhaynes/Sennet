@@ -71,7 +71,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   };
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
- },[pointerId,onChoose,onCancel,onSendTo]);
+ },[pointerId,onChoose,onCancel]);
  return <div className="card-radial-wheel" style={{width:size,height:size,left:x-size/2,top:y-size/2}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()}>
