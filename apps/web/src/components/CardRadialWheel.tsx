@@ -28,26 +28,6 @@ function multiline(label:string){
 }
 export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap'}:Props){
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
- const dragActive=useRef(false);
- const dragPoint=useRef<{id:number;x:number;y:number;originX:number;originY:number;startX:number;startY:number}|null>(null);
- const startDockDrag=(event:React.PointerEvent<HTMLButtonElement>)=>{
-   if(!docked)return;
-   event.preventDefault();event.stopPropagation();
-   dragActive.current=true;
-   dragPoint.current={id:event.pointerId,x:event.clientX,y:event.clientY,originX:x,originY:y,startX:event.clientX,startY:event.clientY};
-   event.currentTarget.setPointerCapture(event.pointerId);
- };
- const dragDock=(event:React.PointerEvent<HTMLButtonElement>)=>{
-   const d=dragPoint.current;if(!d||event.pointerId!==d.id)return;
-   const nextX=d.originX+event.clientX-d.startX,nextY=d.originY+event.clientY-d.startY;
-   setDragOffset({x:nextX,y:nextY});
- };
- const finishDockDrag=(event:React.PointerEvent<HTMLButtonElement>)=>{
-   const d=dragPoint.current;if(!d||event.pointerId!==d.id)return;
-   dragPoint.current=null;dragActive.current=false;
-   // Let the wheel animate smoothly home rather than retaining its drop position.
-   setDragOffset(null);
- };
  const [category,setCategory]=useState<number|null>(null);
  const [collapsed,setCollapsed]=useState(false);
  const centerTimer=useRef<number|null>(null);
@@ -140,11 +120,25 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     </g>;
    }))}
    </g>
-   <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Hold to expand wheel':'Hold to collapse wheel'}
+   <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Drag or hold to expand wheel':'Drag or hold to collapse wheel'}
      onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
        centerTimer.current=window.setTimeout(()=>{setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;},450);
-       const move=(ev:PointerEvent)=>{if(ev.pointerId===e.pointerId&&Math.hypot(ev.clientX-startX,ev.clientY-startY)>12)clearCenterTimer();};
-       const finish=(ev:PointerEvent)=>{if(ev.pointerId===e.pointerId){clearCenterTimer();window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',finish);window.removeEventListener('pointercancel',finish);}};
+       const move=(ev:PointerEvent)=>{
+         if(ev.pointerId!==e.pointerId)return;
+         const dx=ev.clientX-startX,dy=ev.clientY-startY;
+         if(Math.hypot(dx,dy)>12){
+           clearCenterTimer();
+           if(docked)setDragOffset({x:x+dx,y:y+dy});
+         }
+       };
+       const finish=(ev:PointerEvent)=>{
+         if(ev.pointerId!==e.pointerId)return;
+         clearCenterTimer();
+         setDragOffset(null);
+         window.removeEventListener('pointermove',move);
+         window.removeEventListener('pointerup',finish);
+         window.removeEventListener('pointercancel',finish);
+       };
        window.addEventListener('pointermove',move);window.addEventListener('pointerup',finish);window.addEventListener('pointercancel',finish);
      }}
      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
@@ -154,7 +148,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{collapsed?'Hold to expand':category===null?'Hold to shrink':RADIAL_CATEGORIES[category]}</text>
    </g>
   </svg>
-  {docked&&<button className="sennet-radial-drag-handle" type="button" aria-label="Move radial wheel" title="Drag to move wheel" onPointerDown={startDockDrag} onPointerMove={dragDock} onPointerUp={finishDockDrag} onPointerCancel={finishDockDrag}>⠿</button>}
+  
   {!docked&&<button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
  </div>;
 }
