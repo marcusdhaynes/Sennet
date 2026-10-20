@@ -144,3 +144,38 @@ test('Nine actions replay exactly and card scale persists through sanitization',
  assert.deepEqual(replay(local,actions),sequential);
  assert.equal(sequential.seq,local.seq+9);
 });
+
+
+test('Lorcana-style stacked cards take wheel operations together without affecting unselected cards',()=>{
+ const {local,ids}=stateWithCards();
+ const lorcanaNames=[
+  'Mother Gothel - Selfish Manipulator',
+  "The Queen's Castle - Mirror Chamber",
+  'Jafar - Striking Illusionist',
+  'Hidden Inkcaster'
+ ];
+ const base=local.objects.find(o=>o.id===ids[0]);
+ const clustered={...local,objects:local.objects.map(o=>{
+  const idx=ids.indexOf(o.id);
+  return idx>=0&&idx<4?{...o,name:lorcanaNames[idx],
+   x:base.x,y:base.y,zone:'TABLE',matSeat:0,order:idx}:o;
+ })};
+ const selected=ids.slice(0,4);
+ let after=apply(clustered,'flip',selected);
+ after=apply(after,'rotate-cw',selected);
+ after=apply(after,'scale-bigger',selected);
+ after=apply(after,'shuffle',selected,{seed:491});
+ after=apply(after,'lock',selected);
+ for(const id of selected){
+  const card=after.objects.find(o=>o.id===id);
+  assert.equal(card.faceUp,false);
+  assert.equal(card.rotation,45);
+  assert.equal(card.scale,1.5);
+  assert.equal(card.locked,true);
+ }
+ assert.deepEqual(after.objects.find(o=>o.id===ids[4]),
+  clustered.objects.find(o=>o.id===ids[4]));
+ const unlocked=apply(after,'lock',selected);
+ const hand=apply(unlocked,'send-to',selected,{destination:'HAND',matSeat:0});
+ for(const id of selected)assert.equal(hand.objects.find(o=>o.id===id).zone,'HAND');
+});
