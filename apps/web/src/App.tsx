@@ -368,14 +368,13 @@ export default function App(){
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
-          if(old&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat)){
-            for(const card of cardStackMembers(game,id))takeAction('DELETE',{id:card.id});
-          }else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+          if(old&&Math.hypot(old.x-x,old.y-y)>=2)
+            takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
         onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
-          if(old&&['card','token'].includes(old.kind)&&game.kind==='tcg'&&isTcgRemoveDrop(x,y,seat))takeAction('DELETE',{id});
-          else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+          if(old&&Math.hypot(old.x-x,old.y-y)>=2)
+            takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }} readonly={replayAt!==null}/>
     </div>
     <button className="sennet-rewind-button" type="button" title="Restore last play session"
