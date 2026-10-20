@@ -184,7 +184,12 @@ function drawTcgMats(
     // Two empty trays are siblings of the mat pockets in the SAME transformed
     // container, so Castle/Eye/ordinary views all carry them automatically.
     if(seat===viewerSeat){
-      const trayW=TCG_MAT.cardWidth,trayH=TCG_MAT.cardHeight*3;
+      const trayW=TCG_MAT.cardWidth;
+      // Exact zone edges: row 1 = PLAY 02; row 3 = HAND.
+      // Match the pockets, including the gaps between their rows.
+      const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
+      const trayBottom=TCG_MAT_HEIGHT/2;
+      const trayH=trayBottom-trayTop;
       const finishes={
         walnut:[0x34251d,0x6b4830,0x120e0d,0xb68a59],
         carved:[0x765033,0xaf8050,0x3c2330,0xe3bf83],
@@ -194,7 +199,7 @@ function drawTcgMats(
       } as const;
       const [wood,rim,well,shine]=finishes[playmat.sideBoxStyle??'walnut'];
       for(const side of [-1,1]){
-        const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=TCG_MAT_HEIGHT/2-trayH/2;
+        const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=(trayTop+trayBottom)/2;
         const tray=new Graphics()
           .roundRect(cx-trayW/2-4,cy-trayH/2-5,trayW+8,trayH+10,7)
           .fill({color:wood}).stroke({color:shine,width:1.6})
