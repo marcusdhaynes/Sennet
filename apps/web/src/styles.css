@@ -1116,3 +1116,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
  max-height:360px;
 }
+
+/* Player tags follow transformed PLAY 01 positions, never the screen edge.
+   A zero-sized anchor must not clip the clickable drawer. */
+.pixi-host .sennet-player-tag-anchor{position:absolute;z-index:95;pointer-events:none;width:0;height:0;overflow:visible;transform:none}
+.pixi-host .sennet-player-tag-anchor .player-hub{
+ position:absolute;left:0;top:0;bottom:auto;
+ transform:translate(-50%,-50%);
+ width:150px;max-width:none;min-height:23px;
+ overflow:visible;visibility:visible;opacity:1;pointer-events:auto;
+ border:1px solid #bb9e6b;border-radius:9px;
+ background:linear-gradient(165deg,#25493e,#172e29);
+}
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open{width:min(406px,calc(100vw - 16px));z-index:2}
+.pixi-host .sennet-player-tag-anchor .player-hub-tab{min-height:23px}
+.pixi-host .sennet-player-tag-anchor .player-hub-content{max-height:0;visibility:hidden}
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+ max-height:380px;visibility:visible;overflow:hidden;
+}
