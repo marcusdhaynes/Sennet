@@ -1043,3 +1043,28 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel.is-half .sennet-radial-center{
   pointer-events:auto;
 }
+
+/* The playmat lip visually overlaps the docked half-wheel, including its hub.
+   Keep the wheel's exposed lower half interactive; the lip never catches input. */
+.card-radial-wheel.is-half{
+  isolation:isolate;
+  overflow:visible;
+  filter:drop-shadow(0 8px 8px #030a09a0);
+}
+.card-radial-wheel.is-half::after{
+  content:"";
+  position:absolute;
+  z-index:6;
+  left:-2%;
+  top:-5px;
+  width:104%;
+  height:9px;
+  pointer-events:none;
+  background:linear-gradient(to bottom,#233e34 0%,#1a302a 60%,#0b1715 100%);
+  border-bottom:1px solid #aa956e99;
+  box-shadow:0 3px 7px #030c0bb5;
+}
+.card-radial-wheel.is-half.is-collapsed::after{
+  left:32%;
+  width:36%;
+}
