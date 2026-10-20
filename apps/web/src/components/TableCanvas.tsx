@@ -955,7 +955,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
     startClientX:number;startClientY:number;moved:boolean;
-    whole:boolean;held:boolean;wheel:boolean;members:{id:string;x:number;y:number}[];
+    whole:boolean;held:boolean;wheel:boolean;locked:boolean;members:{id:string;x:number;y:number}[];
     timer:number|null;
   };
   const drag=useRef<ActiveDrag|null>(null);
@@ -1141,7 +1141,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
             id:obj.id,pointerId:e.pointerId,visual:piece,card:obj.kind!=='board'&&obj.kind!=='deck-box',
             x:obj.x,y:obj.y,startX:obj.x,startY:obj.y,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
-            whole:false,held:false,wheel:false,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
+            whole:false,held:false,wheel:false,locked:!!obj.locked,members:eligible?members.map(o=>({id:o.id,x:o.x,y:o.y})):[],
             timer:null
           };
           drag.current=active;
@@ -1214,7 +1214,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     cancelActiveDrag.current=()=>discard();
     const move=(event:PointerEvent)=>{
       const d=drag.current,current=session.current;
-      if(!d||d.pointerId!==event.pointerId||!current||!mount.current)return;
+      if(!d||d.pointerId!==event.pointerId||!current||!mount.current||d.locked)return;
       if(!d.moved){
         if(d.wheel)return;
         if(Math.hypot(event.clientX-d.startClientX,event.clientY-d.startClientY)<GESTURE_MOVE_THRESHOLD)return;
