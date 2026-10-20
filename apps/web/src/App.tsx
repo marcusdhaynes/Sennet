@@ -389,7 +389,7 @@ export default function App(){
           loadRecent(saved);
           setSeat(saved.seat??seat);
         }else inform('No saved play session yet.');
-      }}>⟲</button>
+      }}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2.5 6"/><path d="M4 4v7h7"/></svg></button>
     <button type="button" className="sennet-log-toggle" aria-label={actionLogOpen?'Close action log':'Open action log'}
       aria-expanded={actionLogOpen} title="Action log" onClick={()=>setActionLogOpen(v=>!v)}>
       <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
