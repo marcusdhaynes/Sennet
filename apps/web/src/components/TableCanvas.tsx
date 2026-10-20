@@ -639,8 +639,8 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     // in the versus mode, preserving the full play area for cards.
     if(layers)continue;
     const angle=i*Math.PI/6-Math.PI/2;
-    const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle);
-    const y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
+    const x=BOARD_CENTER+(TABLE_APOTHEM+4)*Math.cos(angle);
+    const y=BOARD_CENTER+(TABLE_APOTHEM+4)*Math.sin(angle);
     const mine=i===seat;
     // The local seat is represented by its interactive book-drawer tag.
     if(mine)continue;
@@ -1036,8 +1036,8 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         }
 
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
-        const localChair=new Point(BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle),
-          BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle));
+        const localChair=new Point(BOARD_CENTER+(TABLE_APOTHEM+4)*Math.cos(angle),
+          BOARD_CENTER+(TABLE_APOTHEM+4)*Math.sin(angle));
         const chairParent=duelLayers.current?.get(seatRef.current)??board;
         const point=chairParent.toGlobal(localChair);
         setPlayerTagGeometry(previous=>Math.abs(previous.x-point.x)<.35&&Math.abs(previous.y-point.y)<.35&&Math.abs(previous.scale-scale)<.001?previous:{x:point.x,y:point.y,scale});
