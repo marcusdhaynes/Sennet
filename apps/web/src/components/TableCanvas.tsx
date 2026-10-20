@@ -924,6 +924,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
   const [radialWheel,setRadialWheel]=useState<{
     x:number;y:number;size:number;pointerId:number|null;ids:string[];sendTo:boolean
   }|null>(null);
+  const radialOpenedAt=useRef(0);
   const radialOpen=useRef(false);
   radialOpen.current=!!radialWheel;
   const wheelPointer=useRef<number|null>(null);
@@ -934,6 +935,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     const size=Math.max(172,Math.min(258,rect.width-12,rect.height-12));
     const pos=wheelPosition(x-rect.left,y-rect.top,rect.width,rect.height,size);
     const ids=selectedSet.current.has(id)?[...selectedSet.current]:[id];
+    radialOpenedAt.current=Date.now();
     setRadialWheel({x:pos.x,y:pos.y,size,pointerId,ids,sendTo:false});
     wheelPointer.current=pointerId;
     setGestureMenu(null);
@@ -1768,7 +1770,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(event.target===session.current?.app.canvas&&!drag.current&&
         controlPointer.current!==event.pointerId){
         setGestureMenu(null);
-        if(radialOpen.current)setRadialWheel(null);
+        if(radialOpen.current&&Date.now()-radialOpenedAt.current>450)setRadialWheel(null);
         if(selectedSet.current.size){
           selectedSet.current=new Set();
           setSelectedIds([]);
