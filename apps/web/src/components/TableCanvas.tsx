@@ -4,7 +4,7 @@ import CardRadialWheel from './CardRadialWheel';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
@@ -114,6 +114,7 @@ function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,
 function drawTcgMats(
   board:Container,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,playmat:PlaymatAppearance,
+  bookDesign:Props['bookDesign'],bookDock:Props['bookDock'],bookOffset:Props['bookOffset'],onBookOpen:()=>void,onBookMove:Props['onBookMove'],
   onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,
   onFocusCastleSeat:(seat:number)=>void,
   selectedOpponent:number|null,relations:Readonly<Record<number,OpponentRelation>>,
@@ -220,6 +221,49 @@ function drawTcgMats(
         }
         tray.eventMode='none';mat.addChild(tray);
       }
+    }
+    if(seat===viewerSeat){
+      const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
+      const trayBottom=TCG_MAT_HEIGHT/2;
+      const side=bookDock==='left'?-1:1;
+      const bw=TCG_MAT.cardWidth*.76,bh=TCG_MAT.cardHeight*.9;
+      const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
+      const by=trayBottom-bh/2-9+bookOffset.y;
+      const palettes={
+        tiny:[0x7e3035,0xd5a45d,0x251919],
+        dragon:[0x124960,0x3fbbcb,0x081c28],
+        journal:[0x751e35,0xc97999,0x2b1025],
+        arcane:[0x4a321f,0xe8c16c,0x271b15],
+        strapped:[0x70412a,0xa78960,0x332019]
+      } as const;
+      const [cover,foil,spine]=palettes[bookDesign];
+      const book=new Container();book.position.set(bx,by);book.eventMode='static';book.cursor='grab';
+      const face=new Graphics().roundRect(-bw/2+2,-bh/2+3,bw,bh,5)
+        .fill({color:0xd4c5a5}).stroke({color:0x735741,width:2})
+        .roundRect(-bw/2,-bh/2-2,bw-3,bh,5).fill({color:cover})
+        .stroke({color:foil,width:1.6})
+        .roundRect(-bw/2,-bh/2-2,8,bh,2).fill({color:spine})
+        .roundRect(-bw/2+10,-bh/2+7,bw-24,bh-16,3).stroke({color:foil,width:1.5})
+        .moveTo(-bw/2+12,-bh/2+14).lineTo(bw/2-15,bh/2-13)
+        .moveTo(bw/2-15,-bh/2+14).lineTo(-bw/2+12,bh/2-13)
+        .stroke({color:foil,width:.7,alpha:.55});
+      if(bookDesign==='tiny'||bookDesign==='strapped')face.roundRect(-bw/2,-bh/2+7,bw-3,9,2).fill({color:spine,alpha:.9});
+      const emblem=label('✦',19,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
+      let down:{x:number;y:number;offsetX:number;offsetY:number}|null=null;
+      book.on('pointerdown',e=>{e.stopPropagation();down={x:e.global.x,y:e.global.y,offsetX:bookOffset.x,offsetY:bookOffset.y};});
+      book.on('pointerup',e=>{
+        e.stopPropagation();
+        if(!down)return;
+        if(Math.hypot(e.global.x-down.x,e.global.y-down.y)<7)onBookOpen();
+        down=null;
+      });
+      book.on('pointerupoutside',()=>{down=null;});
+      book.on('globalpointermove',e=>{
+        if(!down)return;
+        const scale=book.getGlobalTransform().a||1;
+        onBookMove({x:down.offsetX+(e.global.x-down.x)/scale,y:down.offsetY+(e.global.y-down.y)/scale});
+      });
+      mat.addChild(book);
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
@@ -670,6 +714,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,
       castleMode,castleBaseMode,focused,viewport,selectedEnemy);
   if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
+    bookDesign,bookDock,bookOffset,onBookOpen,onBookMove,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,layers,
@@ -919,7 +964,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
