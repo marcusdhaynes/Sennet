@@ -565,7 +565,7 @@ test('mat draw uses that seat deck and HAND, retains privacy, and replays with f
     const drawn=applyCommand(start,commands[0]);
     const card=drawn.objects.find(o=>o.id===deck[0].id);
     assert.equal(card.zone,'HAND');assert.equal(card.matSeat,seat);assert.equal(card.owner,'local');
-    assert.equal(card.faceUp,false);
+    assert.equal(card.faceUp,true,'Owner sees actual card front in hand');
     const hand=tcgSnapPoint(card.x,card.y);
     assert.equal(hand.seat,seat);assert.equal(hand.row,3);assert.equal(hand.column,1);
     assert.equal(drawn.objects.filter(o=>o.zone==='DECK'&&o.matSeat===(seat===0?6:0)).length,12);
