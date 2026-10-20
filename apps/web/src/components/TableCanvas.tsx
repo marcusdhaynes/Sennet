@@ -1033,8 +1033,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
         const playerSection=tcgMatCells(seatRef.current).find(cell=>cell.row===0&&cell.column===1);
         if(playerSection){
-          const topPoint=new Point(playerSection.x+Math.sin(playerSection.angle)*playerSection.height/2,
-            playerSection.y-Math.cos(playerSection.angle)*playerSection.height/2);
+          const topPoint=new Point(playerSection.x,playerSection.y);
           const projected=board.toGlobal(topPoint);
           setPlayerTagGeometry(previous=>Math.abs(previous.x-projected.x)<.35&&Math.abs(previous.y-projected.y)<.35?previous:{x:projected.x,y:projected.y});
         }
@@ -1967,10 +1966,6 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
-    {eyeView.kind==='versus'&&eyeView.opponent!==null&&
-      <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
-        side="top"
-        idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
 
     {state.kind==='tcg'&&!readonly&&drawer&&<div className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y}}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
