@@ -569,7 +569,7 @@ export function castleGridLayout(
   const width=Math.max(1,viewport.width),height=Math.max(1,viewport.height);
   const cameraScale=Math.min(
     height/(2*TCG_MAT_HEIGHT+4*pad),
-    width/(2*TCG_MAT_WIDTH+6*pad)
+    width/(2*TCG_MAT_WIDTH+3*pad)
   );
   const visibleW=width/cameraScale,visibleH=height/cameraScale;
   const rotation=viewerTableRotation(viewerSeat);
@@ -593,9 +593,9 @@ export function castleGridLayout(
   const viewerLeft=-TCG_MAT_WIDTH/2;
   const viewerCenter=world(0,visibleH/4);
   mats.set(viewerSeat,{...viewerCenter,rotation:0,scale:1});
-  // Preserve the generous viewer-to-ally clearance, independently of
-  // the very tight spacing WITHIN each automatically optimized grid.
-  const playerGap=2*pad;
+  // Match the small outer wall clearance to the inner viewer-to-ally gap.
+  // Center each wing in its remaining lane, sharing unused space equally.
+  const playerGap=pad;
   const grid=(
     seats:readonly number[],rect:{left:number;right:number;top:number;bottom:number},
     enemy:boolean
