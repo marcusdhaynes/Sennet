@@ -489,7 +489,17 @@ export default function App(){
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
             </>}
             {settingsPage==='playmat'&&
-              <><PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
+              <><div className="reader-block"><h3>Wooden side boxes</h3><p>Two empty wooden trays, one card wide and three cards tall, follow your playmat in every view.</p>
+                <label htmlFor="wood-box-finish">Wood finish</label>
+                <select id="wood-box-finish" value={playmat.sideBoxStyle}
+                  onChange={e=>setPlaymat(p=>({...p,sideBoxStyle:e.target.value as PlaymatAppearance['sideBoxStyle']}))}>
+                  <option value="walnut">Dark walnut tray</option>
+                  <option value="carved">Carved wooden chest</option>
+                  <option value="maple">Light maple</option>
+                  <option value="ebony">Ebony</option>
+                  <option value="mahogany">Mahogany</option>
+                </select>
+              </div><PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
                 merges={viewedGame.centerMerges??[]} seat={seat} inform={inform}/>
               <div className="reader-block">
                 <h3>TCG center-section controls</h3>
