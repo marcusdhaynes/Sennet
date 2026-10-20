@@ -1933,6 +1933,7 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
         count={wheelMode==='docked'?selectedIds.length:radialWheel!.ids.length}
         allLocked={(wheelMode==='docked'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode==='docked'?null:radialWheel!.pointerId}
+        tapLabel={(wheelMode==='docked'?selectedIds:radialWheel!.ids).some(id=>{const card=state.objects.find(o=>o.id===id);return card&&((card.rotation%360)+360)%360!==0;})?'Untap':'Tap'}
         onChoose={action=>{
           const targets=wheelMode==='docked'?selectedIds:radialWheel!.ids;
           if(targets.length)callbacks.current.onRadialAction(targets,action);
