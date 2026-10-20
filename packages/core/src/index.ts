@@ -1087,7 +1087,12 @@ export function applyCommand(state: GameState, command: Command): GameState {
   // orientation change atomically in the same replayable command.
   const applyPocketDrop=(cards:TableObject[],x:number,y:number,seat:number)=>{
     const pocket=tcgDropZone(x,y,seat);
-    if(!pocket)return;
+    if(!pocket){
+      for(const card of cards)if(card.zone==='DECK'){
+        card.zone='TABLE';card.faceUp=true;
+      }
+      return;
+    }
     if(pocket.zone==='DECK'){
       const ids=new Set(cards.map(card=>card.id));
       const otherDeck=objects.filter(card=>!ids.has(card.id)&&
@@ -1343,7 +1348,7 @@ export function nearestFrameIndex(seat:number,rotationDegrees:number,frameCount:
 export function projectForActor(state:GameState,viewerId:string):GameState {
   return {...state,objects:state.objects.map(o=>{
     if(o.zone==='HAND' && o.owner!==viewerId) return {...o,name:'Hidden card',description:undefined,faceUrl:undefined,frameUrls:undefined,faceUp:false,color:'#253c43',value:undefined,order:0};
-    if(o.zone==='DECK')return {...o,name:'Face-down card',description:undefined,faceUrl:undefined,frameUrls:undefined,faceUp:false,color:'#253c43',value:undefined,order:0};
+    if(o.zone==='DECK'&&!o.faceUp)return {...o,name:'Face-down card',description:undefined,faceUrl:undefined,frameUrls:undefined,faceUp:false,color:'#253c43',value:undefined,order:0};
     return o;
   })};
 }
