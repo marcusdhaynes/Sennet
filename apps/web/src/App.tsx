@@ -102,11 +102,13 @@ export default function App(){
   const [recent,setRecent]=useState<SavedSession[]>(recentGames);
   const [book,setBook]=useState<Book|null>(null);
   const [bookDesign,setBookDesign]=useState<'tiny'|'dragon'|'journal'|'arcane'|'strapped'>(()=>(localStorage.getItem('sennet.book.design') as 'tiny'|'dragon'|'journal'|'arcane'|'strapped')||'dragon');
-  const [bookDock,setBookDock]=useState<'left'|'right'|'free'>(()=>(localStorage.getItem('sennet.book.dock') as 'left'|'right'|'free')||'right');
-  const [bookOffset,setBookOffset]=useState<{x:number;y:number}>(()=>{try{return JSON.parse(localStorage.getItem('sennet.book.offset')||'{"x":0,"y":0}');}catch{return {x:0,y:0};}});
+  // New book footprint starts at the bottom of the RIGHT tray even when an
+  // earlier version saved the old miniature's position or left dock.
+  const [bookDock,setBookDock]=useState<'left'|'right'|'free'>(()=>(localStorage.getItem('sennet.book.dock.v2') as 'left'|'right'|'free')||'right');
+  const [bookOffset,setBookOffset]=useState<{x:number;y:number}>(()=>{try{return JSON.parse(localStorage.getItem('sennet.book.offset.v2')||'{"x":0,"y":0}');}catch{return {x:0,y:0};}});
   useEffect(()=>{localStorage.setItem('sennet.book.design',bookDesign)},[bookDesign]);
-  useEffect(()=>{localStorage.setItem('sennet.book.dock',bookDock)},[bookDock]);
-  useEffect(()=>{localStorage.setItem('sennet.book.offset',JSON.stringify(bookOffset))},[bookOffset]);
+  useEffect(()=>{localStorage.setItem('sennet.book.dock.v2',bookDock)},[bookDock]);
+  useEffect(()=>{localStorage.setItem('sennet.book.offset.v2',JSON.stringify(bookOffset))},[bookOffset]);
 
   const [tcgStudioOpen,setTcgStudioOpen]=useState(false);
   const [gamesPage,setGamesPage]=useState<GamePage>('all');
