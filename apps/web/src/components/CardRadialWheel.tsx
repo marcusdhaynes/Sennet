@@ -74,7 +74,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  },[pointerId,onChoose,onCancel]);
  return <div className="card-radial-wheel" style={{width:size,height:size,left:x-size/2,top:y-size/2}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
-  onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()}>
+  onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
   <svg viewBox="0 0 400 400" role="img" aria-label="Position, Scale and Location action wheel">
    <circle cx={200} cy={200} r={198} fill="#0c1016" fillOpacity=".42"/>
    {RADIAL_CATEGORIES.map((name,i)=>{
@@ -94,14 +94,14 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     const selected=category===i,hot=action===act.id;
     return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
-      onClick={()=>onChoose(act.id)}
+      onClick={e=>{e.stopPropagation();onChoose(act.id);}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
-      style={{pointerEvents:selected?'auto':'none'}}>
+      style={{pointerEvents:'auto'}}>
      <path d={sector(127,192,i*120+j*40,i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     {selected&&<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
+     {<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
        textAnchor="middle" fontSize="12" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
        {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
