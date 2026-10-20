@@ -223,6 +223,29 @@ export function tcgMatCells(seat=0):TcgMatCell[] {
   }
   return cells;
 }
+/** Exact card pocket hit test (no magnetic snap margin). */
+export function tcgDropZone(x:number,y:number,seat:number):{
+ zone:'DECK'|'HAND'|'DISCARD'|'TABLE'|'REMOVE';
+ faceUp:boolean;deckBottom:boolean;row:number;column:number
+}|null{
+ if(!Number.isFinite(x)||!Number.isFinite(y))return null;
+ const p=tcgMatLocal(x,y,seat);
+ for(const cell of tcgMatCells(seat)){
+  const center=tcgMatLocal(cell.x,cell.y,seat);
+  if(Math.abs(p.x-center.x)>cell.width/2||
+     Math.abs(p.y-center.y)>cell.height/2)continue;
+  const {row,column}=cell;
+  const zone=row===1&&column===2?'DECK':
+    row===3&&column===1?'HAND':
+    row===2&&column===2?'DISCARD':
+    row===3&&column===2?'REMOVE':'TABLE';
+  const faceUp=zone==='HAND'||zone==='DISCARD'||zone==='REMOVE'||
+   (column===0&&row===2)||(column===2&&row===0);
+  const deckBottom=zone==='DECK'&&p.y>center.y;
+  return {zone,faceUp,deckBottom,row,column};
+ }
+ return null;
+}
 /** An enabled boundary is seat*3+row, with row 0,1,2. */
 export function centerMergeKey(seat:number,boundary:number):number {
   return seat*3+boundary;
@@ -1064,15 +1087,28 @@ export function applyCommand(state: GameState, command: Command): GameState {
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
-        // Playing a card from a deck or hand makes it a public table card.
-        if(obj.kind==='card' || obj.kind==='deck')obj.zone='TABLE';
+        if(obj.kind==='card'||obj.kind==='deck'){
+          const pocket=tcgDropZone(x,y,snapped.seat);
+          obj.zone=pocket?.zone==='DECK'?'DECK':
+            pocket?.zone==='HAND'?'HAND':
+            pocket?.zone==='DISCARD'?'DISCARD':'TABLE';
+          if(pocket){
+            if(pocket.zone==='DECK'){
+              const others=objects.filter(o=>o.id!==obj.id&&o.zone==='DECK'&&o.matSeat===snapped.seat);
+              if(pocket.deckBottom)obj.order=1+Math.max(-1,...others.map(o=>o.order));
+              else {for(const other of others)other.order+=1;obj.order=0;}
+              obj.faceUp=others.length>0?others[0].faceUp:false;
+            }else obj.faceUp=pocket.faceUp;
+            if(pocket.zone==='HAND')obj.owner=command.actor;
+          }else obj.faceUp=true;
+        }
         message=`Placed ${obj.name} on seat ${snapped.seat+1}, row ${snapped.row+1}, column ${snapped.column+1}, position ${snapped.slot+1}`;
       } else {
         if(snapEligible)delete obj.matSeat;
         message=`Moved ${obj.name}`;
       }
       // A normal short drag lifts only this card from a deck stack.
-      if(obj.kind==='card' && obj.zone==='DECK')obj.zone='TABLE';
+      if(obj.kind==='card'&&obj.zone==='DECK'&&!tcgDropZone(x,y,obj.matSeat??0))obj.zone='TABLE';
     }break;
     case 'MOVE_STACK': if(obj){
       // One atomic command moves the entire source stack, preserving each
