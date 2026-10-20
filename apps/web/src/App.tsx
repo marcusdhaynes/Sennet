@@ -28,6 +28,7 @@ const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
 ];
 const ACTOR_KEY='sennet.actor.v1';
 const RECENT_KEY='sennet.recent.v1';
+const LAST_SESSION_KEY='sennet.last-play-session.v1';
 const MERGE_OPACITY_KEY='sennet.merge-control-opacity.v1';
 const MERGE_DELAY_KEY='sennet.merge-hover-delay.v2';
 const PREVIOUS_MERGE_DELAY_KEY='sennet.merge-hover-delay.v1';
@@ -78,16 +79,24 @@ function storedMergeHoverMs():number{
 function emptyTable():GameState{return {...createGame('sandbox'),objects:[],players:[],message:'A fresh table. Open a book to begin.'};}
 function localActor(){try{let id=localStorage.getItem(ACTOR_KEY);if(!id){id='player_'+createId();localStorage.setItem(ACTOR_KEY,id);}return id;}catch{return 'player-local';}}
 function recentGames():SavedSession[]{try{const value=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');return Array.isArray(value)?value.slice(0,8):[];}catch{return [];}}
+function lastSession():SavedSession|null{
+ try{
+  const session=JSON.parse(localStorage.getItem(LAST_SESSION_KEY)||'null') as SavedSession|null;
+  return session&&typeof session.id==='string'&&session.game?.version===1&&
+    Array.isArray(session.game.objects)&&Array.isArray(session.history)?session:null;
+ }catch{return null;}
+}
 const json=(value:unknown)=>JSON.stringify(value,null,2);
 const nameFor=(kind:GameKind)=>KINDS.find(k=>k.id===kind)?.label||kind;
 const Tabs=({items,active,change}:{items:{id:string;label:string}[];active:string;change:(value:string)=>void})=><div className="book-tabs" role="tablist">{items.map(item=><button role="tab" aria-selected={active===item.id} className={active===item.id?'current':''} key={item.id} onClick={()=>change(item.id)}>{item.label}</button>)}</div>;
 
 export default function App(){
-  const [game,setGame]=useState<GameState>(emptyTable);
-  const [initial,setInitial]=useState<GameState>(emptyTable);
-  const [history,setHistory]=useState<EventRecord[]>([]);
+  const [restored]=useState(lastSession);
+  const [game,setGame]=useState<GameState>(()=>restored?.game??emptyTable());
+  const [initial,setInitial]=useState<GameState>(()=>restored?.initial??emptyTable());
+  const [history,setHistory]=useState<EventRecord[]>(()=>restored?.history??[]);
   const current=useRef(game);current.current=game;
-  const sessionId=useRef(createId());
+  const sessionId=useRef(restored?.id??createId());
   const [recent,setRecent]=useState<SavedSession[]>(recentGames);
   const [book,setBook]=useState<Book|null>(null);
   const [tcgStudioOpen,setTcgStudioOpen]=useState(false);
@@ -169,6 +178,15 @@ export default function App(){
     try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
     catch{inform('Not enough browser storage to save this playmat image. Try a smaller image.');}
   },[actor,playmat]);
+  useEffect(()=>{
+    if(isConnected)return;
+    const snapshot:SavedSession={
+      id:sessionId.current,title:nameFor(game.kind),updated:Date.now(),
+      initial,game,history:history.slice(-500)
+    };
+    try{localStorage.setItem(LAST_SESSION_KEY,JSON.stringify(snapshot));}
+    catch{/* Storage quota or private session: current play remains usable. */}
+  },[game,history,initial,isConnected]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
@@ -351,6 +369,13 @@ export default function App(){
           else if(old&&Math.hypot(old.x-x,old.y-y)>=2)takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }} readonly={replayAt!==null}/>
     </div>
+    <button className="sennet-rewind-button" type="button" title="Restore last play session"
+      aria-label="Rewind to your last saved play session"
+      onClick={()=>{
+        const saved=lastSession();
+        if(saved){loadRecent(saved);setSeat(saved.game.objects.find(o=>o.matSeat!==undefined)?.matSeat??seat);}
+        else inform('No saved play session yet.');
+      }}>↶</button>
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
