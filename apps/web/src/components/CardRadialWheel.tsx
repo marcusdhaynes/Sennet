@@ -44,7 +44,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   const rect=document.querySelector('.card-radial-wheel')?.getBoundingClientRect();
   if(!rect)return;
   const hit=radialHit((clientX-rect.left-rect.width/2)*400/rect.width,
-                      (clientY-rect.top-rect.height/2)*400/rect.height);
+                      half?(clientY-rect.top)*200/rect.height:(clientY-rect.top-rect.height/2)*400/rect.height);
   if(hit.category!==null){
    state.current.category=hit.category;
    setCategory(hit.category);
