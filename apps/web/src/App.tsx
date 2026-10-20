@@ -323,7 +323,16 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected} wheelMode="docked"
+        onSelect={setSelected} wheelMode="docked" drawer={<PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
+        let saved:SavedSession|null=null;
+        try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
+        catch{/* Ignore a corrupted previous session. */}
+        saved??=lastSession();
+        if(saved?.game&&Array.isArray(saved.game.objects)){
+          loadRecent(saved);
+          setSeat(saved.seat??seat);
+        }else inform('No saved play session yet.');
+      }}/>}
         onOpenTcgSettings={()=>{setBook('settings');setSettingsPage('playmat');}}
         onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
         onCardAction={(id,action)=>{
@@ -404,16 +413,6 @@ export default function App(){
         })}
       </div>
     </aside>}
-    <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
-        let saved:SavedSession|null=null;
-        try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
-        catch{/* Ignore a corrupted previous session. */}
-        saved??=lastSession();
-        if(saved?.game&&Array.isArray(saved.game.objects)){
-          loadRecent(saved);
-          setSeat(saved.seat??seat);
-        }else inform('No saved play session yet.');
-      }}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
       snapMerged={playmat.snapMerged}
