@@ -226,7 +226,7 @@ function drawTcgMats(
       const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
       const trayBottom=TCG_MAT_HEIGHT/2;
       const side=bookDock==='left'?-1:1;
-      const bw=TCG_MAT.cardWidth*.76,bh=TCG_MAT.cardHeight*.9;
+      const bw=TCG_MAT.cardWidth*.55,bh=TCG_MAT.cardHeight*.69;
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
       const by=trayBottom-bh/2-9+bookOffset.y;
       const palettes={
@@ -248,7 +248,7 @@ function drawTcgMats(
         .moveTo(bw/2-15,-bh/2+14).lineTo(-bw/2+12,bh/2-13)
         .stroke({color:foil,width:.7,alpha:.55});
       if(bookDesign==='tiny'||bookDesign==='strapped')face.roundRect(-bw/2,-bh/2+7,bw-3,9,2).fill({color:spine,alpha:.9});
-      const emblem=label('✦',19,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
+      const emblem=label('✦',12,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
       let down:{x:number;y:number;offsetX:number;offsetY:number}|null=null;
       book.on('pointerdown',e=>{e.stopPropagation();down={x:e.global.x,y:e.global.y,offsetX:bookOffset.x,offsetY:bookOffset.y};});
       const finish=(x:number,y:number)=>{
@@ -259,13 +259,16 @@ function drawTcgMats(
         down=null;
       };
       book.on('pointerup',e=>{e.stopPropagation();finish(e.global.x,e.global.y);});
-      book.on('pointerupoutside',e=>finish(e.global.x,e.global.y));
+      book.on('pointerupoutside',e=>{e.stopPropagation();finish(e.global.x,e.global.y);});
       book.on('globalpointermove',e=>{
         if(!down)return;
+        e.stopPropagation();
         const scale=Math.max(.01,Math.hypot(book.worldTransform.a,book.worldTransform.b));
         book.position.set(bx+(e.global.x-down.x)/scale,by+(e.global.y-down.y)/scale);
       });
       mat.addChild(book);
+      // Capture the drag before the table background can initiate camera pan.
+      book.hitArea=new Rectangle(-bw/2-5,-bh/2-7,bw+10,bh+14);
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
