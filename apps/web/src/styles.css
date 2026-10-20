@@ -801,3 +801,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(max-width:530px){
  .sennet-card-selection-status{bottom:52px;font-size:10px}
 }
+
+
+.sennet-rewind-button{position:absolute;right:46px;bottom:9px;z-index:72;
+ width:38px;height:38px;padding:0;border-radius:50%;
+ background:#0c322e;color:#f4dfae;border:2px solid #f3d69b;
+ box-shadow:0 2px 12px #06131199;font:700 27px/1 system-ui;
+ display:grid;place-items:center;cursor:pointer;touch-action:manipulation}
+.sennet-rewind-button:hover,.sennet-rewind-button:focus-visible{
+ background:#245448;outline:2px solid #f1d18a;outline-offset:2px}
