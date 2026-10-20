@@ -750,8 +750,8 @@ function createPiece(o:TableObject,isSelected:boolean){
     box.addChild(face);
     const t=label(o.name,12,0xf2ead7,'bold');t.position.set(0,-110);box.addChild(t);
   }else if(o.kind==='card'||o.kind==='deck'){
-    box.addChild(new Graphics().roundRect(-31,-41,62,88,7).fill(0x101e20).stroke({color:isSelected?0xf4d59b:0x6d6c60,width:isSelected?3:1}));
-    box.addChild(new Graphics().roundRect(-27,-37,54,80,5).fill(o.faceUp?rgb(o.color):0x253c43));
+    box.addChild(new Graphics().roundRect(-31,-44,62,88,7).fill(0x101e20).stroke({color:isSelected?0xf4d59b:0x6d6c60,width:isSelected?3:1}));
+    box.addChild(new Graphics().roundRect(-27,-40,54,80,5).fill(o.faceUp?rgb(o.color):0x253c43));
     if(o.faceUp){box.addChild(new Graphics().roundRect(-22,-31,44,42,3).fill({color:0xede8cf,alpha:.25}));
       const emblem=label('✦',29,0xf1e7d0);emblem.position.set(0,-10);box.addChild(emblem);
       const tx=label(o.name.length>12?o.name.slice(0,11)+'…':o.name,9,0x172826,'bold');tx.position.set(0,24);box.addChild(tx);
@@ -1109,8 +1109,8 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         const cc=(down.x-p.x)*sx,dd=(down.y-p.y)*sy;
         // Artwork is precisely the card body's width/height and follows
         // every Pixi camera/mat/seat/selection transform.
-        const tx=p.x*sx-31*aa-41*cc;
-        const ty=p.y*sy-31*bb-41*dd;
+        const tx=p.x*sx-31*aa-44*cc;
+        const ty=p.y*sy-31*bb-44*dd;
         img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
       }
     };
