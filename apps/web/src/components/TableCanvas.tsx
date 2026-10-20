@@ -1078,9 +1078,26 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // object ordering elsewhere on the table.
     const drawGroup=(o:TableObject)=>[o.zone,o.matSeat??-1,
       Math.round(o.x*10),Math.round(o.y*10)].join(':');
+    const footprint=(o:TableObject)=>(o.kind==='card'||o.kind==='deck'?62*88:
+      o.kind==='board'?310*206:52*52)*Math.pow(o.scale??1,2);
+    const ancestry=(o:TableObject):number=>{
+      let depth=0,current=o,guard=0;
+      while(current.carrierId&&guard++<state.objects.length){
+        const parent=state.objects.find(item=>item.id===current.carrierId);
+        if(!parent)break;
+        depth++;current=parent;
+      }
+      return depth;
+    };
     visible.sort((a,b)=>{
       if(a.kind==='board'||b.kind==='board')
         return Number(a.kind!=='board')-Number(b.kind!=='board');
+      // Descendants render over carriers; otherwise smaller objects always
+      // sit above bigger cards, including half-size cards and tokens.
+      const da=ancestry(a),db=ancestry(b);
+      if(da!==db)return da-db;
+      const area=footprint(b)-footprint(a);
+      if(Math.abs(area)>1)return area;
       return drawGroup(a)===drawGroup(b)?a.order-b.order:0;
     });
     // Selection contains only currently existing, visible members; never
