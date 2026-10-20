@@ -969,3 +969,20 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .sennet-log-toggle:hover,.sennet-rewind-button:hover{background:#31584a;border-color:#ead197}
 .sennet-action-log{left:max(12px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 43px)}
 @media(max-width:600px){.sennet-action-log{left:max(8px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 43px)}}
+
+/* Tabletop interaction surfaces are game controls, not selectable text.
+   Preserve normal editing, caret placement and selection in form fields. */
+.sennet-home,
+.sennet-home *:not(input):not(textarea):not([contenteditable]):not([contenteditable="true"]) {
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+.sennet-home input,
+.sennet-home textarea,
+.sennet-home [contenteditable],
+.sennet-home [contenteditable="true"]{
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default;
+}
