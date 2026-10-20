@@ -1049,3 +1049,52 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel.is-half{filter:drop-shadow(0 8px 8px #030a09a0);overflow:hidden;border-radius:0 0 50% 50%}
 .card-radial-wheel.is-half.is-collapsed{clip-path:circle(18% at 50% 0%);}
 
+
+/* Full-art card gallery across desktop and mobile, never compressed into slivers. */
+.tcg-builder .tcgb-results.tcgb-card-gallery,
+.tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery,
+.tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery.dense{
+ display:grid!important;
+ grid-template-columns:repeat(var(--cards-per-row,2),minmax(0,1fr))!important;
+ align-content:start!important;
+ align-items:start!important;
+ gap:12px!important;
+ padding:12px!important;
+ overflow-y:auto!important;
+ overflow-x:hidden!important;
+}
+.tcg-builder .tcgb-card-gallery .tcgb-result,
+.tcg-builder .tcgb-mobile-browse .tcgb-card-gallery .tcgb-result,
+.tcg-builder .tcgb-mobile-browse .tcgb-card-gallery.dense .tcgb-result{
+ display:flex!important;flex-direction:column!important;
+ height:auto!important;min-height:0!important;
+ padding:8px!important;gap:7px!important;overflow:visible!important;
+ border:1px solid #536d58;border-radius:12px;
+ background:#20392d;
+}
+.tcg-builder .tcgb-card-gallery .tcgb-thumb,
+.tcg-builder .tcgb-mobile-browse .tcgb-card-gallery .tcgb-thumb,
+.tcg-builder .tcgb-mobile-browse .tcgb-card-gallery.dense .tcgb-thumb{
+ display:block!important;flex:none!important;
+ width:100%!important;height:auto!important;aspect-ratio:5 / 7!important;
+ min-height:0!important;max-height:none!important;
+ overflow:hidden!important;padding:0!important;border-radius:8px;
+ background:#10231e;
+}
+.tcg-builder .tcgb-card-gallery .tcgb-thumb img{
+ width:100%!important;height:100%!important;object-fit:contain!important;
+ display:block!important;
+}
+.tcg-builder .tcgb-card-gallery .tcgb-result-text{width:100%!important;min-width:0;flex:none!important;align-items:center!important;text-align:center!important;padding:0!important}
+.tcg-builder .tcgb-card-gallery .tcgb-result-text strong{white-space:normal!important;overflow-wrap:anywhere;font-size:12px}
+.tcg-builder .tcgb-card-gallery .tcgb-result-text small{white-space:normal!important}
+.tcgb-grid-scale,.tcgb-gallery-counter{display:inline-flex;align-items:center;justify-content:center;gap:3px;flex:none;font-variant-numeric:tabular-nums}
+.tcgb-grid-scale button,.tcgb-gallery-counter button{
+ display:grid;place-items:center;min-width:32px;min-height:30px;padding:2px 6px;
+ border:1px solid #8b9f85;border-radius:7px;color:#f0e0b9;
+ background:#26483c;cursor:pointer;font-size:19px;line-height:1
+}
+.tcgb-grid-scale span,.tcgb-gallery-counter span{min-width:26px;text-align:center;font-size:13px;font-weight:700;color:#f3e8ce}
+.tcgb-gallery-counter{width:100%;margin-top:auto}
+.tcgb-gallery-counter button{flex:1;max-width:72px}
+.tcg-builder .tcgb-card-gallery .tcgb-add{display:none!important}
