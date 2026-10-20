@@ -131,6 +131,7 @@ export default function App(){
   const [onlineStatus,setOnlineStatus]=useState('Offline · local game');
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
+  const [actionLogOpen,setActionLogOpen]=useState(false);
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
@@ -389,23 +390,38 @@ export default function App(){
           setSeat(saved.seat??seat);
         }else inform('No saved play session yet.');
       }}>⟲</button>
-    <aside className="sennet-action-log" aria-label="Table action history">
-      <header><strong>Action log</strong><span>{history.length} events</span></header>
+    <button type="button" className="sennet-log-toggle" aria-label={actionLogOpen?'Close action log':'Open action log'}
+      aria-expanded={actionLogOpen} title="Action log" onClick={()=>setActionLogOpen(v=>!v)}>
+      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M5 2.5h10l4 4V22H5z"/><path d="M15 2.5V7h4M8 11h8M8 14.5h8M8 18h6"/>
+      </svg>
+    </button>
+    {actionLogOpen&&<aside className="sennet-action-log" aria-label="Table action history">
+      <header><strong>Action log</strong><span>{history.length} events</span>
+        <button type="button" onClick={()=>setActionLogOpen(false)} aria-label="Close action log">×</button></header>
       <div className="sennet-action-log-entries" role="log" aria-live="off">
-        {history.slice(-100).reverse().map(h=>{
+        {history.slice().reverse().map(h=>{
           const ids=[h.payload?.id,...(Array.isArray(h.payload?.ids)?h.payload.ids:[])].filter((v):v is string=>typeof v==='string');
-          const hidden=ids.some(id=>{const card=game.objects.find(o=>o.id===id);return card&&(card.zone==='HAND'||card.zone==='DECK')&&!card.faceUp;});
+          const references=ids.map(id=>game.objects.find(o=>o.id===id)??initial.objects.find(o=>o.id===id)).filter((o):o is NonNullable<typeof o>=>!!o);
+          const hidden=references.some(card=>(card.zone==='HAND'||card.zone==='DECK')&&!card.faceUp);
           const player=game.players.find(p=>p.id===h.actor);
+          const action=h.type==='BATCH_CARD_ACTION'?String(h.payload.action??'card action').replaceAll('-',' '):h.type.toLowerCase().replaceAll('_',' ');
+          const names=hidden?'[Hidden card]':references.map(card=>card.name).join(', ');
+          const details=[names,typeof h.payload.degrees==='number'?String(h.payload.degrees)+'°':'',
+            typeof h.payload.zone==='string'?'Zone: '+h.payload.zone:'',
+            typeof h.payload.x==='number'&&typeof h.payload.y==='number'?'Position: '+Math.round(h.payload.x)+', '+Math.round(h.payload.y):'',
+            typeof h.payload.matSeat==='number'?'Seat '+(h.payload.matSeat+1):'',
+            ids.length>1?ids.length+' objects':''].filter(Boolean).join(' · ');
           return <div className="sennet-action-log-entry" key={h.id}>
             <span className="sennet-log-seq">#{h.seq}</span>
-            <span><strong>{player?.name??(h.actor==='local'?playerName:h.actor.slice(0,12))}</strong> · {h.type.toLowerCase().replaceAll('_',' ')}
-              <small>{new Date(h.at).toLocaleTimeString()} · {hidden?'Hidden card details':JSON.stringify(h.payload)}</small>
+            <span><strong>{player?.name??(h.actor==='local'?playerName:h.actor.slice(0,12))}</strong> · {action}
+              <small>{new Date(h.at).toLocaleTimeString()} · {details||'Table action'}</small>
             </span>
-            <button type="button" aria-label="Share action details" title="Reveal requires an authorized public action" disabled={hidden}>♧</button>
+            <span className="sennet-log-share" title={hidden?'Hidden until a player explicitly reveals the card':'Public action'} aria-label={hidden?'Hidden card':'Public action'}>♧</span>
           </div>;
         })}
       </div>
-    </aside>
+    </aside>}
     <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
