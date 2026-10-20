@@ -1089,6 +1089,32 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       selectedSet.current=new Set(still);
       queueMicrotask(()=>setSelectedIds(still));
     }
+    // Use browser <img> elements for actual card art, just like the Deck
+    // Builder. Third-party card art often disallows WebGL/CORS texture uploads
+    // even while rendering perfectly in an ordinary HTML image.
+    const artLayers:{piece:Container;img:HTMLImageElement}[]=[];
+    const imagesRoot=mount.current;
+    const syncCardArtwork=()=>{
+      const root=mount.current;
+      if(!root||!session.current)return;
+      const rect=session.current.app.canvas.getBoundingClientRect();
+      const sx=rect.width/session.current.app.screen.width;
+      const sy=rect.height/session.current.app.screen.height;
+      for(const {piece,img} of artLayers){
+        if(piece.destroyed||!img.isConnected)continue;
+        const p=piece.toGlobal(new Point(0,0));
+        const right=piece.toGlobal(new Point(1,0));
+        const down=piece.toGlobal(new Point(0,1));
+        const aa=(right.x-p.x)*sx,bb=(right.y-p.y)*sy;
+        const cc=(down.x-p.x)*sx,dd=(down.y-p.y)*sy;
+        // Artwork is precisely the card body's width/height and follows
+        // every Pixi camera/mat/seat/selection transform.
+        const tx=p.x*sx-31*aa-41*cc;
+        const ty=p.y*sy-31*bb-41*dd;
+        img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
+      }
+    };
+    session.current?.app.ticker.add(syncCardArtwork);
     for(const obj of visible){
       const assumedOwner=obj.matSeat??
         (obj.owner===actorId||obj.owner==='local'?seat:
@@ -1124,15 +1150,28 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         ?obj.frameUrls[nearestFrameIndex(seat,obj.rotation,obj.frameUrls.length)]
         :undefined;
       const url=obj.faceUp ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
-      if(url){
+      if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
+        const img=document.createElement('img');
+        img.alt=obj.faceUp?obj.name:obj.name+' card back';
+        img.draggable=false;
+        img.decoding='async';
+        img.loading='eager';
+        img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
+          'display:none;pointer-events:none;user-select:none;object-fit:fill;'+
+          'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:5';
+        img.onload=()=>{if(img.isConnected)img.style.display='block';};
+        img.onerror=()=>{img.style.display='none';};
+        imagesRoot.appendChild(img);
+        img.src=url;
+        artLayers.push({piece,img});
+      }else if(url){
         Assets.load(url).then(texture=>{
           if(piece.destroyed||!session.current)return;
-          const sprite=new Sprite(texture);sprite.anchor.set(.5);const scale=Math.min(74/texture.width,105/texture.height);sprite.scale.set(scale);
-          // Keep counters visible above asynchronously loaded card artwork.
-          if((obj.counters??0)>0&&piece.children.length){
-            piece.addChildAt(sprite,piece.children.length-1);
-          }else piece.addChild(sprite);
-        }).catch(()=>{/* Fallback stays visible when creator's hosting is down or CORS blocks fetch. */});
+          const sprite=new Sprite(texture);sprite.anchor.set(.5);
+          const scale=Math.min(74/texture.width,105/texture.height);
+          sprite.scale.set(scale);
+          piece.addChild(sprite);
+        }).catch(()=>{/* Keep vector fallback for unavailable artwork. */});
       }
       if(!readonly){
         piece.eventMode='static';piece.cursor=obj.locked?'pointer':'grab';
@@ -1215,6 +1254,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
+    syncCardArtwork();
+    return ()=>{
+      session.current?.app.ticker.remove(syncCardArtwork);
+      for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
+    };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,eyeView,relations,viewport]);
   useEffect(()=>{
     const clearHighlight=()=>{
