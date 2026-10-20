@@ -103,7 +103,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
     const act=RADIAL_ACTIONS[i][j],mid=half?90+i*60+j*20+10:i*120+j*40+20,p=point(157,mid);
-    const actionLabel=act.id==='lock'&&allLocked?'Unlock':act.id==='tap-toggle'?tapLabel:act.label;
+    const actionLabel=act.id==='tap-toggle'?tapLabel:act.label;
     const selected=category===i,hot=action===act.id;
     return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
