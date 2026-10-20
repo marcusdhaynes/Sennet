@@ -1877,3 +1877,25 @@ test('Half-sized cards snap to four distinct quadrants of a regular card slot',(
  }
  assert.equal(found.size,4);
 });
+
+
+test('Private hands stay hidden across zone moves; intentionally flipped decks are public',()=>{
+ const original=createGame('tcg');
+ const named={...original,objects:original.objects.map(o=>o.id==='hero-a'
+  ?{...o,name:'Private Card',faceUrl:'https://example.com/front.png',
+    backUrl:'https://example.com/back.png'}:o)};
+ const hand=tcgMatCells(0).find(cell=>cell.row===3&&cell.column===1);
+ const moved=applyCommand(named,c('MOVE',{id:'hero-a',x:hand.x,y:hand.y}));
+ const own=projectForActor(moved,'P1').objects.find(o=>o.id==='hero-a');
+ const other=projectForActor(moved,'observer').objects.find(o=>o.id==='hero-a');
+ assert.equal(own.zone,'HAND');
+ assert.equal(own.faceUp,true);
+ assert.equal(own.faceUrl,'https://example.com/front.png');
+ assert.equal(other.name,'Hidden card');
+ assert.equal(other.faceUrl,undefined);
+ assert.equal(other.faceUp,false);
+ const deckFlipped={...named,objects:named.objects.map(o=>
+  o.zone==='DECK'?{...o,faceUp:true}:o)};
+ const visible=projectForActor(deckFlipped,'observer');
+ assert.ok(visible.objects.filter(o=>o.zone==='DECK').every(o=>o.faceUp===true));
+});
