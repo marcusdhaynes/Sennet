@@ -1080,6 +1080,38 @@ export function applyCommand(state: GameState, command: Command): GameState {
   let turnSeat=state.turnSeat,round=state.round,mode=state.mode;
   let centerMerges=state.centerMerges??[];
   const obj=objects.find(o=>o.id===p.id);
+  // All physical card drops share the same destination rules, whether
+  // one card, one stack or a multi-selection is dragged. Deck order and
+  // orientation change atomically in the same replayable command.
+  const applyPocketDrop=(cards:TableObject[],x:number,y:number,seat:number)=>{
+    const pocket=tcgDropZone(x,y,seat);
+    if(!pocket)return;
+    if(pocket.zone==='DECK'){
+      const ids=new Set(cards.map(card=>card.id));
+      const otherDeck=objects.filter(card=>!ids.has(card.id)&&
+        card.zone==='DECK'&&card.matSeat===seat);
+      const deckFaceUp=otherDeck.length>0?
+        otherDeck.every(card=>card.faceUp):
+        cards.every(card=>card.zone==='DECK'&&card.faceUp);
+      const stack=cards.slice().sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+      let base=0;
+      if(pocket.deckBottom)base=1+Math.max(-1,...otherDeck.map(card=>card.order));
+      else for(const other of otherDeck)other.order+=stack.length;
+      const deckCell=tcgMatCells(seat).find(cell=>cell.row===1&&cell.column===2)!;
+      stack.forEach((card,i)=>{
+        card.zone='DECK';card.faceUp=deckFaceUp;card.matSeat=seat;
+        card.x=deckCell.x;card.y=deckCell.y;card.order=base+i;
+      });
+      return;
+    }
+    for(const card of cards){
+      card.zone=pocket.zone==='HAND'?'HAND':
+        pocket.zone==='DISCARD'?'DISCARD':'TABLE';
+      card.faceUp=pocket.faceUp;
+      card.matSeat=seat;
+      if(pocket.zone==='HAND')card.owner=command.actor;
+    }
+  };
   switch(command.type) {
     case 'ADD':objects.push(sanitizeObject(p.object as Record<string,unknown>)); message='New object placed';break;
     case 'MOVE': if(obj){
@@ -1094,28 +1126,15 @@ export function applyCommand(state: GameState, command: Command): GameState {
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
-        if(obj.kind==='card'||obj.kind==='deck'){
-          const pocket=tcgDropZone(x,y,snapped.seat);
-          obj.zone=pocket?.zone==='DECK'?'DECK':
-            pocket?.zone==='HAND'?'HAND':
-            pocket?.zone==='DISCARD'?'DISCARD':'TABLE';
-          if(pocket){
-            if(pocket.zone==='DECK'){
-              const others=objects.filter(o=>o.id!==obj.id&&o.zone==='DECK'&&o.matSeat===snapped.seat);
-              if(pocket.deckBottom)obj.order=1+Math.max(-1,...others.map(o=>o.order));
-              else {for(const other of others)other.order+=1;obj.order=0;}
-              obj.faceUp=others.length>0?others[0].faceUp:false;
-            }else obj.faceUp=pocket.faceUp;
-            if(pocket.zone==='HAND')obj.owner=command.actor;
-          }else obj.faceUp=true;
-        }
+        if(obj.kind==='card'||obj.kind==='deck')
+          applyPocketDrop([obj],x,y,snapped.seat);
         message=`Placed ${obj.name} on seat ${snapped.seat+1}, row ${snapped.row+1}, column ${snapped.column+1}, position ${snapped.slot+1}`;
       } else {
         if(snapEligible)delete obj.matSeat;
         message=`Moved ${obj.name}`;
       }
       // A normal short drag lifts only this card from a deck stack.
-      if(obj.kind==='card'&&obj.zone==='DECK'&&!tcgDropZone(x,y,obj.matSeat??0))obj.zone='TABLE';
+      if(obj.kind==='card'&&obj.zone==='DECK'&&!snapped)obj.zone='TABLE';
     }break;
     case 'MOVE_STACK': if(obj){
       // One atomic command moves the entire source stack, preserving each
@@ -1138,6 +1157,11 @@ export function applyCommand(state: GameState, command: Command): GameState {
           if(snapped)card.matSeat=snapped.seat;
           else delete card.matSeat;
         }
+      }
+      if(snapped){
+        const placed=objects.filter(card=>ids.has(card.id));
+        if(placed.length&&placed.every(card=>card.kind==='card'||card.kind==='deck'))
+          applyPocketDrop(placed,requestedX,requestedY,snapped.seat);
       }
       message=`Moved stack of ${cards.length} cards`;
     }break;
@@ -1170,6 +1194,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
           else delete card.matSeat;
           if(card.zone==='DECK'&&snapped)card.zone='TABLE';
         }
+        if(snapped&&picked.every(card=>card.kind==='card'||card.kind==='deck'))
+          applyPocketDrop(picked,tx,ty,snapped.seat);
       }
       if(action==='flip')for(const card of picked)card.faceUp=!card.faceUp;
       if(action==='rotate-cw'||action==='rotate-ccw'){
