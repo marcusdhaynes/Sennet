@@ -141,6 +141,7 @@ function drawTcgMats(
       const tag=new Container();tag.position.set(0,-TCG_MAT_HEIGHT/2-8);
       const plate=new Graphics().roundRect(-58,-14,116,28,6).fill(0x274538)
         .stroke({color:0xbca476,width:1.5});
+      tag.zIndex=999;mat.sortableChildren=true;
       tag.addChild(plate);
       const number=label('PLAYER '+String(seat+1).padStart(2,'0'),12,0xe9d8ad,'bold');
       tag.addChild(number);tag.eventMode='none';mat.addChild(tag);
