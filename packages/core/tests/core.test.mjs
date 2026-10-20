@@ -248,10 +248,10 @@ test('Atomic stack move takes every card and preserves relative state',()=>{
   const after=next.objects.filter(o=>o.id.startsWith('alpha-'));
   assert.equal(after.length,12);
   for(let i=0;i<before.length;i++){
-    assert.equal(after[i].zone,'DECK');
+    assert.equal(after[i].zone,'TABLE','Dropping stack in PLAY makes cards public');
     assert.equal(after[i].matSeat,3);
     assert.equal(after[i].order,before[i].order);
-    assert.equal(after[i].faceUp,before[i].faceUp);
+    assert.equal(after[i].faceUp,true,'PLAY cards always enter face up');
     assert.equal(after[i].owner,before[i].owner);
     assert.ok(Math.abs(after[i].x-target.x)<1e-6);
     assert.ok(Math.abs(after[i].y-target.y)<1e-6);
