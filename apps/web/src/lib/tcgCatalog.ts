@@ -17,10 +17,16 @@ export type DeckSection=string;
  * individual card entry does not supply a custom back image. */
 export function tcgCardBack(game:TcgId):string{
  const images:Record<TcgId,string>={
-  lorcana:'',
-  gundam:'',mtg:'https://cards.scryfall.io/back.png',
-  onepiece:'',pokemon:'',
-  riftbound:'',yugioh:''
+  // Actual card-back images, rather than the generic Sennet S glyph.
+  // Use each game's card-back image as published on its encyclopedia
+  // page. Browser <img> renders these redirects without WebGL CORS.
+  lorcana:'https://en.wikipedia.org/wiki/Special:Redirect/file/Lorcana_Card_Back.png',
+  gundam:'',
+  mtg:'https://cards.scryfall.io/back.png',
+  onepiece:'https://en.wikipedia.org/wiki/Special:Redirect/file/One_Piece_Card_Game_back.webp',
+  pokemon:'https://en.wikipedia.org/wiki/Special:Redirect/file/Pokemon_Trading_Card_Game_cardback.png',
+  riftbound:'',
+  yugioh:'https://en.wikipedia.org/wiki/Special:Redirect/file/Yugioh_Card_Back.jpg'
  };
  return images[game]||'';
 }
