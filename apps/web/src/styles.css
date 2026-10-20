@@ -1304,3 +1304,8 @@ body>.reader-backdrop{
  transform:translateY(-50%);transform-origin:center left;
 }
 .pixi-host>.sennet-player-tag-anchor[data-outward="right"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
+
+/* The player-tag trigger must win hit-testing against the radial overlay.
+   Neither the radial nor the tag changes its table-world coordinates. */
+.pixi-host>.sennet-player-tag-anchor{z-index:90}
+.pixi-host>.sennet-player-tag-anchor:has(.player-hub.is-open){z-index:120}
