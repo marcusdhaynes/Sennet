@@ -1162,7 +1162,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
         for(let i=0;i<picked.length;i++){
           const card=picked[i];card.zone=zone;card.matSeat=seat;
           card.owner=command.actor;
-          card.faceUp=zone==='TABLE'||zone==='DISCARD';
+          card.faceUp=zone!=='DECK';
           card.x=cell.x;card.y=cell.y;
           if(zone==='DECK')card.order=base+i;
           else if(zone==='HAND'){
@@ -1187,7 +1187,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const position=zone==='DECK'?[1,2]:zone==='DISCARD'?[1,0]:[3,1];
       const cell=tcgMatCells(seat).find(c=>c.row===position[0]&&c.column===position[1])!;
       obj.x=cell.x;obj.y=cell.y;obj.zone=zone;obj.matSeat=seat;
-      obj.faceUp=zone==='DISCARD';obj.owner=command.actor;
+      obj.faceUp=zone!=='DECK';obj.owner=command.actor;
       if(zone==='DECK'){
         const others=objects.filter(other=>other.id!==obj.id&&other.zone==='DECK'&&other.matSeat===seat);
         if(p.bottom===true){
@@ -1214,7 +1214,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix))) &&
         (p.matSeat===undefined||(o.matSeat===p.matSeat&&(!o.owner||o.owner===command.actor)))).sort((a,b)=>a.order-b.order);
       const card=available[0];if(!card) throw new Error('No cards in that deck');
-      card.zone='HAND';card.owner=command.actor;card.faceUp=false;
+      card.zone='HAND';card.owner=command.actor;card.faceUp=true;
       const handCount=objects.filter(o=>o.zone==='HAND'&&o.owner===command.actor&&(p.matSeat===undefined||o.matSeat===p.matSeat)).length;
       const seat=typeof p.matSeat==='number'?p.matSeat:state.players.find(player=>player.id===command.actor)?.seat??0;
       const handPosition=p.matSeat===undefined
