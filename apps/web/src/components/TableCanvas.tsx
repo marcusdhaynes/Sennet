@@ -927,9 +927,9 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
     } catch {return null;}
   });
   const saveDockPosition=(position:{x:number;y:number})=>{
-    const margin=76;
-    const next={x:Math.max(margin,Math.min(window.innerWidth-margin,position.x)),
-      y:Math.max(margin,Math.min(window.innerHeight-margin,position.y))};
+    const radius=76;
+    const next={x:Math.max(radius,Math.min(window.innerWidth-radius,position.x)),
+      y:Math.max(radius,Math.min(window.innerHeight-radius,position.y))};
     setDockPosition(next);
     try{localStorage.setItem('sennet.radial.dock-position.v2',JSON.stringify(next));}catch{/* Private browsing. */}
   };
