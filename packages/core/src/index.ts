@@ -923,7 +923,7 @@ export function validateCommand(state: GameState, command: Command): string | nu
        new Set(raw).size!==raw.length)return 'Invalid selected card IDs';
     const action=String(command.payload.action||'');
     if(!['flip','rotate-cw','rotate-ccw','scale-original','scale-smaller',
-         'scale-bigger','shuffle','send-to','lock'].includes(action))
+         'scale-bigger','shuffle','send-to','lock','move'].includes(action))
       return 'Invalid wheel action';
     const selected=raw.map(id=>state.objects.find(o=>o.id===id));
     if(selected.some(o=>!o||!['card','deck','token','marker'].includes(o.kind)))
@@ -932,6 +932,11 @@ export function validateCommand(state: GameState, command: Command): string | nu
       return 'Selection includes another player\'s card';
     if(action!=='lock'&&selected.some(o=>o!.locked))
       return 'Selection contains a locked card';
+    if(action==='move'){
+      if(typeof command.payload.anchorId!=='string'||!raw.includes(command.payload.anchorId)||
+        !Number.isFinite(command.payload.x)||!Number.isFinite(command.payload.y))
+        return 'Invalid selected-group move';
+    }
     if(action==='send-to'){
       if(selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
         return 'Only cards can be sent to a pile';
@@ -1056,6 +1061,24 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const ids=p.ids as string[],action=String(p.action);
       const idSet=new Set(ids);
       const picked=objects.filter(card=>idSet.has(card.id));
+      if(action==='move'){
+        // Resolve snap from ONE pressed anchor and translate every selected
+        // piece by the same delta; never independently snap cards or let
+        // a group drift apart. Atomic event = one undo/replay step.
+        const anchor=picked.find(card=>card.id===p.anchorId)!;
+        const tx=clamp(Number(p.x),0,BOARD_W),ty=clamp(Number(p.y),0,BOARD_H);
+        const snapped=tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
+          Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
+            ?Number(p.snapMergedSeat):undefined);
+        const dx=(snapped?.x??tx)-anchor.x,dy=(snapped?.y??ty)-anchor.y;
+        for(const card of picked){
+          card.x=clamp(card.x+dx,0,BOARD_W);
+          card.y=clamp(card.y+dy,0,BOARD_H);
+          if(snapped)card.matSeat=snapped.seat;
+          else delete card.matSeat;
+          if(card.zone==='DECK'&&snapped)card.zone='TABLE';
+        }
+      }
       if(action==='flip')for(const card of picked)card.faceUp=!card.faceUp;
       if(action==='rotate-cw'||action==='rotate-ccw'){
         const step=action==='rotate-cw'?45:-45;
