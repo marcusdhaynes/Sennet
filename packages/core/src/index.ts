@@ -1080,9 +1080,14 @@ export function applyCommand(state: GameState, command: Command): GameState {
           const j=Math.floor(random()*(i+1));
           [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
         }
-        // Unique ranks ensure tabletop stack order changes even when
-        // original order values all match.
-        shuffled.forEach((card,index)=>{card.order=ordered[0].order+index;});
+        // Capture existing ranks BEFORE mutating any card. A shuffled
+        // element can be the original first card; reading ordered[0].order
+        // inside forEach would otherwise make the base rank drift.
+        const ranks=ordered.map(card=>card.order);
+        const distinct=new Set(ranks).size===ranks.length;
+        shuffled.forEach((card,index)=>{
+          card.order=distinct?ranks[index]:ranks[0]+index;
+        });
       }
       if(action==='send-to'){
         const destination=String(p.destination),seat=Number(p.matSeat);
