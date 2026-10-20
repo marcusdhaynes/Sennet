@@ -93,6 +93,7 @@ export interface PlaymatAppearance {
   spanningImageId:string;
   selectedSections:number[];
   snapMerged:boolean;
+  sideBoxStyle:'walnut'|'carved'|'maple'|'ebony'|'mahogany';
 }
 export const DEFAULT_PLAYMAT_SECTION_STYLE:PlaymatSectionStyle={
   imageId:'',
@@ -115,7 +116,7 @@ export function defaultPlaymatAppearance():PlaymatAppearance {
       }
     })),
     images:{},imageMode:'repeat',spanningImageId:'',selectedSections:Array.from({length:12},(_,i)=>i),
-    snapMerged:false
+    snapMerged:false,sideBoxStyle:'walnut'
   };
 }
 /** Each client applies its stored appearance only to its own seat.
@@ -181,7 +182,9 @@ export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
   const imageMode=input.imageMode==='span'?'span':'repeat';
   const spanningImageId=typeof input.spanningImageId==='string'&&images[input.spanningImageId]
     ?input.spanningImageId:'';
-  return {sections,images,imageMode,spanningImageId,selectedSections,snapMerged:input.snapMerged===true};
+  return {sections,images,imageMode,spanningImageId,selectedSections,snapMerged:input.snapMerged===true,
+    sideBoxStyle:['walnut','carved','maple','ebony','mahogany'].includes(String(input.sideBoxStyle))
+      ?input.sideBoxStyle as PlaymatAppearance['sideBoxStyle']:'walnut'};
 }
 export function playmatSectionIndex(row:number,column:number):number {return row*3+column;}
 export const TCG_MAT_WIDTH=TCG_MAT.outerWidth*2+TCG_MAT.centerWidth+TCG_MAT.gap*2;
