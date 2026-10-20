@@ -1034,3 +1034,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel .sennet-radial-center{cursor:grab;touch-action:none}
 .card-radial-wheel .sennet-radial-center:active{cursor:grabbing}
 .sennet-radial-drag-handle{display:none!important}
+
+/* Half-wheel's center sits at the TOP midpoint of its clipped lower semicircle.
+   Keep that center exposed and interactive when the outer rings retract. */
+.card-radial-wheel.is-half.is-collapsed{
+  clip-path:circle(18% at 50% 0%);
+}
+.card-radial-wheel.is-half .sennet-radial-center{
+  pointer-events:auto;
+}
