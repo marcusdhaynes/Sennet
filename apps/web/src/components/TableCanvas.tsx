@@ -181,6 +181,41 @@ function drawTcgMats(
         backingBottom-backingTop,duel?7:12)
       .fill({color:0x101e1a,alpha:.82})
       .stroke({color:0x466059,width:1,alpha:.46}));
+    // Two empty trays are siblings of the mat pockets in the SAME transformed
+    // container, so Castle/Eye/ordinary views all carry them automatically.
+    if(seat===viewerSeat){
+      const trayW=TCG_MAT.cardWidth,trayH=TCG_MAT.cardHeight*3;
+      const finishes={
+        walnut:[0x34251d,0x6b4830,0x120e0d,0xb68a59],
+        carved:[0x765033,0xaf8050,0x3c2330,0xe3bf83],
+        maple:[0xb88551,0xe0ba80,0x715037,0xf2d6a4],
+        ebony:[0x15191a,0x383335,0x090d0e,0x907b71],
+        mahogany:[0x4b201d,0x883c31,0x240f13,0xc88164]
+      } as const;
+      const [wood,rim,well,shine]=finishes[playmat.sideBoxStyle??'walnut'];
+      for(const side of [-1,1]){
+        const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=0;
+        const tray=new Graphics()
+          .roundRect(cx-trayW/2-4,cy-trayH/2-5,trayW+8,trayH+10,7)
+          .fill({color:wood}).stroke({color:shine,width:1.6})
+          .roundRect(cx-trayW/2,cy-trayH/2,trayW,trayH,4)
+          .fill({color:rim})
+          .roundRect(cx-trayW/2+7,cy-trayH/2+7,trayW-14,trayH-14,3)
+          .fill({color:well}).stroke({color:0x08090a,width:2})
+          .moveTo(cx-trayW/2+5,cy-trayH/2+5)
+          .lineTo(cx+trayW/2-5,cy-trayH/2+5)
+          .stroke({color:shine,width:2,alpha:.72});
+        if(playmat.sideBoxStyle==='carved'){
+          for(let i=0;i<6;i++){
+            const y=cy-trayH/2+16+i*(trayH-32)/5;
+            tray.moveTo(cx-trayW/2+2,y).lineTo(cx-trayW/2+6,y+5)
+              .moveTo(cx+trayW/2-2,y).lineTo(cx+trayW/2-6,y+5)
+              .stroke({color:shine,width:1,alpha:.8});
+          }
+        }
+        tray.eventMode='none';mat.addChild(tray);
+      }
+    }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
     // remain four separate single-card rectangles.
