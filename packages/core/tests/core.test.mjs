@@ -1821,3 +1821,59 @@ test('Sword backgrounds are red and Shield backgrounds blue, bright and distinct
   assert.notEqual(sword.outlineActive,sword.outlineIdle);
   assert.notEqual(shield.outlineActive,shield.outlineIdle);
 });
+
+
+test('All 12 TCG drop pockets apply requested orientation and owner-hand visibility',()=>{
+ const base=createGame('tcg');
+ const named=[
+  [0,0,'LOCATIONS',true],[0,2,'LEADERS',true],
+  [1,0,'RESERVE',false],[1,2,'DECK',false],
+  [2,0,'WAIT',true],[2,2,'DISCARD',true],
+  [3,0,'RESOURCE',false],[3,1,'HAND',true],[3,2,'REMOVE',true]
+ ];
+ for(const [row,column,name,faceUp] of named){
+  const point=tcgMatCells(0).find(cell=>cell.row===row&&cell.column===column);
+  const action=c('MOVE',{id:'hero-a',x:point.x,y:point.y});
+  const result=applyCommand(base,action);
+  const card=result.objects.find(item=>item.id==='hero-a');
+  assert.equal(card.faceUp,faceUp,name+' facing');
+  assert.equal(card.matSeat,0);
+  if(name==='HAND'){
+   assert.equal(card.zone,'HAND');
+   assert.equal(card.owner,'local');
+   assert.equal(projectForActor(result,'opponent').objects.find(o=>o.id===card.id).faceUrl,undefined);
+  }
+  if(name==='DECK')assert.equal(card.zone,'DECK');
+ }
+});
+test('Deck drag upper and lower half changes exact order and respects flipped deck',()=>{
+ const base=createGame('tcg'),cell=tcgMatCells(0).find(c=>c.row===1&&c.column===2);
+ const deckBefore=base.objects.filter(o=>o.zone==='DECK'&&o.matSeat===0);
+ const local=tcgMatLocal(cell.x,cell.y,0);
+ const coords=dy=>tcgMatWorld(local.x,local.y+dy,0);
+ const top=applyCommand(base,c('MOVE',{id:'hero-a',...coords(-cell.height/4)}));
+ const topCard=top.objects.find(o=>o.id==='hero-a');
+ assert.equal(topCard.zone,'DECK');assert.equal(topCard.faceUp,false);
+ assert.equal(topCard.order,0);
+ assert.ok(deckBefore.every(o=>top.objects.find(x=>x.id===o.id).order===o.order+1));
+ const bottom=applyCommand(base,c('MOVE',{id:'hero-a',...coords(cell.height/4)}));
+ const bottomCard=bottom.objects.find(o=>o.id==='hero-a');
+ assert.equal(bottomCard.zone,'DECK');assert.equal(bottomCard.faceUp,false);
+ assert.ok(bottomCard.order>Math.max(...deckBefore.map(o=>o.order)));
+ const flipped={...base,objects:base.objects.map(o=>
+  o.zone==='DECK'&&o.matSeat===0?{...o,faceUp:true}:o)};
+ assert.equal(applyCommand(flipped,c('MOVE',{id:'hero-a',...coords(-cell.height/4)}))
+  .objects.find(o=>o.id==='hero-a').faceUp,true);
+});
+test('Half-sized cards snap to four distinct quadrants of a regular card slot',()=>{
+ const slot=tcgMatCells(0).find(cell=>cell.row===2&&cell.column===1);
+ const spot=tcgSnapPoint(slot.x,slot.y);
+ const local=tcgMatLocal(spot.x,spot.y,0);
+ const found=new Set();
+ for(const dx of [-8,8])for(const dy of [-8,8]){
+  const p=tcgMatWorld(local.x+dx,local.y+dy,0);
+  const snapped=tcgSnapPoint(p.x,p.y,[],false,0,.5);
+  found.add(snapped.x.toFixed(4)+','+snapped.y.toFixed(4));
+ }
+ assert.equal(found.size,4);
+});
