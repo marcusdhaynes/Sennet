@@ -773,6 +773,10 @@ function createPiece(o:TableObject,isSelected:boolean){
     const t=label(o.name.length>7?'✦':o.name, o.name.length>7?25:11,0x172c2a,'bold');t.position.set(0,-4);box.addChild(t);
   }
   if(isSelected){box.addChild(new Graphics().ellipse(0,0,o.kind==='board'?172:43,o.kind==='board'?117:56).stroke({color:0xf8d18b,width:2,alpha:.9}));}
+  if(o.locked){
+    const lock=label('LOCKED',8,0xffd496,'bold');
+    lock.position.set(0,51);lock.eventMode='none';box.addChild(lock);
+  }
   if((o.counters??0)>0){
     const counter=new Container();
     counter.position.set(27,-37);counter.eventMode='none';
@@ -1735,7 +1739,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
     };
     const reset=()=>{selectView({kind:'overview',opponent:null});resetCamera.current();};
     const key=(event:KeyboardEvent)=>{
-      if(event.key==='Escape'){setGestureMenu(null);lastTap.current=null;}
+      if(event.key==='Escape'){setGestureMenu(null);setRadialWheel(null);lastTap.current=null;}
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
       if(currentKind.current==='tcg'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
