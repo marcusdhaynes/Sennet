@@ -256,8 +256,6 @@ function drawTcgMats(
         if(e.button!==0)return;
         e.stopPropagation();
         activeBookPointer=e.pointerId;
-        const canvas=book.parent?.parent;
-        void canvas;
         const stage=document.querySelector<HTMLCanvasElement>('.pixi-host canvas');
         if(!stage){activeBookPointer=null;return;}
         const rect=stage.getBoundingClientRect();
@@ -269,8 +267,8 @@ function drawTcgMats(
           if(event.pointerId!==e.pointerId)return;
           event.stopPropagation();
           if(event.cancelable)event.preventDefault();
-          const global=new Point((event.clientX-rect.left)*stage.width/rect.width,
-            (event.clientY-rect.top)*stage.height/rect.height);
+          const global=new Point((event.clientX-rect.left)*stage.clientWidth/rect.width,
+            (event.clientY-rect.top)*stage.clientHeight/rect.height);
           const start=mat.toLocal(new Point(startX,startY));
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
