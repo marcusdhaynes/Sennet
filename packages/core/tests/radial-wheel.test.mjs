@@ -23,12 +23,12 @@ test('Reference wheel defines exactly 3 inner sections and 9 unique outer action
  assert.deepEqual(RADIAL_CATEGORIES,['Position','Scale','State']);
  assert.equal(RADIAL_ACTIONS.length,3);
  assert.deepEqual(RADIAL_ACTIONS.map(group=>group.map(o=>o.label)),[
-  ['−45°','Flip','+45°'],
+  ['−45°','Tap','+45°'],
   ['Increase','Original','Decrease'],
   ['Shuffle','Flip','Lock']
  ]);
  assert.equal(RADIAL_ACTIONS.flat().length,9);
- assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,8,'Flip is intentionally shared by two sectors');
+ assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,9,'Each sector now has its own action');
  for(let group=0;group<3;group++)for(let i=0;i<3;i++){
   const degrees=group*120+i*40+20;
   const point=(radius)=>({
