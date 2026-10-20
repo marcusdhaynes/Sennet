@@ -6,6 +6,8 @@ import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOL
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
 interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
+// Pixi book gestures and DOM camera gestures must share one pointer guard.
+let activeBookPointer:number|null=null;
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
@@ -226,7 +228,7 @@ function drawTcgMats(
       const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
       const trayBottom=TCG_MAT_HEIGHT/2;
       const side=bookDock==='left'?-1:1;
-      const bw=TCG_MAT.cardWidth*.55,bh=TCG_MAT.cardHeight*.69;
+      const bw=TCG_MAT.cardWidth*.43,bh=TCG_MAT.cardHeight*.55;
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
       const by=trayBottom-bh/2-9+bookOffset.y;
       const palettes={
@@ -249,23 +251,50 @@ function drawTcgMats(
         .stroke({color:foil,width:.7,alpha:.55});
       if(bookDesign==='tiny'||bookDesign==='strapped')face.roundRect(-bw/2,-bh/2+7,bw-3,9,2).fill({color:spine,alpha:.9});
       const emblem=label('✦',12,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
-      let down:{x:number;y:number;offsetX:number;offsetY:number}|null=null;
-      book.on('pointerdown',e=>{e.stopPropagation();down={x:e.global.x,y:e.global.y,offsetX:bookOffset.x,offsetY:bookOffset.y};});
-      const finish=(x:number,y:number)=>{
-        if(!down)return;
-        const distance=Math.hypot(x-down.x,y-down.y);
-        if(distance<7)onBookOpen();
-        else onBookMove({x:bookOffset.x+book.position.x-bx,y:bookOffset.y+book.position.y-by});
-        down=null;
-      };
-      book.on('pointerup',e=>{e.stopPropagation();finish(e.global.x,e.global.y);});
-      book.on('pointerupoutside',e=>{e.stopPropagation();finish(e.global.x,e.global.y);});
-      book.on('globalpointermove',e=>{
-        if(!down)return;
+      let release:((event:PointerEvent)=>void)|null=null;
+      book.on('pointerdown',e=>{
+        if(e.button!==0)return;
         e.stopPropagation();
-        const scale=Math.max(.01,Math.hypot(book.worldTransform.a,book.worldTransform.b));
-        book.position.set(bx+(e.global.x-down.x)/scale,by+(e.global.y-down.y)/scale);
+        activeBookPointer=e.pointerId;
+        const canvas=book.parent?.parent;
+        void canvas;
+        const stage=document.querySelector<HTMLCanvasElement>('.pixi-host canvas');
+        if(!stage){activeBookPointer=null;return;}
+        const rect=stage.getBoundingClientRect();
+        const startX=e.global.x,startY=e.global.y;
+        const originalX=book.position.x,originalY=book.position.y;
+        const initialOffset={...bookOffset};
+        let moved=false;
+        const onMove=(event:PointerEvent)=>{
+          if(event.pointerId!==e.pointerId)return;
+          event.stopPropagation();
+          if(event.cancelable)event.preventDefault();
+          const global=new Point((event.clientX-rect.left)*stage.width/rect.width,
+            (event.clientY-rect.top)*stage.height/rect.height);
+          const start=mat.toLocal(new Point(startX,startY));
+          const current=mat.toLocal(global);
+          const dx=current.x-start.x,dy=current.y-start.y;
+          if(Math.hypot(dx,dy)>4)moved=true;
+          book.position.set(originalX+dx,originalY+dy);
+        };
+        const onUp=(event:PointerEvent)=>{
+          if(event.pointerId!==e.pointerId)return;
+          event.stopPropagation();
+          window.removeEventListener('pointermove',onMove,true);
+          window.removeEventListener('pointerup',onUp,true);
+          window.removeEventListener('pointercancel',onUp,true);
+          activeBookPointer=null;
+          release=null;
+          if(moved)onBookMove({x:initialOffset.x+book.position.x-originalX,
+            y:initialOffset.y+book.position.y-originalY});
+          else if(event.type!=='pointercancel')onBookOpen();
+        };
+        release=onUp;
+        window.addEventListener('pointermove',onMove,true);
+        window.addEventListener('pointerup',onUp,true);
+        window.addEventListener('pointercancel',onUp,true);
       });
+      book.on('destroyed',()=>{if(release)activeBookPointer=null;});
       mat.addChild(book);
       // Capture the drag before the table background can initiate camera pan.
       book.hitArea=new Rectangle(-bw/2-5,-bh/2-7,bw+10,bh+14);
@@ -1909,6 +1938,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       }
     };
     const down=(event:PointerEvent)=>{
+      if(activeBookPointer===event.pointerId)return; // Book dragging never pans or clears the table.
       if(onCardMenu(event.target))return; // Menu taps never initiate tabletop pan.
       // Pixi targets live on the canvas. A selected card's pointerdown
       // sets drag.current before this host handler executes: it must not
@@ -1959,6 +1989,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       }
     };
     const move=(event:PointerEvent)=>{
+      if(activeBookPointer===event.pointerId)return;
       if(isBattleView(viewRef.current.kind))return;
       const touches=pointers.current;
       if(event.pointerType==='touch'&&touches.has(event.pointerId)){
