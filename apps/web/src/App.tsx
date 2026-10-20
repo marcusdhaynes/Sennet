@@ -104,7 +104,7 @@ export default function App(){
   const [gamesPage,setGamesPage]=useState<GamePage>('all');
   const [settingsPage,setSettingsPage]=useState<SettingsPage>('general');
   const [selected,setSelected]=useState<string|null>(null);
-  const [seat,setSeat]=useState(0);
+  const [seat,setSeat]=useState(()=>restored?.seat??0);
   const [mergeOpacity,setMergeOpacity]=useState(()=>storedPreference(MERGE_OPACITY_KEY,MERGE_OPACITY_DEFAULT,.05,.5));
   const [mergeHoverMs,setMergeHoverMs]=useState(storedMergeHoverMs);
   // Resolve identity before reading appearance. One player's saved playmat
