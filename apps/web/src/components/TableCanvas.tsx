@@ -1697,6 +1697,11 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(event.target===session.current?.app.canvas){
         setGestureMenu(null);
         if(radialOpen.current)setRadialWheel(null);
+        if(selectedSet.current.size){
+          selectedSet.current=new Set();
+          setSelectedIds([]);
+          callbacks.current.onSelect(null);
+        }
       }
       // All modes track touch pointers, including locked Castle/Eye views.
       // A second finger always cancels any pending card move or stack
@@ -1830,8 +1835,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
     {!radialWheel&&selectedIds.length>0&&<div className="sennet-card-selection-status"
-      role="status"><span><b>{selectedIds.length}</b> selected · Tap to add · Drag to move · Hold for wheel</span>
-      <button type="button" onClick={()=>updateSelection([])}>Clear</button></div>}
+      role="status"><span><b>{selectedIds.length}</b> selected · Tap to add · Drag to move · Hold for wheel · Click empty space to deselect</span></div>}
     {radialWheel&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={radialWheel.x} y={radialWheel.y} size={radialWheel.size}
@@ -1860,9 +1864,7 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           }}>{label}</button>)}
         <button onClick={()=>setRadialWheel(w=>w?{...w,sendTo:false}:null)}>Back</button>
       </div>}
-      <button className="sennet-wheel-clear" type="button" onClick={()=>{
-        updateSelection([]);setRadialWheel(null);
-      }}>Clear selection</button>
+
     </div>}
     {gestureMenu&&(()=>{
       const item=state.objects.find(o=>o.id===gestureMenu.id);
