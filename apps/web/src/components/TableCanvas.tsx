@@ -656,6 +656,18 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     chair.addChild(seatText);
     board.addChild(chair);
   }
+  // Redraw the table's ACTUAL outer rim on top of the Pixi seat plates.
+  // No artificial HTML lip: the genuine wood/bevel obscures their inner edge.
+  if(!layers){
+    const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
+    const outline=Array.from({length:12},(_,i)=>{
+      const a=i*Math.PI/6-Math.PI/2-Math.PI/12;
+      return [BOARD_CENTER+radius*Math.cos(a),BOARD_CENTER+radius*Math.sin(a)];
+    }).flat();
+    board.addChild(new Graphics().poly(outline)
+      .stroke({color:0x110f0c,width:18})
+      .poly(outline.map(v=>v)).stroke({color:COLORS.wood,width:10}));
+  }
   return layers;
 }
 function markHeldStack(piece:Container,count:number){
