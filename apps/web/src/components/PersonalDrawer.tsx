@@ -10,7 +10,7 @@ const BOOKS=[
 
 /** The name/number tag IS the book drawer. Click Player 01 (or the
  * corresponding seat number) to expand the tag upward and reveal its books.
- * There are no hover, pin, countdown, or outside-click handlers.
+ * Selection and outside-pointer interaction always dismiss the drawer.
  */
 export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRecall}:{
   openBook:(id:CommandBook)=>void;
@@ -50,7 +50,7 @@ export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRe
           tabIndex={open?0:-1}
           aria-label={'Open '+book.name+' book'}
           title={'Open '+book.name}
-          onClick={()=>openBook(book.id)}>
+          onClick={()=>{setOpen(false);openBook(book.id);}}>
           <span className="book-spine" aria-hidden="true"/>
           <span className="book-cover">
             <span className="book-ornament">✦</span>
@@ -61,7 +61,7 @@ export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRe
           </span>
         </button>)}
       </div>
-      <nav className="player-hub-utilities" aria-label="Table utilities"><button type="button" onClick={onLog} tabIndex={open?0:-1} title="Show action log">▤ <span>Log</span></button><button type="button" onClick={onRecall} tabIndex={open?0:-1} title="Restore previous table">↶ <span>Recall</span></button></nav>
+      <nav className="player-hub-utilities" aria-label="Table utilities"><button type="button" onClick={()=>{setOpen(false);onLog();}} tabIndex={open?0:-1} title="Show action log">▤ <span>Log</span></button><button type="button" onClick={()=>{setOpen(false);onRecall();}} tabIndex={open?0:-1} title="Restore previous table">↶ <span>Recall</span></button></nav>
     </div>
   </div>;
 }
