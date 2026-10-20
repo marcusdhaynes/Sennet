@@ -23,9 +23,9 @@ test('Reference wheel defines exactly 3 inner sections and 9 unique outer action
  assert.deepEqual(RADIAL_CATEGORIES,['Position','Scale','Location']);
  assert.equal(RADIAL_ACTIONS.length,3);
  assert.deepEqual(RADIAL_ACTIONS.map(group=>group.map(o=>o.label)),[
-  ['Flip','+45° Rotate','−45° Rotate'],
-  ['Restore Original Size','Scale 50% Smaller','Scale 50% Bigger'],
-  ['Shuffle','Send To','Lock']
+  ['−45°','Flip','+45°'],
+  ['−50%','Original','+50%'],
+  ['Shuffle','Send','Lock']
  ]);
  assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,9);
  for(let group=0;group<3;group++)for(let i=0;i<3;i++){
@@ -178,4 +178,31 @@ test('Lorcana-style stacked cards take wheel operations together without affecti
  const unlocked=apply(after,'lock',selected);
  const hand=apply(unlocked,'send-to',selected,{destination:'HAND',matSeat:0});
  for(const id of selected)assert.equal(hand.objects.find(o=>o.id===id).zone,'HAND');
+});
+
+
+test('Selected card groups translate as one atomic event without shifting relative spacing',()=>{
+ const {local,ids}=stateWithCards();
+ const targets=ids.slice(0,3);
+ const anchor=local.objects.find(c=>c.id===targets[0]);
+ const p=targets.map(id=>local.objects.find(o=>o.id===id));
+ const before=p.map(o=>({x:o.x,y:o.y,zone:o.zone,rotation:o.rotation}));
+ const cmd=command('move',targets,{anchorId:anchor.id,x:anchor.x+43,y:anchor.y+31});
+ const after=applyCommand(local,cmd);
+ const cards=targets.map(id=>after.objects.find(o=>o.id===id));
+ const dx=cards[0].x-before[0].x,dy=cards[0].y-before[0].y;
+ assert.ok(Math.abs(dx)+Math.abs(dy)>0);
+ for(let i=0;i<cards.length;i++){
+  assert.equal(cards[i].x-before[i].x,dx);
+  assert.equal(cards[i].y-before[i].y,dy);
+  assert.equal(cards[i].rotation,before[i].rotation);
+ }
+ assert.deepEqual(replay(local,[cmd]),after);
+ assert.equal(after.seq,local.seq+1);
+ assert.deepEqual(after.objects.find(o=>o.id===ids[4]),local.objects.find(o=>o.id===ids[4]));
+ assert.throws(()=>apply(local,'move',targets,{anchorId:'not-selected',x:1,y:1}),/Invalid selected-group/);
+ assert.throws(()=>apply(local,'move',targets,{anchorId:targets[0],x:NaN,y:1}),/Invalid selected-group/);
+ const blocked={...local,objects:local.objects.map(o=>
+  o.id===targets[1]?{...o,locked:true}:o)};
+ assert.throws(()=>apply(blocked,'move',targets,{anchorId:targets[0],x:10,y:10}),/locked/);
 });
