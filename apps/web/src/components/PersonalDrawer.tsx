@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 
 export type CommandBook='sennet'|'games'|'settings';
 
@@ -19,11 +19,20 @@ export default function PersonalDrawer({openBook,activeBook,seat,name}:{
   name:string;
 }){
   const [open,setOpen]=useState(false);
+  const root=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(!open)return;
+    const close=(event:PointerEvent)=>{
+      if(event.target instanceof Node&&!root.current?.contains(event.target))setOpen(false);
+    };
+    document.addEventListener('pointerdown',close,true);
+    return()=>document.removeEventListener('pointerdown',close,true);
+  },[open]);
   const label='Player '+String(seat+1).padStart(2,'0');
   const displayName=name.trim().replace(/^player(?:\s+|$)/i,'').trim();
   const shelfId='personal-player-books';
 
-  return <div className={'player-hub'+(open?' is-open':'')}>
+  return <div ref={root} className={'player-hub'+(open?' is-open':'')}>
     <button type="button" className="player-hub-tab"
       onClick={()=>setOpen(previous=>!previous)}
       aria-controls={shelfId} aria-expanded={open}
