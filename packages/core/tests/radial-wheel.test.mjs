@@ -108,7 +108,7 @@ test('Location wheel: Send To applies to all selected with no partial updates',(
   for(const id of picked){
    const item=state.objects.find(c=>c.id===id);
    assert.equal(item.zone,zone);assert.equal(item.matSeat,0);
-   assert.equal(item.faceUp,zone==='TABLE'||zone==='DISCARD');
+   assert.equal(item.faceUp,zone!=='DECK');
   }
   assert.equal(state.seq,local.seq+1);
  }
