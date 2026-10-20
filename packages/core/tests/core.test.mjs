@@ -1276,7 +1276,7 @@ test('Castle All chooses equally sized symmetric wing grids for every valid 1-10
     assert.ok(values.every(scale=>scale>0&&scale<=1));
     assert.equal(layout.allySeats.length,count);
     assert.equal(layout.enemySeats.length,1);
-    assert.equal(chosen.rows,Math.ceil(count/chosen.cols));
+    assert.equal(chosen.rows,Math.ceil(wingCount/chosen.cols));
     assert.equal(chosen.gapX,CASTLE_GRID_GAP);
     assert.ok(chosen.gapY>=CASTLE_GRID_GAP);
     // Independently enumerate ALL possible rectangular arrangements.
