@@ -652,6 +652,8 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     const x=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.cos(angle);
     const y=BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle);
     const mine=i===seat;
+    // The local seat is represented by its interactive book-drawer tag.
+    if(mine)continue;
     const player=players.find(p=>p.seat===i);
     const chair=new Container();
     chair.position.set(x,y);
@@ -1031,12 +1033,6 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
-        const playerSection=tcgMatCells(seatRef.current).find(cell=>cell.row===0&&cell.column===1);
-        if(playerSection){
-          const topPoint=new Point(playerSection.x,playerSection.y);
-          const projected=board.toGlobal(topPoint);
-          setPlayerTagGeometry(previous=>Math.abs(previous.x-projected.x)<.35&&Math.abs(previous.y-projected.y)<.35?previous:{x:projected.x,y:projected.y});
-        }
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
           const bottom=new Point(
@@ -1055,6 +1051,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
           BOARD_CENTER+TABLE_SEAT_RADIUS*Math.sin(angle));
         const chairParent=duelLayers.current?.get(seatRef.current)??board;
         const point=chairParent.toGlobal(localChair);
+        setPlayerTagGeometry(previous=>Math.abs(previous.x-point.x)<.35&&Math.abs(previous.y-point.y)<.35?previous:{x:point.x,y:point.y});
         if(callbacks.current.onViewChange&&
           (Math.abs(lastView.current.x-point.x)>.4||
            Math.abs(lastView.current.y-point.y)>.4||
@@ -1967,7 +1964,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
 
-    {state.kind==='tcg'&&!readonly&&drawer&&<div className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y}}>{drawer}</div>}
+    {drawer&&<div className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y}}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
