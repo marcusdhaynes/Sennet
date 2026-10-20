@@ -10,6 +10,34 @@ const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 let activeBookPointer:number|null=null;
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
+/** Integrate a soft resistance band across each wall of the two wooden trays.
+ * The integral is continuous: objects can pass through the wall with sustained
+ * dragging but never hit an artificial hard stop or teleport across it. */
+function resistTrayWalls(start:{x:number;y:number},target:{x:number;y:number},seat:number){
+ const origin=tcgMatOrigin(seat),c=Math.cos(origin.angle),sn=Math.sin(origin.angle);
+ const local=(p:{x:number;y:number})=>{const dx=p.x-origin.x,dy=p.y-origin.y;
+   return {x:dx*c+dy*sn,y:-dx*sn+dy*c};};
+ const a=local(start),b=local(target);
+ const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+ const bottom=TCG_MAT_HEIGHT/2;
+ const width=TCG_MAT.cardWidth;
+ const band=7,strength=.68;
+ const soften=(from:number,to:number,wall:number)=>
+   strength*band*(Math.atan((to-wall)/band)-Math.atan((from-wall)/band));
+ let x=b.x,y=b.y;
+ for(const side of [-1,1]){
+   const cx=side*(TCG_MAT_WIDTH/2+width/2+3);
+   const lo=cx-width/2-4,hi=cx+width/2+4;
+   // Each rectangle has a resistant inner AND outer wall, including ends.
+   if(Math.max(a.y,b.y)>=top-10&&Math.min(a.y,b.y)<=bottom+10){
+     for(const wall of [lo,hi])x-=soften(a.x,b.x,wall);
+   }
+   if(Math.max(a.x,b.x)>=lo-10&&Math.min(a.x,b.x)<=hi+10){
+     for(const wall of [top,bottom])y-=soften(a.y,b.y,wall);
+   }
+ }
+ return {x:origin.x+x*c-y*sn,y:origin.y+x*sn+y*c};
+}
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
@@ -1495,6 +1523,14 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const factor=Math.max(0,(distance-GESTURE_MOVE_THRESHOLD)/Math.max(1,distance));
       d.x=Math.max(0,Math.min(BOARD_W,d.startX+(point.x-origin.x)*factor));
       d.y=Math.max(0,Math.min(BOARD_W,d.startY+(point.y-origin.y)*factor));
+      // Apply gentle resistance to crossings of either side of each tray.
+      // Never block the move; a longer pull carries objects through.
+      if(currentKind.current==='tcg'){
+        const resisted=resistTrayWalls(
+          {x:d.startX,y:d.startY},{x:d.x,y:d.y},seatRef.current);
+        d.x=Math.max(0,Math.min(BOARD_W,resisted.x));
+        d.y=Math.max(0,Math.min(BOARD_W,resisted.y));
+      }
       const dx=d.x-d.startX,dy=d.y-d.startY;
       if(d.selection||d.whole){
         for(const m of d.members){
