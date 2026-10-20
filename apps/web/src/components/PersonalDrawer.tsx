@@ -2,11 +2,6 @@ import {useEffect,useRef,useState} from 'react';
 
 export type CommandBook='sennet'|'games'|'settings';
 
-const BOOKS=[
-  {id:'sennet',name:'Sennet',subtitle:'Instructions',n:'01'},
-  {id:'games',name:'Games',subtitle:'Games & library',n:'02'},
-  {id:'settings',name:'Settings',subtitle:'Preferences',n:'03'}
-] as const;
 
 /** The name/number tag IS the book drawer. Click Player 01 (or the
  * corresponding seat number) to expand the tag upward and reveal its books.
@@ -44,23 +39,7 @@ export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRe
     </button>
     <div id={shelfId} className="player-hub-content" aria-hidden={!open}>
       {displayName&&<div className="player-hub-name">{displayName}</div>}
-      <div className="player-hub-books" aria-label="Your command books">
-        {BOOKS.map(book=><button key={book.id} type="button"
-          className={'table-book book-'+book.id+(activeBook===book.id?' opened':'')}
-          tabIndex={open?0:-1}
-          aria-label={'Open '+book.name+' book'}
-          title={'Open '+book.name}
-          onClick={()=>{setOpen(false);openBook(book.id);}}>
-          <span className="book-spine" aria-hidden="true"/>
-          <span className="book-cover">
-            <span className="book-ornament">✦</span>
-            <span className="book-title">{book.name}</span>
-            <span className="book-rule"/>
-            <span className="book-subtitle">{book.subtitle}</span>
-            <span className="book-number">{book.n}</span>
-          </span>
-        </button>)}
-      </div>
+      <div className="player-hub-books"><button type="button" className="unified-book-shortcut" onClick={()=>{setOpen(false);openBook('sennet');}}>Open Sennet Tome</button></div>
       <nav className="player-hub-utilities" aria-label="Table utilities"><button type="button" onClick={()=>{setOpen(false);onLog();}} tabIndex={open?0:-1} title="Show action log">▤ <span>Log</span></button><button type="button" onClick={()=>{setOpen(false);onRecall();}} tabIndex={open?0:-1} title="Restore previous table">↶ <span>Recall</span></button></nav>
     </div>
   </div>;
