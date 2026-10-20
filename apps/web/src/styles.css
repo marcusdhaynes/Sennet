@@ -1134,3 +1134,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .pixi-host .sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
  max-height:380px;visibility:visible;overflow:hidden;
 }
+
+/* The table-edge number remains the hinge. Books unfold toward the table
+   rather than disappearing below the screen when the local seat is south. */
+.pixi-host .sennet-player-tag-anchor .player-hub-content{
+ position:absolute;left:0;bottom:100%;top:auto;width:100%;
+ background:linear-gradient(165deg,#25493e,#172e29);
+ border-radius:9px 9px 0 0;box-shadow:0 -9px 20px #0008;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open{
+ overflow:visible;
+}
