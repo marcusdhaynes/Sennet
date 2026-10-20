@@ -12,11 +12,13 @@ const BOOKS=[
  * corresponding seat number) to expand the tag upward and reveal its books.
  * There are no hover, pin, countdown, or outside-click handlers.
  */
-export default function PersonalDrawer({openBook,activeBook,seat,name}:{
+export default function PersonalDrawer({openBook,activeBook,seat,name,onLog,onRecall}:{
   openBook:(id:CommandBook)=>void;
   activeBook:CommandBook|null;
   seat:number;
   name:string;
+  onLog:()=>void;
+  onRecall:()=>void;
 }){
   const [open,setOpen]=useState(false);
   const root=useRef<HTMLDivElement>(null);
@@ -59,6 +61,7 @@ export default function PersonalDrawer({openBook,activeBook,seat,name}:{
           </span>
         </button>)}
       </div>
+      <nav className="player-hub-utilities" aria-label="Table utilities"><button type="button" onClick={onLog} tabIndex={open?0:-1} title="Show action log">▤ <span>Log</span></button><button type="button" onClick={onRecall} tabIndex={open?0:-1} title="Restore previous table">↶ <span>Recall</span></button></nav>
     </div>
   </div>;
 }
