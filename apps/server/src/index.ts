@@ -126,8 +126,8 @@ wss.on('connection',ws=>{
         // Moving a card into a private hand/deck requires actor-specific
         // snapshots, exactly like drawing or shuffling, so spectators never
         // retain the card's identity in a public event replay.
-        if(['DRAW','SHUFFLE','SET_ZONE'].includes(command.type)||
-           (command.type==='BATCH_CARD_ACTION'&&command.payload?.action==='send-to')){
+        if(['DRAW','SHUFFLE','SET_ZONE','MOVE','MOVE_STACK','FLIP'].includes(command.type)||
+           command.type==='BATCH_CARD_ACTION'){
           for(const client of entry.sockets)projectedSnapshot(session.room,client);
         } else {
           broadcast(session.room,{type:'event',event:record});
