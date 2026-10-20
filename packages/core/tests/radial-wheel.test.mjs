@@ -24,10 +24,11 @@ test('Reference wheel defines exactly 3 inner sections and 9 unique outer action
  assert.equal(RADIAL_ACTIONS.length,3);
  assert.deepEqual(RADIAL_ACTIONS.map(group=>group.map(o=>o.label)),[
   ['−45°','Flip','+45°'],
-  ['−50%','Original','+50%'],
-  ['Shuffle','Send','Lock']
+  ['Increase','Original','Decrease'],
+  ['Shuffle','Flip','Lock']
  ]);
- assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,9);
+ assert.equal(RADIAL_ACTIONS.flat().length,9);
+ assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,8,'Flip is intentionally shared by two sectors');
  for(let group=0;group<3;group++)for(let i=0;i<3;i++){
   const degrees=group*120+i*40+20;
   const point=(radius)=>({
@@ -72,14 +73,14 @@ test('Scale wheel: original, 50% smaller and 50% bigger clamp safely',()=>{
  let state=apply(local,'scale-smaller',target);
  for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,0.5);
  state=apply(state,'scale-bigger',target);
- for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,0.75);
+ for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,1);
  state=apply(state,'scale-original',target);
  for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,1);
  for(let i=0;i<12;i++)state=apply(state,'scale-bigger',target);
- for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,4);
+ for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,7);
  for(let i=0;i<12;i++)state=apply(state,'scale-smaller',target);
- for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,0.25);
- assert.equal(sanitizeObject({...target[0],kind:'card',scale:100}).scale,4);
+ for(const id of target)assert.equal(state.objects.find(c=>c.id===id).scale,1);
+ assert.equal(sanitizeObject({...target[0],kind:'card',scale:100}).scale,7);
 });
 test('Location wheel: shuffle is seeded deterministic and changes selected ordering only',()=>{
  const {local,ids}=stateWithCards();
@@ -225,8 +226,8 @@ test('Stationary hold is 250ms, movement resistance starts after 13 screen pixel
 });
 test('Compact radial layout keeps outer actions in the requested order',()=>{
  assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-ccw','flip','rotate-cw']);
- assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['scale-smaller','scale-original','scale-bigger']);
- assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['shuffle','send-to','lock']);
+ assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['scale-bigger','scale-original','scale-smaller']);
+ assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['shuffle','flip','lock']);
  for(const [index,group] of RADIAL_ACTIONS.entries()){
   for(const [position,action] of group.entries()){
    const radians=(index*120+position*40+20)*Math.PI/180;
