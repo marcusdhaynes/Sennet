@@ -87,7 +87,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,i*120,i*120+120)}
       fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
-     <text x={p.x} y={p.y+5} transform={i===0||i===2?`rotate(${i===0?-60:60} ${p.x} ${p.y})`:undefined} textAnchor="middle" fontSize="15" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
+     <text x={p.x} y={p.y+5} transform={i===0||i===2?`rotate(${i===0?60:-60} ${p.x} ${p.y})`:undefined} textAnchor="middle" fontSize="15" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
@@ -114,6 +114,6 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    <text x="200" y="207" fill="#dfcaea" fontSize="14" textAnchor="middle">{count===1?'CARD SELECTED':'CARDS SELECTED'}</text>
    <text x="200" y="224" fill="#bca9c9" fontSize="14" textAnchor="middle">{category===null?'Choose a ring':RADIAL_CATEGORIES[category]}</text>
   </svg>
-  <button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
+  {!docked&&<button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
  </div>;
 }
