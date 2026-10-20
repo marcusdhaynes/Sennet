@@ -38,3 +38,16 @@ export function radialMembership(
  if(isSecondHold&&selected.has(pressedId))return [...selected];
  return [...new Set([...selected,...(stackIds.length?stackIds:[pressedId])])];
 }
+
+/** Once selection mode is active, a single tap adds/removes one stack;
+ * it never requires a second 250ms hold.
+ */
+export function radialTapMembership(
+ selected:ReadonlySet<string>,pressedId:string,stackIds:readonly string[]
+):string[]{
+ if(selected.has(pressedId)){
+  const toRemove=new Set(stackIds.length?stackIds:[pressedId]);
+  return [...selected].filter(id=>!toRemove.has(id));
+ }
+ return radialMembership(selected,pressedId,stackIds,false);
+}
