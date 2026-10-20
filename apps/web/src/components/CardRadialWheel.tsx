@@ -170,6 +170,6 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    </g>
   </svg>
   
-  {!docked&&<button className="card-radial-close" type="button" aria-label="Close wheel" onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();onCancel();}}>×</button>}
+
  </div>;
 }
