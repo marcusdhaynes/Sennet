@@ -810,3 +810,15 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  display:grid;place-items:center;cursor:pointer;touch-action:manipulation}
 .sennet-rewind-button:hover,.sennet-rewind-button:focus-visible{
  background:#245448;outline:2px solid #f1d18a;outline-offset:2px}
+
+/* Compact restore control, visually matched to the circular battlefield buttons. */
+.sennet-rewind-button{right:16px;bottom:16px;width:32px;height:32px;border:1px solid #bba474;border-radius:50%;background:#17382fdd;color:#e9d6a9;font:500 21px/1 system-ui;box-shadow:0 1px 6px #06131180;z-index:75}
+.sennet-action-log{position:absolute;z-index:60;left:12px;bottom:12px;width:min(330px,37vw);max-height:205px;border:1px solid #aa97636b;border-radius:9px;background:#101d1bdf;color:#eee7d7;backdrop-filter:blur(8px);font:11px/1.4 system-ui;display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+.sennet-action-log header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:1px solid #b69a6350}
+.sennet-action-log header span,.sennet-log-seq{color:#c1b18b}
+.sennet-action-log-entries{overflow-y:auto;min-height:0;max-height:168px}
+.sennet-action-log-entry{display:grid;grid-template-columns:32px minmax(0,1fr) 24px;gap:5px;padding:5px 8px;border-bottom:1px solid #ffffff12;align-items:start}
+.sennet-action-log-entry small{display:block;color:#b9b5ad;overflow-wrap:anywhere;font-size:10px}
+.sennet-action-log-entry button{background:transparent;color:#d3c5a7;border:0;padding:2px}
+.sennet-action-log-entry button:disabled{opacity:.35;cursor:not-allowed}
+@media(max-width:600px){.sennet-action-log{width:min(240px,56vw);max-height:150px}.sennet-action-log-entries{max-height:113px}}
