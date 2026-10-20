@@ -1202,3 +1202,22 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   left:calc(100% + 7px);right:auto;top:50%;bottom:auto;
   transform:translateY(-50%);
 }
+
+/* Outward only: override both the closed and expanded drawer declarations.
+   The directional rule must outrank the older .player-hub.is-open rules. */
+.pixi-host .sennet-player-tag-anchor[data-outward="bottom"] .player-hub .player-hub-content,
+.pixi-host .sennet-player-tag-anchor[data-outward="bottom"] .player-hub.is-open .player-hub-content{
+ left:50%;right:auto;top:calc(100% + 7px);bottom:auto;transform:translateX(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="top"] .player-hub .player-hub-content,
+.pixi-host .sennet-player-tag-anchor[data-outward="top"] .player-hub.is-open .player-hub-content{
+ left:50%;right:auto;bottom:calc(100% + 7px);top:auto;transform:translateX(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="left"] .player-hub .player-hub-content,
+.pixi-host .sennet-player-tag-anchor[data-outward="left"] .player-hub.is-open .player-hub-content{
+ left:auto;right:calc(100% + 7px);top:50%;bottom:auto;transform:translateY(-50%);
+}
+.pixi-host .sennet-player-tag-anchor[data-outward="right"] .player-hub .player-hub-content,
+.pixi-host .sennet-player-tag-anchor[data-outward="right"] .player-hub.is-open .player-hub-content{
+ left:calc(100% + 7px);right:auto;top:50%;bottom:auto;transform:translateY(-50%);
+}
