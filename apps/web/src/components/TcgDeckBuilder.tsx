@@ -5,7 +5,6 @@ import {changeDeckEntry,deckChecks,deckQuantity,deckStats,newDeck,patchDeckEntry
 import {parseDeckImport,detectDeckGame,matchDeckImport,type ImportData,type ImportMatch,type Detection} from '../lib/universalDeckImport';
 type Props={onClose:()=>void;onLoadOnTable:(deck:SavedDeck)=>void;initialGame?:TcgId;
  snapMerged:boolean;onSnapMerged:(value:boolean)=>void;
- stackHoldMs:number;onStackHoldMs:(value:number)=>void;
  mergeHoverMs:number;onMergeHoverMs:(value:number)=>void;};
 const ALL='All';
 function download(name:string,content:string,type='text/plain'){
@@ -14,7 +13,7 @@ function download(name:string,content:string,type='text/plain'){
  window.setTimeout(()=>URL.revokeObjectURL(uri),1000);
 }
 export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokemon',
- snapMerged,onSnapMerged,stackHoldMs,onStackHoldMs,mergeHoverMs,onMergeHoverMs}:Props){
+ snapMerged,onSnapMerged,mergeHoverMs,onMergeHoverMs}:Props){
  const [decks,setDecks]=useState<SavedDeck[]>(readDecks);
  const [activeId,setActiveId]=useState(()=>{
   try{return localStorage.getItem('sennet.deck-active.v1')||'';}catch{return '';}
@@ -399,9 +398,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      <label className="tcgb-toggle"><input type="checkbox" checked={snapMerged}
       onChange={e=>onSnapMerged(e.target.checked)}/>
       <span><b>Snap while merged</b><small>Use the 13 horizontal card positions even when play zones are merged.</small></span></label>
-     <label>Hold to pick up a stack <strong>{stackHoldMs} ms</strong>
-      <input type="range" min="250" max="5000" step="250" value={stackHoldMs}
-       onChange={e=>onStackHoldMs(Number(e.target.value))}/></label>
+     <p><strong>Card selection hold: 250 ms (fixed)</strong> — keep the pointer still to select; tap further cards once. Drag past the 13 px resistance to move your selection, or hold a selected card to open the wheel.</p>
      <label>Merge hover delay <strong>{mergeHoverMs} ms</strong>
       <input type="range" min="0" max="3000" step="100" value={mergeHoverMs}
        onChange={e=>onMergeHoverMs(Number(e.target.value))}/></label>
