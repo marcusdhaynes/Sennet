@@ -1066,8 +1066,16 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(!deckTop.has(pileKey(o)))deckTop.set(pileKey(o),o);
     const visible=state.objects.filter(o=>o.zone!=='DECK'||
       deckTop.get(pileKey(o))?.id===o.id);
-    visible.sort((a,b)=>Number(a.kind==='board')-Number(b.kind==='board')); // Boards drawn behind movable pieces
-    visible.sort((a,b)=>(a.kind==='board'?0:1)-(b.kind==='board'?0:1));
+    // Draw lower stack-order cards first, so a wheel Shuffle visibly
+    // changes which overlapping card sits on top, without disrupting
+    // object ordering elsewhere on the table.
+    const drawGroup=(o:TableObject)=>[o.zone,o.matSeat??-1,
+      Math.round(o.x*10),Math.round(o.y*10)].join(':');
+    visible.sort((a,b)=>{
+      if(a.kind==='board'||b.kind==='board')
+        return Number(a.kind!=='board')-Number(b.kind!=='board');
+      return drawGroup(a)===drawGroup(b)?a.order-b.order:0;
+    });
     // Selection contains only currently existing, visible members; never
     // allow a stale deleted card ID into a later wheel action.
     const validIds=new Set(state.objects.map(o=>o.id));
