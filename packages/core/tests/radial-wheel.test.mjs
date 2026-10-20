@@ -20,7 +20,7 @@ const stateWithCards=()=>{
  return {local,ids:sample.map(o=>o.id)};
 };
 test('Reference wheel defines exactly 3 inner sections and 9 unique outer actions',()=>{
- assert.deepEqual(RADIAL_CATEGORIES,['Position','Scale','Location']);
+ assert.deepEqual(RADIAL_CATEGORIES,['Position','Scale','State']);
  assert.equal(RADIAL_ACTIONS.length,3);
  assert.deepEqual(RADIAL_ACTIONS.map(group=>group.map(o=>o.label)),[
   ['−45°','Flip','+45°'],
@@ -225,7 +225,7 @@ test('Stationary hold is 250ms, movement resistance starts after 13 screen pixel
  assert.ok(GESTURE_MOVE_THRESHOLD>7,'Drag threshold must provide slight deliberate resistance');
 });
 test('Compact radial layout keeps outer actions in the requested order',()=>{
- assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-ccw','flip','rotate-cw']);
+ assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-ccw','tap-toggle','rotate-cw']);
  assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['scale-bigger','scale-original','scale-smaller']);
  assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['shuffle','flip','lock']);
  for(const [index,group] of RADIAL_ACTIONS.entries()){
