@@ -5,7 +5,6 @@ type Props={
  x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
- onSendTo:()=>void;
 };
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
@@ -27,7 +26,7 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,onSendTo}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel}:Props){
  const [category,setCategory]=useState<number|null>(null);
  const [action,setAction]=useState<RadialAction|null>(null);
  const state=useRef({category:null as number|null,action:null as RadialAction|null});
@@ -95,8 +94,8 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     const selected=category===i,hot=action===act.id;
     return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
-      onClick={()=>{if(act.id==='send-to')onSendTo();else onChoose(act.id);}}
-      onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();if(act.id==='send-to')onSendTo();else onChoose(act.id);}}}
+      onClick={()=>onChoose(act.id)}
+      onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
       style={{pointerEvents:selected?'auto':'none'}}>
      <path d={sector(127,192,i*120+j*40,i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
