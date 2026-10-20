@@ -107,7 +107,8 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     const selected=category===i,hot=action===act.id;
     return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
-      onClick={e=>{e.stopPropagation();onChoose(act.id);}}
+      onPointerDown={e=>{e.preventDefault();e.stopPropagation();if(!collapsed)onChoose(act.id);}}
+      onClick={e=>{e.preventDefault();e.stopPropagation();}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
       style={{pointerEvents:'auto'}}>
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
