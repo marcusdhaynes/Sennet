@@ -1899,7 +1899,6 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
           setRadialWheel(null);
           wheelPointer.current=null;
         }}
-        onSendTo={()=>setRadialWheel(w=>w?{...w,sendTo:true,pointerId:null}:null)}
         onCancel={()=>{setRadialWheel(null);wheelPointer.current=null;}}
       />
 
