@@ -325,6 +325,14 @@ export default function App(){
           else if(action==='shuffle')takeAction('SHUFFLE',{seed:Date.now()%10000000,matSeat:seat});
           else if(action==='roll')takeAction('ROLL',{id,seed:Date.now()%10000000});
         }}
+        onRadialAction={(ids,action,destination)=>{
+          // One authoritative event applies to the ENTIRE selection.
+          // State is validated atomically; invalid or opponent-owned
+          // groups never partially mutate.
+          takeAction('BATCH_CARD_ACTION',{ids,action,
+            ...(action==='shuffle'?{seed:Date.now()%10000000}:{}),
+            ...(action==='send-to'?{destination,matSeat:seat}:{})});
+        }}
         stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
