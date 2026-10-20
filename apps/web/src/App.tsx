@@ -132,6 +132,8 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
+  const [wheelMode,setWheelMode]=useState<'docked'|'hold'>(()=>localStorage.getItem('sennet.wheel.mode.v1')==='hold'?'hold':'docked');
+  useEffect(()=>{try{localStorage.setItem('sennet.wheel.mode.v1',wheelMode);}catch{/* Storage unavailable. */}},[wheelMode]);
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
@@ -323,7 +325,7 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected}
+        onSelect={setSelected} wheelMode={wheelMode}
         onOpenTcgSettings={()=>{setBook('settings');setSettingsPage('playmat');}}
         onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
         onCardAction={(id,action)=>{
@@ -378,24 +380,6 @@ export default function App(){
             takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }} readonly={replayAt!==null}/>
     </div>
-    <button className="sennet-rewind-button" type="button" title="Restore last play session"
-      aria-label="Rewind to your last saved play session"
-      onClick={()=>{
-        let saved:SavedSession|null=null;
-        try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
-        catch{/* Ignore a corrupted previous session. */}
-        saved??=lastSession();
-        if(saved?.game&&Array.isArray(saved.game.objects)){
-          loadRecent(saved);
-          setSeat(saved.seat??seat);
-        }else inform('No saved play session yet.');
-      }}><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 11a8 8 0 1 1 2.5 6"/><path d="M4 4v7h7"/></svg></button>
-    <button type="button" className="sennet-log-toggle" aria-label={actionLogOpen?'Close action log':'Open action log'}
-      aria-expanded={actionLogOpen} title="Action log" onClick={()=>setActionLogOpen(v=>!v)}>
-      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M5 2.5h10l4 4V22H5z"/><path d="M15 2.5V7h4M8 11h8M8 14.5h8M8 18h6"/>
-      </svg>
-    </button>
     {actionLogOpen&&<aside className="sennet-action-log" aria-label="Table action history">
       <header><strong>Action log</strong><span>{history.length} events</span>
         <button type="button" onClick={()=>setActionLogOpen(false)} aria-label="Close action log">×</button></header>
@@ -422,7 +406,16 @@ export default function App(){
         })}
       </div>
     </aside>}
-    <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName}/>
+    <PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
+        let saved:SavedSession|null=null;
+        try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
+        catch{/* Ignore a corrupted previous session. */}
+        saved??=lastSession();
+        if(saved?.game&&Array.isArray(saved.game.objects)){
+          loadRecent(saved);
+          setSeat(saved.seat??seat);
+        }else inform('No saved play session yet.');
+      }}/>
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
       snapMerged={playmat.snapMerged}
@@ -493,6 +486,12 @@ export default function App(){
                 <h3>Card stacks</h3>
                 <p>A stationary <strong>0.25-second hold</strong> starts selection mode. Tap more cards or stacks once to add them; tap selected cards to remove them. Drag any selected card to move the entire selection together. A small <strong>13 px</strong> breakaway threshold resists accidental motion.</p>
                 <p>Hold a selected card for another 0.25 seconds to open the compact radial wheel. Slide outward and release to apply one of its nine actions to every selected card. Moving before the hold completes drags the selection instead. After a first stationary hold, moving brings up the wheel. These timings are deliberately fixed for consistent touch and trackpad behavior.</p>
+              </div>
+              <div className="reader-block"><h3>Radial wheel</h3><p>Choose exactly one way to access card actions.</p>
+                <div className="sennet-wheel-mode-options" role="radiogroup" aria-label="Radial wheel activation">
+                  <label><input type="radio" name="radial-mode" checked={wheelMode==='docked'} onChange={()=>setWheelMode('docked')}/><strong>Docked</strong><span className="sennet-info-tip" tabIndex={0} title="Keeps the action wheel visible in the bottom-right corner for your selected cards." aria-label="Docked: Keeps the action wheel visible in the bottom-right corner for selected cards.">ⓘ</span></label>
+                  <label><input type="radio" name="radial-mode" checked={wheelMode==='hold'} onChange={()=>setWheelMode('hold')}/><strong>Hold</strong><span className="sennet-info-tip" tabIndex={0} title="Opens the action wheel when you hold an already-selected card." aria-label="Hold: Opens the action wheel when you hold an already-selected card.">ⓘ</span></label>
+                </div>
               </div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
