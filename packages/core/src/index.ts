@@ -1070,10 +1070,18 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const snapped=tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
           Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
             ?Number(p.snapMergedSeat):undefined);
-        const dx=(snapped?.x??tx)-anchor.x,dy=(snapped?.y??ty)-anchor.y;
+        // Clamp the shared translation against the whole selection's
+        // bounding box, not each card individually. Otherwise a card
+        // hitting a table edge could pull the group out of formation.
+        const minX=Math.min(...picked.map(card=>card.x));
+        const maxX=Math.max(...picked.map(card=>card.x));
+        const minY=Math.min(...picked.map(card=>card.y));
+        const maxY=Math.max(...picked.map(card=>card.y));
+        const dx=clamp((snapped?.x??tx)-anchor.x,-minX,BOARD_W-maxX);
+        const dy=clamp((snapped?.y??ty)-anchor.y,-minY,BOARD_H-maxY);
         for(const card of picked){
-          card.x=clamp(card.x+dx,0,BOARD_W);
-          card.y=clamp(card.y+dy,0,BOARD_H);
+          card.x=card.x+dx;
+          card.y=card.y+dy;
           if(snapped)card.matSeat=snapped.seat;
           else delete card.matSeat;
           if(card.zone==='DECK'&&snapped)card.zone='TABLE';
