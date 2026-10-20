@@ -1117,7 +1117,13 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
         };
         animations.current.push(requestAnimationFrame(animate));
       }
-      const url=obj.faceUp ? (obj.frameUrls?.[nearestFrameIndex(seat,obj.rotation,obj.frameUrls.length)]||obj.faceUrl) : obj.backUrl;
+      // Honor the individual card's exact artwork: a flipped card uses
+      // its own back, not the artwork of the card beneath it or the
+      // current game's generic placeholder.
+      const frame=obj.frameUrls?.length
+        ?obj.frameUrls[nearestFrameIndex(seat,obj.rotation,obj.frameUrls.length)]
+        :undefined;
+      const url=obj.faceUp ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
       if(url){
         Assets.load(url).then(texture=>{
           if(piece.destroyed||!session.current)return;
