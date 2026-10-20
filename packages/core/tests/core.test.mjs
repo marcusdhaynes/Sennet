@@ -1840,7 +1840,7 @@ test('All 12 TCG drop pockets apply requested orientation and owner-hand visibil
   assert.equal(card.matSeat,0);
   if(name==='HAND'){
    assert.equal(card.zone,'HAND');
-   assert.equal(card.owner,'local');
+   assert.equal(card.owner,'P1');
    assert.equal(projectForActor(result,'opponent').objects.find(o=>o.id===card.id).faceUrl,undefined);
   }
   if(name==='DECK')assert.equal(card.zone,'DECK');
