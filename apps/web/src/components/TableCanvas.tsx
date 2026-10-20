@@ -1333,7 +1333,10 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       if(hint&&!hint.destroyed){
         if(hint.parent!==parent)parent.addChild(hint);
         hint.clear();hint.removeChildren().forEach(child=>child.destroy());
-        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(d.x,d.y,currentState.current.centerMerges,playmatRef.current.snapMerged,seatRef.current):null;
+        const cardScale=currentState.current.objects.find(o=>o.id===d.id)?.scale??1;
+        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(
+          d.x,d.y,currentState.current.centerMerges,
+          playmatRef.current.snapMerged,seatRef.current,cardScale):null;
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
@@ -1350,8 +1353,9 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
             const dx=cell.x-zone.x,dy=cell.y-zone.y;
             const cos=Math.cos(zone.angle),sin=Math.sin(zone.angle);
             const sx=dx*cos+dy*sin,sy=-dx*sin+dy*cos;
-            hint.roundRect(sx-TCG_MAT.cardWidth/2,sy-TCG_MAT.cardHeight/2,
-              TCG_MAT.cardWidth,TCG_MAT.cardHeight,4)
+            hint.roundRect(sx-TCG_MAT.cardWidth*cardScale/2,
+              sy-TCG_MAT.cardHeight*cardScale/2,
+              TCG_MAT.cardWidth*cardScale,TCG_MAT.cardHeight*cardScale,4)
               .fill({color:0x83dfe7,alpha:.19})
               .stroke({color:0xbafaff,width:2,alpha:.96});
           }
