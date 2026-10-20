@@ -1,4 +1,5 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
+import {createPortal} from 'react-dom';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
@@ -418,7 +419,7 @@ export default function App(){
       snapMerged={playmat.snapMerged}
       onSnapMerged={value=>setPlaymat(p=>({...p,snapMerged:value}))}
       mergeHoverMs={mergeHoverMs} onMergeHoverMs={setMergeHoverMs}/>}
-    {book&&<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
+    {book&&createPortal(<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
       <section className="reader" role="dialog" aria-modal="true" aria-label={book+' book'}>
         <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
           <button className="reader-close" onClick={()=>setBook(null)} aria-label="Close book"><X size={22}/></button>
@@ -520,7 +521,7 @@ export default function App(){
         </div>
         <footer className="reader-footer"><span>SENNET · YOUR TABLETOP, YOUR RULES</span><span>ESC TO CLOSE</span></footer>
       </section>
-    </div>}
+    </div>,document.body)}
     {replayAt!==null&&!book&&<button className="replay-return" onClick={()=>setReplayAt(null)}>Replay · Return to live table <X size={16}/></button>}
     {notice&&<div className="table-toast" role="status">{notice}<button aria-label="Dismiss" onClick={()=>setNotice('')}><X size={14}/></button></div>}
   </div>;
