@@ -1259,3 +1259,48 @@ body>.reader-backdrop{
  position:fixed;inset:0;z-index:10000;
  width:100vw;height:100dvh;
 }
+
+/* Table-anchored player drawer. The tab remains the table's own size and
+   position; only the shelf slides out from its outer edge. */
+.pixi-host>.sennet-player-tag-anchor{
+ overflow:visible;pointer-events:none;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub{
+ pointer-events:auto;touch-action:manipulation;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub-tab{
+ pointer-events:auto;touch-action:manipulation;
+ cursor:pointer;position:relative;z-index:1;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub .player-hub-content,
+.pixi-host>.sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+ box-sizing:border-box;
+ width:var(--drawer-width,320px);
+ max-width:none;
+ pointer-events:none;
+ opacity:0;visibility:hidden;
+ transition:opacity .18s ease,clip-path .22s ease;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+ pointer-events:auto;opacity:1;visibility:visible;
+}
+.pixi-host>.sennet-player-tag-anchor[data-outward="bottom"] .player-hub .player-hub-content{
+ clip-path:inset(0 0 100% 0);
+ transform:translateX(-50%);transform-origin:top center;
+}
+.pixi-host>.sennet-player-tag-anchor[data-outward="bottom"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
+.pixi-host>.sennet-player-tag-anchor[data-outward="top"] .player-hub .player-hub-content{
+ clip-path:inset(100% 0 0 0);
+ transform:translateX(-50%);transform-origin:bottom center;
+}
+.pixi-host>.sennet-player-tag-anchor[data-outward="top"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
+.pixi-host>.sennet-player-tag-anchor[data-outward="left"] .player-hub .player-hub-content{
+ clip-path:inset(0 0 0 100%);
+ transform:translateY(-50%);transform-origin:center right;
+}
+.pixi-host>.sennet-player-tag-anchor[data-outward="left"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
+.pixi-host>.sennet-player-tag-anchor[data-outward="right"] .player-hub .player-hub-content{
+ clip-path:inset(0 100% 0 0);
+ transform:translateY(-50%);transform-origin:center left;
+}
+.pixi-host>.sennet-player-tag-anchor[data-outward="right"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
