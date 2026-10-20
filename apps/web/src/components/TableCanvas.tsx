@@ -648,11 +648,10 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     const chair=new Container();
     chair.position.set(x,y);
     chair.rotation=playerSeatRotation(i);
-    chair.addChild(new Graphics().roundRect(-112,-48,224,96,19)
-      .fill(mine?0xc6aa74:player?0x365b50:0x29483d)
-      .stroke({color:mine?0xf0d6a5:player?0xa4c1a9:0x698476,width:1.4}));
+    chair.addChild(new Graphics().roundRect(-78,-25,156,50,10)
+      .fill(0xc9a66a).stroke({color:0xf0d6a5,width:1.5}));
     const seatText=label('Player '+String(i+1).padStart(2,'0'),
-      29,mine?0x263a32:0xe7e0c9,'bold');
+      22,0x263a32,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);
