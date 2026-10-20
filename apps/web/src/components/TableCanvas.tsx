@@ -1785,10 +1785,15 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       <RetractableSeatLabel key={'opponent-'+eyeView.opponent}
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
+    {!radialWheel&&selectedIds.length>0&&<div className="sennet-card-selection-status"
+      role="status"><span><b>{selectedIds.length}</b> selected · Hold a selected card for the wheel</span>
+      <button type="button" onClick={()=>updateSelection([])}>Clear</button></div>}
     {radialWheel&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={radialWheel.x} y={radialWheel.y} size={radialWheel.size}
-        count={radialWheel.ids.length} pointerId={radialWheel.pointerId}
+        count={radialWheel.ids.length}
+        allLocked={radialWheel.ids.every(id=>state.objects.find(o=>o.id===id)?.locked)}
+        pointerId={radialWheel.pointerId}
         onChoose={action=>{
           callbacks.current.onRadialAction(radialWheel.ids,action);
           setRadialWheel(null);
