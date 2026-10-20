@@ -1929,7 +1929,7 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
 
     {(wheelMode==='docked'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
-        x={wheelMode==='docked'?Math.max(98,viewport.width-112):radialWheel!.x} y={wheelMode==='docked'?Math.max(98,viewport.height-112):radialWheel!.y} size={wheelMode==='docked'?192:radialWheel!.size}
+        x={wheelMode==='docked'?Math.max(82,viewport.width-88):radialWheel!.x} y={wheelMode==='docked'?Math.max(82,viewport.height-88):radialWheel!.y} size={wheelMode==='docked'?152:radialWheel!.size} docked={wheelMode==='docked'}
         count={wheelMode==='docked'?selectedIds.length:radialWheel!.ids.length}
         allLocked={(wheelMode==='docked'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode==='docked'?null:radialWheel!.pointerId}
