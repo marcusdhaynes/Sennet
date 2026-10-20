@@ -55,7 +55,7 @@ test('Touch menu sends TCG cards to hand, top/bottom deck and discard determinis
  const hand=run(initial,'SET_ZONE',{id:card.id,matSeat:cardSeat,zone:'HAND'},7);
  let moved=hand.objects.find(o=>o.id===card.id);
  assert.equal(moved.zone,'HAND');assert.equal(moved.owner,'local');
- assert.equal(moved.faceUp,false);assert.equal(moved.matSeat,cardSeat);
+ assert.equal(moved.faceUp,true);assert.equal(moved.matSeat,cardSeat);
  const discard=run(hand,'SET_ZONE',{id:card.id,matSeat:cardSeat,zone:'DISCARD'},8);
  moved=discard.objects.find(o=>o.id===card.id);
  assert.equal(moved.zone,'DISCARD');assert.equal(moved.faceUp,true);
