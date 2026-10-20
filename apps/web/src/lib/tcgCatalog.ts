@@ -13,6 +13,17 @@ export const TCGS=[
 ] as const;
 export type TcgId=(typeof TCGS)[number]['id'];
 export type DeckSection=string;
+/** Public, game-specific card backs. These are used only when a deck's
+ * individual card entry does not supply a custom back image. */
+export function tcgCardBack(game:TcgId):string{
+ const images:Record<TcgId,string>={
+  lorcana:'https://images.lorcast.com/card-backs/lorcana.webp',
+  gundam:'',mtg:'https://cards.scryfall.io/back.png',
+  onepiece:'',pokemon:'https://assets.tcgdex.net/en/base/base1/1/low.webp',
+  riftbound:'',yugioh:''
+ };
+ return images[game]||'';
+}
 export type CatalogCard={
   id:string;name:string;game:TcgId;number:string;set:string;rarity:string;
   type:string;types:string[];colors:string[];cost:string;text:string;image:string;
