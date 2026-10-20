@@ -921,18 +921,6 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
   const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
   const selectedSet=useRef(new Set<string>());
-  const [dockPosition,setDockPosition]=useState<{x:number;y:number}|null>(()=>{
-    try{const value=JSON.parse(localStorage.getItem('sennet.radial.dock-position.v1')||'null');
-      return value&&Number.isFinite(value.x)&&Number.isFinite(value.y)?value:null;
-    }catch{return null;}
-  });
-  const persistDock=(position:{x:number;y:number})=>{
-    const w=mount.current?.clientWidth??viewport.width,h=mount.current?.clientHeight??viewport.height;
-    const min=80;
-    const next={x:Math.max(min,Math.min(w-min,position.x)),y:Math.max(min,Math.min(h-min,position.y))};
-    setDockPosition(next);
-    try{localStorage.setItem('sennet.radial.dock-position.v1',JSON.stringify(next));}catch{/* Storage unavailable. */}
-  };
   const [radialWheel,setRadialWheel]=useState<{
     x:number;y:number;size:number;pointerId:number|null;ids:string[];sendTo:boolean
   }|null>(null);
@@ -1941,7 +1929,7 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
 
     {(wheelMode==='docked'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
-        x={wheelMode==='docked'?Math.max(80,Math.min(viewport.width-80,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?Math.max(80,Math.min(viewport.height-80,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?152:radialWheel!.size} docked={wheelMode==='docked'} onMoveDock={persistDock}
+        x={wheelMode==='docked'?Math.max(80,viewport.width-88):radialWheel!.x} y={wheelMode==='docked'?Math.max(80,viewport.height-88):radialWheel!.y} size={wheelMode==='docked'?152:radialWheel!.size} docked={wheelMode==='docked'}
         count={wheelMode==='docked'?selectedIds.length:radialWheel!.ids.length}
         allLocked={(wheelMode==='docked'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode==='docked'?null:radialWheel!.pointerId}
