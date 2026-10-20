@@ -1098,3 +1098,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tcgb-gallery-counter{width:100%;margin-top:auto}
 .tcgb-gallery-counter button{flex:1;max-width:72px}
 .tcg-builder .tcgb-card-gallery .tcgb-add{display:none!important}
+
+/* Personal book drawer shares the player's table-anchored number tag.
+   The closed tag stays attached to the PLAYER row; books open below it. */
+.sennet-player-tag-anchor{position:absolute;z-index:85;width:0;height:0;pointer-events:none}
+.sennet-player-tag-anchor .player-hub{
+ position:absolute;left:0;top:-20px;bottom:auto;
+ transform:translateX(-50%);
+ border:1px solid #bb9e6b;border-radius:9px;
+ overflow:visible;pointer-events:auto;
+ box-shadow:0 5px 20px #0008;
+}
+.sennet-player-tag-anchor .player-hub.is-open{z-index:2}
+.sennet-player-tag-anchor .player-hub-content{
+ overflow:hidden;border-radius:0 0 9px 9px;
+}
+.sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+ max-height:360px;
+}
