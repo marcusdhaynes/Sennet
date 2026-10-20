@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
- x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;docked?:boolean;
+ x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;docked?:boolean;tapLabel?:'Tap'|'Untap';
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
 };
@@ -26,7 +26,7 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,tapLabel='Tap'}:Props){
  const [category,setCategory]=useState<number|null>(null);
  const [action,setAction]=useState<RadialAction|null>(null);
  const state=useRef({category:null as number|null,action:null as RadialAction|null});
@@ -92,7 +92,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
     const act=RADIAL_ACTIONS[i][j],mid=i*120+j*40+20,p=point(157,mid);
-    const actionLabel=act.id==='lock'&&allLocked?'Unlock':act.label;
+    const actionLabel=act.id==='lock'&&allLocked?'Unlock':act.id==='tap-toggle'?tapLabel:act.label;
     const selected=category===i,hot=action===act.id;
     return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
