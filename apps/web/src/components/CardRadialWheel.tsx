@@ -59,7 +59,9 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    // Release over the inner ring keeps the wheel available for tapping.
   };
   const cancel=(event:PointerEvent)=>{
-   if(event.pointerId===pointerId)onCancel();
+   // Browser touch-gesture cancellation is not an explicit request to
+   // close the wheel. Keep it open for a subsequent deliberate tap.
+   if(event.pointerId===pointerId){state.current.action=null;setAction(null);}
   };
   window.addEventListener('pointermove',move);
   window.addEventListener('pointerup',up);
