@@ -251,17 +251,19 @@ function drawTcgMats(
       const emblem=label('✦',19,foil,'bold');emblem.position.set(3,-3);book.addChild(face,emblem);
       let down:{x:number;y:number;offsetX:number;offsetY:number}|null=null;
       book.on('pointerdown',e=>{e.stopPropagation();down={x:e.global.x,y:e.global.y,offsetX:bookOffset.x,offsetY:bookOffset.y};});
-      book.on('pointerup',e=>{
-        e.stopPropagation();
+      const finish=(x:number,y:number)=>{
         if(!down)return;
-        if(Math.hypot(e.global.x-down.x,e.global.y-down.y)<7)onBookOpen();
+        const distance=Math.hypot(x-down.x,y-down.y);
+        if(distance<7)onBookOpen();
+        else onBookMove({x:bookOffset.x+book.position.x-bx,y:bookOffset.y+book.position.y-by});
         down=null;
-      });
-      book.on('pointerupoutside',()=>{down=null;});
+      };
+      book.on('pointerup',e=>{e.stopPropagation();finish(e.global.x,e.global.y);});
+      book.on('pointerupoutside',e=>finish(e.global.x,e.global.y));
       book.on('globalpointermove',e=>{
         if(!down)return;
-        const scale=book.getGlobalTransform().a||1;
-        onBookMove({x:down.offsetX+(e.global.x-down.x)/scale,y:down.offsetY+(e.global.y-down.y)/scale});
+        const scale=Math.max(.01,Math.hypot(book.worldTransform.a,book.worldTransform.b));
+        book.position.set(bx+(e.global.x-down.x)/scale,by+(e.global.y-down.y)/scale);
       });
       mat.addChild(book);
     }
@@ -1406,7 +1408,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       session.current?.app.ticker.remove(syncCardArtwork);
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,eyeView,relations,viewport]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
