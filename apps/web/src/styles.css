@@ -1221,3 +1221,10 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .pixi-host .sennet-player-tag-anchor[data-outward="right"] .player-hub.is-open .player-hub-content{
  left:calc(100% + 7px);right:auto;top:50%;bottom:auto;transform:translateY(-50%);
 }
+
+/* The local HTML trigger cannot paint over the Pixi rim. Mask only the
+   inward-facing portion of the gold trigger; NEVER clip its book drawer. */
+.pixi-host .sennet-player-tag-anchor[data-outward="bottom"] .player-hub-tab{clip-path:inset(24% 0 0 0 round 8px)}
+.pixi-host .sennet-player-tag-anchor[data-outward="top"] .player-hub-tab{clip-path:inset(0 0 24% 0 round 8px)}
+.pixi-host .sennet-player-tag-anchor[data-outward="left"] .player-hub-tab{clip-path:inset(0 24% 0 0 round 8px)}
+.pixi-host .sennet-player-tag-anchor[data-outward="right"] .player-hub-tab{clip-path:inset(0 0 0 24% round 8px)}
