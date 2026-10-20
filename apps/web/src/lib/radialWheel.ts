@@ -1,10 +1,10 @@
 /** Shared deterministic radial-wheel model. Geometric hit testing uses
  * an upright polar angle: 0° is 12 o'clock, clockwise positive.
  */
-export const RADIAL_CATEGORIES=['Position','Scale','Location'] as const;
+export const RADIAL_CATEGORIES=['Position','Scale','State'] as const;
 export type RadialCategory=(typeof RADIAL_CATEGORIES)[number];
 export const RADIAL_ACTIONS=[
- [{id:'rotate-ccw',label:'−45°'}, {id:'flip',label:'Flip'}, {id:'rotate-cw',label:'+45°'}],
+ [{id:'rotate-ccw',label:'−45°'}, {id:'tap-toggle',label:'Tap'}, {id:'rotate-cw',label:'+45°'}],
  [{id:'scale-bigger',label:'Increase'}, {id:'scale-original',label:'Original'}, {id:'scale-smaller',label:'Decrease'}],
  [{id:'shuffle',label:'Shuffle'}, {id:'flip',label:'Flip'}, {id:'lock',label:'Lock'}]
 ] as const;
