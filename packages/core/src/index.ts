@@ -565,8 +565,10 @@ export function castleGridLayout(
     ?selectedAlly:allies[0]??null;
   // The viewer is always full-size, at precisely the same left edge and
   // vertical midpoint for Single, All, and any ally/enemy count.
-  const viewerLeft=-visibleW/2+pad;
-  const viewerCenter=world(viewerLeft+TCG_MAT_WIDTH/2,visibleH/4);
+  // Keep the viewer centered on the lower half of the zoomed battlefield.
+  // Allies will alternate around this anchor instead of pushing it left.
+  const viewerLeft=-TCG_MAT_WIDTH/2;
+  const viewerCenter=world(0,visibleH/4);
   mats.set(viewerSeat,{...viewerCenter,rotation:0,scale:1});
   // Preserve the generous viewer-to-ally clearance, independently of
   // the very tight spacing WITHIN each automatically optimized grid.
@@ -599,11 +601,36 @@ export function castleGridLayout(
     top:-visibleH/2+pad,bottom:-pad
   },true);
   const drawnAllies=mode==='single'?(active===null?[]:[active]):allies;
-  grid(drawnAllies,{
-    left:viewerLeft+TCG_MAT_WIDTH+playerGap,
-    right:visibleW/2-pad,
-    top:pad,bottom:visibleH/2-pad
-  },false);
+  if(drawnAllies.length){
+    const bottomTop=pad,bottomEnd=visibleH/2-pad;
+    const availableWidth=Math.max(1,(visibleW-TCG_MAT_WIDTH)/2-pad-playerGap);
+    const availableHeight=Math.max(1,bottomEnd-bottomTop);
+    // Symmetric wings: 1 right, 1 left, 2 right, 2 left...
+    // Each wing gets equal available area and a uniform scale.
+    const right=drawnAllies.filter((_,i)=>i%2===0);
+    const left=drawnAllies.filter((_,i)=>i%2===1);
+    const maxCount=Math.max(right.length,left.length);
+    const shape=bestCastleGridShape(maxCount,availableWidth,availableHeight);
+    const s=shape.scale,cellW=TCG_MAT_WIDTH*s,cellH=TCG_MAT_HEIGHT*s;
+    const placeWing=(seats:readonly number[],side:'left'|'right')=>{
+      const totalH=shape.rows*cellH+(shape.rows-1)*shape.gapY;
+      for(let i=0;i<seats.length;i++){
+        const row=Math.floor(i/shape.cols),col=i%shape.cols;
+        const entries=Math.min(shape.cols,seats.length-row*shape.cols);
+        const rowWidth=entries*cellW+(entries-1)*shape.gapX;
+        const centerX=side==='right'
+          ?TCG_MAT_WIDTH/2+playerGap+availableWidth/2
+          :-TCG_MAT_WIDTH/2-playerGap-availableWidth/2;
+        const x=centerX-rowWidth/2+col*(cellW+shape.gapX)+cellW/2;
+        const y=(bottomTop+bottomEnd-totalH)/2+row*(cellH+shape.gapY)+cellH/2;
+        const allySeat=seats[i];
+        mats.set(allySeat,{...world(x,y),
+          rotation:(viewerSeat-allySeat)*Math.PI/6,scale:s});
+      }
+    };
+    placeWing(right,'right');
+    placeWing(left,'left');
+  }
   return {mats,allySeats:allies,enemySeats,selectedAlly:active,cameraScale};
 }
 /** Each side of Castle All can independently show its complete grid or
