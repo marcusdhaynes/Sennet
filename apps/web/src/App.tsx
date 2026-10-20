@@ -132,7 +132,7 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
-  const [wheelMode,setWheelMode]=useState<'mobile'|'docked'|'hold'>(()=>{const mode=localStorage.getItem('sennet.wheel.mode.v1');return mode==='hold'?'hold':mode==='docked'?'mobile':mode==='mobile'?'mobile':'docked';});
+  const [wheelMode,setWheelMode]=useState<'mobile'|'docked'|'hold'>(()=>{const mode=localStorage.getItem('sennet.wheel.mode.v1');return mode==='hold'?'hold':mode==='mobile'?'mobile':'docked';});
   useEffect(()=>{try{localStorage.setItem('sennet.wheel.mode.v1',wheelMode);}catch{/* Storage unavailable. */}},[wheelMode]);
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
