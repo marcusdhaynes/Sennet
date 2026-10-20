@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
- x:number;y:number;size:number;count:number;pointerId:number|null;
+ x:number;y:number;size:number;count:number;allLocked:boolean;pointerId:number|null;
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
  onSendTo:()=>void;
@@ -26,7 +26,7 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,pointerId,onChoose,onCancel,onSendTo}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,onSendTo}:Props){
  const [category,setCategory]=useState<number|null>(null);
  const [action,setAction]=useState<RadialAction|null>(null);
  const state=useRef({category:null as number|null,action:null as RadialAction|null});
@@ -91,8 +91,9 @@ export default function CardRadialWheel({x,y,size,count,pointerId,onChoose,onCan
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
     const act=RADIAL_ACTIONS[i][j],mid=i*120+j*40+20,p=point(157,mid);
+    const actionLabel=act.id==='lock'&&allLocked?'Unlock':act.label;
     const selected=category===i,hot=action===act.id;
-    return <g key={act.id} aria-label={act.label} role="button" tabIndex={selected?0:-1}
+    return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
       onClick={()=>{if(act.id==='send-to')onSendTo();else onChoose(act.id);}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();if(act.id==='send-to')onSendTo();else onChoose(act.id);}}}
@@ -101,9 +102,9 @@ export default function CardRadialWheel({x,y,size,count,pointerId,onChoose,onCan
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     {selected&&<text x={p.x} y={p.y-(multiline(act.label).length-1)*7}
+     {selected&&<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
        textAnchor="middle" fontSize="12" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
-       {multiline(act.label).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
+       {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
     </g>;
    }))}
