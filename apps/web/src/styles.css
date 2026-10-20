@@ -998,3 +998,24 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .sennet-info-tip:focus-visible{outline:2px solid #e8c58e;border-radius:50%}
 /* The dock occupies the lower right but leaves tabletop events accessible outside it. */
 .sennet-radial-overlay{pointer-events:none}
+
+/* The outer rings retract toward the fixed center on a center hold. */
+.card-radial-wheel .sennet-radial-rings{
+  transform-origin:200px 200px;
+  transform:scale(1);
+  opacity:1;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .22s ease;
+}
+.card-radial-wheel.is-collapsed .sennet-radial-rings{
+  transform:scale(.325);
+  opacity:0;
+  pointer-events:none;
+}
+.card-radial-wheel.is-collapsed{
+  clip-path:circle(17% at 50% 50%);
+  filter:none;
+}
+.card-radial-wheel .sennet-radial-center{cursor:pointer;touch-action:none}
+@media(prefers-reduced-motion:reduce){
+ .card-radial-wheel .sennet-radial-rings{transition:none}
+}
