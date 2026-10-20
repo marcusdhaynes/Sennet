@@ -8,6 +8,8 @@ type Props={
  onSendTo:()=>void;
 };
 const cx=200,cy=200;
+// Uniform type across all categories and all actions; smaller outer
+// text stays inside the narrowest 40-degree wedge at compact sizes.
 function point(radius:number,angle:number){
  const radians=angle*Math.PI/180;
  return {x:cx+Math.sin(radians)*radius,y:cy-Math.cos(radians)*radius};
@@ -52,10 +54,9 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    if(event.pointerId!==pointerId)return;
    track(event.clientX,event.clientY);
    const selected=state.current.action;
-   if(selected){
-    if(selected==='send-to')onSendTo();
-    else onChoose(selected);
-   }
+   // Releasing a held pointer only highlights an action. The wheel
+   // remains open until a deliberate click, X, or outside click.
+   void selected;
    // Release over the inner ring keeps the wheel available for tapping.
   };
   const cancel=(event:PointerEvent)=>{
@@ -85,7 +86,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,i*120,i*120+120)}
       fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
-     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="20" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
+     <text x={p.x} y={p.y+5} textAnchor="middle" fontSize="18" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
@@ -102,7 +103,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
      {selected&&<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
-       textAnchor="middle" fontSize="17" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
+       textAnchor="middle" fontSize="15" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
        {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
     </g>;
