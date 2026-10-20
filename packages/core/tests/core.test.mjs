@@ -1221,9 +1221,9 @@ test('Castle Single and All preserve the exact full-size, centered player mat',(
             assert.ok(at.y+halfH<=-pad+1e-7,'Enemies stay across divider');
           }else{
             const playerAt=project(own);
-            assert.ok(at.x-halfW>=playerAt.x+TCG_MAT_WIDTH/2+2*pad-1e-7||
-              at.x+halfW<=playerAt.x-TCG_MAT_WIDTH/2-2*pad+1e-7,
-              'Allies alternate on either side and retain the viewer clearance');
+            assert.ok(at.x-halfW>=playerAt.x+TCG_MAT_WIDTH/2+pad-1e-7||
+              at.x+halfW<=playerAt.x-TCG_MAT_WIDTH/2-pad+1e-7,
+              'Allies remain outside the viewer with the compact shared clearance');
             assert.ok(at.y-halfH>=pad-1e-7,'Allies stay below divider');
           }
         }
@@ -1269,7 +1269,7 @@ test('Castle All chooses equally sized symmetric wing grids for every valid 1-10
     const layout=castleGridLayout(viewer,relations,'all',seats[0],screen);
     const visibleW=screen.width/layout.cameraScale;
     const visibleH=screen.height/layout.cameraScale;
-    const areaW=(visibleW-TCG_MAT_WIDTH)/2-3*pad;
+    const areaW=(visibleW-TCG_MAT_WIDTH)/2-2*pad;
     const areaH=visibleH/2-2*pad;
     const wingCount=Math.ceil(count/2);
     const chosen=bestCastleGridShape(wingCount,areaW,areaH);
