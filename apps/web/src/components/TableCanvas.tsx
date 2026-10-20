@@ -1941,13 +1941,13 @@ export default function TableCanvas({wheelMode,state,seat,playerName,actorId,sel
 
     {(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
-        x={wheelMode==='docked'?viewport.width/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?viewport.height-174:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?320:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?viewport.width/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?viewport.height-174:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?viewport.width*0.30:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?selectedIds.length:radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}
-        tapLabel={(wheelMode==='docked'?selectedIds:radialWheel!.ids).some(id=>{const card=state.objects.find(o=>o.id===id);return card&&((card.rotation%360)+360)%360!==0;})?'Untap':'Tap'}
+        tapLabel={(wheelMode!=='hold'?selectedIds:radialWheel!.ids).some(id=>{const card=state.objects.find(o=>o.id===id);return card&&((card.rotation%360)+360)%360!==0;})?'Untap':'Tap'}
         onChoose={action=>{
-          const targets=wheelMode==='docked'?selectedIds:radialWheel!.ids;
+          const targets=wheelMode!=='hold'?selectedIds:radialWheel!.ids;
           if(targets.length)callbacks.current.onRadialAction(targets,action);
           if(wheelMode==='hold')setRadialWheel(null);
           wheelPointer.current=null;
