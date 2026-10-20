@@ -137,6 +137,15 @@ function drawTcgMats(
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
     parent.addChild(mat);
+    if(seat!==viewerSeat){
+      const tag=new Container();tag.position.set(0,-TCG_MAT_HEIGHT/2-8);
+      const plate=new Graphics().roundRect(-58,-14,116,28,6).fill(0x274538)
+        .stroke({color:0xbca476,width:1.5});
+      tag.addChild(plate);
+      const number=label('PLAYER '+String(seat+1).padStart(2,'0'),12,0xe9d8ad,'bold');
+      tag.addChild(number);tag.eventMode='none';mat.addChild(tag);
+    }
+
     if(castleActive&&seat!==viewerSeat){
       // The actual playmat surface focuses a classified Castle opponent.
       // Child controls and draggable cards retain their own pointer input.
@@ -884,6 +893,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
   const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
+  const [playerTagGeometry,setPlayerTagGeometry]=useState({x:0,y:0});
 
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
   const viewRef=useRef<EyeView>({kind:'overview',opponent:null});
@@ -1020,6 +1030,13 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
+        const playerSection=tcgMatCells(seatRef.current).find(cell=>cell.row===0&&cell.column===1);
+        if(playerSection){
+          const topPoint=new Point(playerSection.x+Math.sin(playerSection.angle)*playerSection.height/2,
+            playerSection.y-Math.cos(playerSection.angle)*playerSection.height/2);
+          const projected=board.toGlobal(topPoint);
+          setPlayerTagGeometry(previous=>Math.abs(previous.x-projected.x)<.35&&Math.abs(previous.y-projected.y)<.35?previous:{x:projected.x,y:projected.y});
+        }
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
           const bottom=new Point(
@@ -1956,7 +1973,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
         side="top"
         idleOpacity={mergeOpacity} seat={eyeView.opponent}/>}
 
-    {state.kind==='tcg'&&!readonly&&drawer&&<div className="sennet-player-tag-anchor" style={{left:dockGeometry.x,top:dockGeometry.y}}>{drawer}</div>}
+    {state.kind==='tcg'&&!readonly&&drawer&&<div className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y}}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
         x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
