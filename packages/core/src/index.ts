@@ -239,8 +239,8 @@ export function tcgDropZone(x:number,y:number,seat:number):{
     row===3&&column===1?'HAND':
     row===2&&column===2?'DISCARD':
     row===3&&column===2?'REMOVE':'TABLE';
-  const faceUp=zone==='HAND'||zone==='DISCARD'||zone==='REMOVE'||
-   (column===0&&row===2)||(column===2&&row===0);
+  const faceUp=column===1||zone==='DISCARD'||zone==='REMOVE'||
+   (column===0&&(row===0||row===2))||(column===2&&row===0);
   const deckBottom=zone==='DECK'&&p.y>center.y;
   return {zone,faceUp,deckBottom,row,column};
  }
@@ -806,7 +806,7 @@ export function opponentAtTablePoint(x:number,y:number,viewerSeat:number):number
  * their owner explicitly enabled snap-while-merged.
  * The same pure function drives move commands and the drag preview.
  */
-export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false,snapMergedSeat?:number):TcgSnapLocation|null {
+export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapMerged=false,snapMergedSeat?:number,cardScale=1):TcgSnapLocation|null {
   if(!Number.isFinite(x)||!Number.isFinite(y))return null;
   let best:TcgSnapLocation|null=null;
   let bestZoneDistance=Infinity,bestSpotDistance=Infinity;
@@ -865,6 +865,13 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
       const spotDistance=Math.hypot(slotDistance,local.y-nearestY);
       if(best&&Math.abs(zoneDistance-bestZoneDistance)<=eps&&
          spotDistance>=bestSpotDistance-eps)continue;
+      // A 50%-scale card occupies precisely one of four quadrants
+      // inside an ordinary 100%-card slot, preserving all existing
+      // full-size anchor positions and the older interstitial slots.
+      if(cardScale===0.5){
+        nearestX+=(local.x>=nearestX?1:-1)*TCG_MAT.cardWidth/4;
+        nearestY+=(local.y>=nearestY?1:-1)*TCG_MAT.cardHeight/4;
+      }
       const snapped=tcgMatWorld(nearestX,nearestY,seat);
       best={...cell,...snapped,slot};
       bestZoneDistance=zoneDistance;
@@ -1083,7 +1090,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const snapEligible=state.kind==='tcg'&&obj.kind!=='board'&&obj.kind!=='deck-box';
       const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-          ?Number(p.snapMergedSeat):undefined):null;
+          ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
@@ -1119,7 +1126,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
       const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-          ?Number(p.snapMergedSeat):undefined):null;
+          ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
       const dx=(snapped?.x??requestedX)-obj.x;
       const dy=(snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
@@ -1146,7 +1153,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const tx=clamp(Number(p.x),0,BOARD_W),ty=clamp(Number(p.y),0,BOARD_H);
         const snapped=tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
           Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-            ?Number(p.snapMergedSeat):undefined);
+            ?Number(p.snapMergedSeat):undefined,anchor.scale??1);
         // Clamp the shared translation against the whole selection's
         // bounding box, not each card individually. Otherwise a card
         // hitting a table edge could pull the group out of formation.
