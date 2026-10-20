@@ -1145,3 +1145,40 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .pixi-host .sennet-player-tag-anchor .player-hub.is-open{
  overflow:visible;
 }
+
+/* Table seat labels: one consistent gold plate, including the interactive local
+   seat. Scale exactly with the Pixi camera, not the viewport or drawer width. */
+.pixi-host .sennet-player-tag-anchor .player-hub,
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open{
+ width:calc(156px * var(--seat-scale,1));
+ height:calc(50px * var(--seat-scale,1));
+ min-height:0;max-width:none;
+ top:0;left:0;transform:translate(-50%,-50%);
+ padding:0;border:calc(1.5px * var(--seat-scale,1)) solid #f0d6a5;
+ border-radius:calc(10px * var(--seat-scale,1));
+ background:#c9a66a;color:#263a32;box-shadow:0 2px 5px #0005;
+ overflow:visible;z-index:95;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub-tab{
+ width:100%;height:100%;min-height:0;display:grid;place-items:center;
+ padding:0;border-radius:inherit;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub-number{
+ width:100%;height:100%;min-height:0;padding:0;letter-spacing:0;
+ background:transparent!important;border:0!important;
+ color:#263a32;font:700 calc(22px * var(--seat-scale,1))/1 'DM Sans',system-ui,sans-serif;
+ text-transform:none;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub-content{
+ position:absolute;left:50%;bottom:calc(100% + 5px);top:auto;
+ transform:translateX(-50%);
+ width:min(380px,calc(100vw - 20px));max-height:0;
+ visibility:hidden;opacity:0;pointer-events:none;
+ border:1px solid #bb9e6b;border-radius:10px;
+ background:linear-gradient(165deg,#25493e,#172e29);
+ box-shadow:0 -5px 22px #000a;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+ max-height:420px;visibility:visible;opacity:1;pointer-events:auto;
+ overflow:hidden;
+}
