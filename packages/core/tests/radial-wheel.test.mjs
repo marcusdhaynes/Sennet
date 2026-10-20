@@ -225,9 +225,9 @@ test('Stationary hold is 250ms, movement resistance starts after 13 screen pixel
  assert.ok(GESTURE_MOVE_THRESHOLD>7,'Drag threshold must provide slight deliberate resistance');
 });
 test('Compact radial layout keeps outer actions in the requested order',()=>{
- assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-ccw','tap-toggle','rotate-cw']);
- assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['scale-bigger','scale-original','scale-smaller']);
- assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['shuffle','flip','lock']);
+ assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-cw','tap-toggle','rotate-ccw']);
+ assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['shuffle','flip','reveal']);
+ assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['scale-bigger','scale-original','scale-smaller']);
  for(const [index,group] of RADIAL_ACTIONS.entries()){
   for(const [position,action] of group.entries()){
    const radians=(index*120+position*40+20)*Math.PI/180;
