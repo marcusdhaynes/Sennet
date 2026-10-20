@@ -825,10 +825,24 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
           slot=candidateSlot;nearestX=candidateX;slotDistance=distance;
         }
       }
-      const spotDistance=Math.hypot(slotDistance,local.y-anchor.y);
+      // An enabled merged PLAY zone retains EVERY unmerged row center,
+      // plus the seams between adjacent rows: don't collapse all card
+      // placements onto one centerline.
+      let nearestY=anchor.y;
+      if(isCenter&&cell.lastRow>cell.row&&seatMaySnap){
+        const rowHeight=TCG_MAT_HEIGHT/4;
+        const count=cell.lastRow-cell.row+1;
+        let bestY=Infinity;
+        for(let i=0;i<count*2-1;i++){
+          const candidate=anchor.y+(i-(count-1))*rowHeight/2;
+          const distance=Math.abs(local.y-candidate);
+          if(distance<bestY){bestY=distance;nearestY=candidate;}
+        }
+      }
+      const spotDistance=Math.hypot(slotDistance,local.y-nearestY);
       if(best&&Math.abs(zoneDistance-bestZoneDistance)<=eps&&
          spotDistance>=bestSpotDistance-eps)continue;
-      const snapped=tcgMatWorld(nearestX,anchor.y,seat);
+      const snapped=tcgMatWorld(nearestX,nearestY,seat);
       best={...cell,...snapped,slot};
       bestZoneDistance=zoneDistance;
       bestSpotDistance=spotDistance;
@@ -900,7 +914,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     zone:['TABLE','DECK','HAND','DISCARD'].includes(String(input.zone)) ? input.zone as Zone : 'TABLE',
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
-    ...(input.scale!==undefined ? {scale:clamp(finite(input.scale,1),0.25,4)} : {}),
+    ...(input.scale!==undefined ? {scale:clamp(Math.round(finite(input.scale,1)*2)/2,0.5,7)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
     ...(Number.isInteger(input.matSeat)&&Number(input.matSeat)>=0&&Number(input.matSeat)<SEATS ? {matSeat:Number(input.matSeat)} : {}),
@@ -1121,9 +1135,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
       }
       if(action==='scale-original')for(const card of picked)card.scale=1;
       if(action==='scale-smaller')for(const card of picked)
-        card.scale=clamp((card.scale??1)*0.5,0.25,4);
+        card.scale=clamp(Math.round((card.scale??1)*2)/2-0.5,0.5,7);
       if(action==='scale-bigger')for(const card of picked)
-        card.scale=clamp((card.scale??1)*1.5,0.25,4);
+        card.scale=clamp(Math.round((card.scale??1)*2)/2+0.5,0.5,7);
       if(action==='lock'){
         const lock=picked.some(card=>!card.locked);
         for(const card of picked)card.locked=lock;
