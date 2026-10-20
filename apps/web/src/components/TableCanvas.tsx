@@ -1977,7 +1977,7 @@ export default function TableCanvas({drawer,wheelMode,state,seat,playerName,acto
       <CardRadialWheel
         x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
-        allLocked={(wheelMode!=='hold'?selectedIds:radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
+        allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}
         tapLabel={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).some(id=>{const card=state.objects.find(o=>o.id===id);return card&&((card.rotation%360)+360)%360!==0;})?'Untap':'Tap'}
         onChoose={action=>{
