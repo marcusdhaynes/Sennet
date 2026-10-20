@@ -47,6 +47,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
   try{return localStorage.getItem('sennet.tcg.compact.v1')==='on';}catch{return false;}
  });
  const [importText,setImportText]=useState('');
+ const [cardsPerRow,setCardsPerRow]=useState(2);
  const [importChoice,setImportChoice]=useState<TcgId|'auto'>('auto');
  const [importPending,setImportPending]=useState<{parsed:ImportData;game:TcgId;detection:Detection}|null>(null);
  const [importResolved,setImportResolved]=useState<ImportMatch|null>(null);
@@ -275,6 +276,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      <button onClick={()=>{setSetFilter(ALL);setType(ALL);setRarity(ALL);setColor(ALL);setCost(ALL);}}>Reset</button>
     </div>}
     <div className="tcgb-resultbar"><span>{matches.length.toLocaleString()} cards {loading?'· loading…':''}</span>
+     <div className="tcgb-grid-scale" aria-label="Cards per row"><button type="button" onClick={()=>setCardsPerRow(n=>Math.max(1,n-1))} aria-label="Fewer cards per row">−</button><span>{cardsPerRow}</span><button type="button" onClick={()=>setCardsPerRow(n=>Math.min(6,n+1))} aria-label="More cards per row">+</button></div>
      <label>Sort<select aria-label="Sort cards" value={sort} onChange={e=>setSort(e.target.value)}>
       <option value="name">Name</option><option value="set">Set</option><option value="cost">Cost</option>
       <option value="rarity">Rarity</option><option value="price">Price</option></select></label>
@@ -285,7 +287,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
      <button disabled={loading} onClick={()=>{forceReload.current=true;setRefresh(v=>v+1);}}>
       Retry incomplete categories</button>
     </div>}
-    <div className={'tcgb-results'+(compact?' dense':'')}>
+    <div className={'tcgb-results tcgb-card-gallery'+(compact?' dense':'')} style={{'--cards-per-row':cardsPerRow} as React.CSSProperties}>
      {matches.slice((page-1)*PAGE,page*PAGE).map(c=><div className="tcgb-result" key={c.id}>
       <button className="tcgb-thumb" onClick={()=>chooseCard(c)} title="Card details">
        {showImages&&c.image?<img src={c.image} loading="lazy" alt="" />:<span>✦</span>}</button>
@@ -293,7 +295,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokem
        <strong>{c.name}</strong><small>{[c.set,c.number].filter(Boolean).join(' · ')}</small>
        <span>{[c.type,c.colors.join('/')].filter(Boolean).join(' · ')}</span>
       </button>
-      <button title={'Add to '+section} aria-label={'Add '+c.name} className="tcgb-add" onClick={()=>add(c)}><Plus size={17}/></button>
+      <div className="tcgb-gallery-counter"><button aria-label={"Remove one "+c.name} onClick={()=>add(c,-1)}>−</button><span>{active?.entries.filter(e=>e.card.id===c.id&&e.section===section).reduce((n,e)=>n+e.quantity,0)??0}</span><button aria-label={"Add one "+c.name} onClick={()=>add(c,1)}>+</button></div>
      </div>)}
      {!matches.length&&<div className="tcgb-empty">
       {loading?'Loading card catalogue…':game==='riftbound'&&error?
