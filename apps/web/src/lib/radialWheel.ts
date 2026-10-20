@@ -1,12 +1,12 @@
 /** Shared deterministic radial-wheel model. Geometric hit testing uses
  * an upright polar angle: 0° is 12 o'clock, clockwise positive.
  */
-export const RADIAL_CATEGORIES=['Position','Scale','State'] as const;
+export const RADIAL_CATEGORIES=['Position','State','Scale'] as const;
 export type RadialCategory=(typeof RADIAL_CATEGORIES)[number];
 export const RADIAL_ACTIONS=[
- [{id:'rotate-ccw',label:'−45°'}, {id:'tap-toggle',label:'Tap'}, {id:'rotate-cw',label:'+45°'}],
- [{id:'scale-bigger',label:'Increase'}, {id:'scale-original',label:'Original'}, {id:'scale-smaller',label:'Decrease'}],
- [{id:'shuffle',label:'Shuffle'}, {id:'flip',label:'Flip'}, {id:'lock',label:'Lock'}]
+ [{id:'rotate-cw',label:'+45°'}, {id:'tap-toggle',label:'Tap'}, {id:'rotate-ccw',label:'−45°'}],
+ [{id:'shuffle',label:'Shuffle'}, {id:'flip',label:'Flip'}, {id:'reveal',label:'Reveal'}],
+ [{id:'scale-bigger',label:'Increase'}, {id:'scale-original',label:'Original'}, {id:'scale-smaller',label:'Decrease'}]
 ] as const;
 export type RadialAction=(typeof RADIAL_ACTIONS)[number][number]['id'];
 export type RadialHit={ring:'center'|'inner'|'outer'|'outside';category:number|null;action:RadialAction|null};
