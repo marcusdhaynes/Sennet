@@ -132,8 +132,6 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
-  const [wheelMode,setWheelMode]=useState<'mobile'|'docked'|'hold'>(()=>{const mode=localStorage.getItem('sennet.wheel.mode.v1');return mode==='hold'?'hold':mode==='mobile'?'mobile':'docked';});
-  useEffect(()=>{try{localStorage.setItem('sennet.wheel.mode.v1',wheelMode);}catch{/* Storage unavailable. */}},[wheelMode]);
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
@@ -325,7 +323,7 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected} wheelMode={wheelMode}
+        onSelect={setSelected} wheelMode="docked"
         onOpenTcgSettings={()=>{setBook('settings');setSettingsPage('playmat');}}
         onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
         onCardAction={(id,action)=>{
@@ -485,14 +483,7 @@ export default function App(){
               <div className="reader-block">
                 <h3>Card stacks</h3>
                 <p>A stationary <strong>0.25-second hold</strong> starts selection mode. Tap more cards or stacks once to add them; tap selected cards to remove them. Drag any selected card to move the entire selection together. A small <strong>13 px</strong> breakaway threshold resists accidental motion.</p>
-                <p>Hold a selected card for another 0.25 seconds to open the compact radial wheel. Slide outward and release to apply one of its nine actions to every selected card. Moving before the hold completes drags the selection instead. After a first stationary hold, moving brings up the wheel. These timings are deliberately fixed for consistent touch and trackpad behavior.</p>
-              </div>
-              <div className="reader-block"><h3>Radial wheel</h3><p>Choose exactly one way to access card actions.</p>
-                <div className="sennet-wheel-mode-options" role="radiogroup" aria-label="Radial wheel activation">
-                  <label><input type="radio" name="radial-mode" checked={wheelMode==='mobile'} onChange={()=>setWheelMode('mobile')}/><strong>Mobile</strong><span className="sennet-info-tip" tabIndex={0} title="Lets you move the full radial anywhere on the playmat and remembers its position." aria-label="Docked: Keeps the action wheel visible in the bottom-right corner for selected cards.">ⓘ</span></label>
-                  <label><input type="radio" name="radial-mode" checked={wheelMode==='docked'} onChange={()=>setWheelMode('docked')}/><strong>Docked</strong><span className="sennet-info-tip" tabIndex={0} title="Displays all radial actions in a bottom-centered half-wheel beneath the playmat edge." aria-label="Docked: Displays every action in a bottom-centered half-wheel beneath the playmat edge.">ⓘ</span></label>
-                  <label><input type="radio" name="radial-mode" checked={wheelMode==='hold'} onChange={()=>setWheelMode('hold')}/><strong>Hold</strong><span className="sennet-info-tip" tabIndex={0} title="Opens the action wheel when you hold an already-selected card." aria-label="Hold: Opens the action wheel when you hold an already-selected card.">ⓘ</span></label>
-                </div>
+                <p>Use the fixed radial at the bottom center of your playmat to apply actions to selected cards. Hold its center to collapse or expand the wheel.</p>
               </div>
               <div className="reader-block"><h3>Play mode</h3><div className="tool-buttons">{(['sandbox','turn-based','asynchronous'] as PlayMode[]).map(m=><button className={game.mode===m?'highlight':''} key={m} onClick={()=>takeAction('SET_MODE',{mode:m})}>{m==='sandbox'?'Live Sandbox':m==='turn-based'?'Turn Based':'Asynchronous'}</button>)}</div></div>
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
