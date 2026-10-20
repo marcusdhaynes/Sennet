@@ -1309,3 +1309,14 @@ body>.reader-backdrop{
    Neither the radial nor the tag changes its table-world coordinates. */
 .pixi-host>.sennet-player-tag-anchor{z-index:90}
 .pixi-host>.sennet-player-tag-anchor:has(.player-hub.is-open){z-index:120}
+
+/* The unified book is a single tabbed fantasy tome, not three separate covers. */
+.unified-tome{position:relative;border:7px ridge #8b693d;box-shadow:0 0 0 3px #211b19,0 28px 95px #000d,inset 0 0 32px #714b23}
+.unified-tome-tabs{display:flex;flex:none;justify-content:center;gap:4px;padding:10px 14px 0;background:linear-gradient(#32231d,#503525)}
+.unified-tome-tabs button{flex:1;max-width:220px;border:1px solid #a98b60;border-radius:10px 10px 0 0;padding:9px;color:#e9d6ab;background:#322820;font-weight:700;cursor:pointer}
+.unified-tome-tabs button.active{color:#322318;background:#e5d5b4;border-bottom-color:#e5d5b4}
+.unified-tome.tome-dragon{border-color:#1b6d84;box-shadow:0 0 0 3px #0b2833,0 28px 95px #000d}
+.unified-tome.tome-journal{border-color:#8d3144}
+.unified-tome.tome-arcane{border-color:#ba9148}
+.unified-tome.tome-strapped{border-color:#59402a}
+.unified-book-shortcut{border:1px solid #d6b47a;border-radius:7px;padding:12px 22px;color:#e9d4a2;background:#4e3528}
