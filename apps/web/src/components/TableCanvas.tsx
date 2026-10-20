@@ -1149,7 +1149,12 @@ export default function TableCanvas({state,seat,playerName,actorId,selected,onSe
       const frame=obj.frameUrls?.length
         ?obj.frameUrls[nearestFrameIndex(seat,obj.rotation,obj.frameUrls.length)]
         :undefined;
-      const url=obj.faceUp ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
+      // Owners always see their own hands, including hands saved before
+      // the face-up-on-draw correction. Opponents receive redacted faces
+      // through projectForActor and cannot recover private front art.
+      const ownHand=obj.zone==='HAND'&&
+        (obj.owner===actorId||obj.owner==='local'||!obj.owner);
+      const url=(ownHand||obj.faceUp) ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
         const img=document.createElement('img');
         img.alt=obj.faceUp?obj.name:obj.name+' card back';
