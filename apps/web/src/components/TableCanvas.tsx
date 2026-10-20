@@ -332,7 +332,30 @@ function drawTcgMats(
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
           if(Math.hypot(dx,dy)>4)moved=true;
-          book.position.set(originalX+dx,originalY+dy);
+          // Book dragging uses its own pointer path: resist the tray's
+          // inside and outside walls here too, without hard clipping.
+          let x=originalX+dx,y=originalY+dy;
+          const walls=(from:number,to:number,edge:number)=>{
+            const d=to-from,dir=Math.sign(d);
+            if(!dir)return 0;
+            const before=dir*(edge-from);
+            if(before<0||before>Math.abs(d))return 0;
+            return dir*30*(1-Math.exp(-(Math.abs(d)-before)/6));
+          };
+          const left=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth-7;
+          const right=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth+7;
+          const innerLeft=-TCG_MAT_WIDTH/2-3;
+          const innerRight=TCG_MAT_WIDTH/2+3;
+          const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+          if(Math.max(originalY,y)>top&&Math.min(originalY,y)<trayBottom){
+            for(const edge of [left,innerLeft,innerRight,right])
+              x-=walls(originalX,originalX+dx,edge);
+          }
+          if(Math.abs(originalX)>TCG_MAT_WIDTH/2){
+            y-=walls(originalY,originalY+dy,top);
+            y-=walls(originalY,originalY+dy,trayBottom);
+          }
+          book.position.set(x,y);
         };
         const onUp=(event:PointerEvent)=>{
           if(event.pointerId!==e.pointerId)return;
