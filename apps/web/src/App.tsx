@@ -132,7 +132,7 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
-  const [wheelMode,setWheelMode]=useState<'docked'|'hold'>(()=>localStorage.getItem('sennet.wheel.mode.v1')==='hold'?'hold':'docked');
+  const [wheelMode,setWheelMode]=useState<'mobile'|'docked'|'hold'>(()=>{const mode=localStorage.getItem('sennet.wheel.mode.v1');return mode==='hold'?'hold':mode==='docked'?'mobile':mode==='mobile'?'mobile':'docked';});
   useEffect(()=>{try{localStorage.setItem('sennet.wheel.mode.v1',wheelMode);}catch{/* Storage unavailable. */}},[wheelMode]);
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
@@ -489,7 +489,8 @@ export default function App(){
               </div>
               <div className="reader-block"><h3>Radial wheel</h3><p>Choose exactly one way to access card actions.</p>
                 <div className="sennet-wheel-mode-options" role="radiogroup" aria-label="Radial wheel activation">
-                  <label><input type="radio" name="radial-mode" checked={wheelMode==='docked'} onChange={()=>setWheelMode('docked')}/><strong>Docked</strong><span className="sennet-info-tip" tabIndex={0} title="Keeps the action wheel visible in the bottom-right corner for your selected cards." aria-label="Docked: Keeps the action wheel visible in the bottom-right corner for selected cards.">ⓘ</span></label>
+                  <label><input type="radio" name="radial-mode" checked={wheelMode==='mobile'} onChange={()=>setWheelMode('mobile')}/><strong>Mobile</strong><span className="sennet-info-tip" tabIndex={0} title="Lets you move the full radial anywhere on the playmat and remembers its position." aria-label="Docked: Keeps the action wheel visible in the bottom-right corner for selected cards.">ⓘ</span></label>
+                  <label><input type="radio" name="radial-mode" checked={wheelMode==='docked'} onChange={()=>setWheelMode('docked')}/><strong>Docked</strong><span className="sennet-info-tip" tabIndex={0} title="Displays all radial actions in a bottom-centered half-wheel beneath the playmat edge." aria-label="Docked: Displays every action in a bottom-centered half-wheel beneath the playmat edge.">ⓘ</span></label>
                   <label><input type="radio" name="radial-mode" checked={wheelMode==='hold'} onChange={()=>setWheelMode('hold')}/><strong>Hold</strong><span className="sennet-info-tip" tabIndex={0} title="Opens the action wheel when you hold an already-selected card." aria-label="Hold: Opens the action wheel when you hold an already-selected card.">ⓘ</span></label>
                 </div>
               </div>
