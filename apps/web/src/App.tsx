@@ -333,6 +333,10 @@ export default function App(){
             ...(action==='shuffle'?{seed:Date.now()%10000000}:{}),
             ...(action==='send-to'?{destination,matSeat:seat}:{})});
         }}
+        onMoveSelection={(ids,anchorId,x,y)=>{
+          takeAction('BATCH_CARD_ACTION',{action:'move',ids,anchorId,x,y,
+            snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+        }}
         stackHoldMs={stackHoldMs} mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
