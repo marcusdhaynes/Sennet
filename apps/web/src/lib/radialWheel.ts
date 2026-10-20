@@ -6,7 +6,7 @@ export type RadialCategory=(typeof RADIAL_CATEGORIES)[number];
 export const RADIAL_ACTIONS=[
  [{id:'flip',label:'Flip'}, {id:'rotate-cw',label:'+45° Rotate'}, {id:'rotate-ccw',label:'−45° Rotate'}],
  [{id:'scale-original',label:'Restore Original Size'}, {id:'scale-smaller',label:'Scale 50% Smaller'}, {id:'scale-bigger',label:'Scale 50% Bigger'}],
- [{id:'shuffle',label:'Shuffle'}, {id:'send-to',label:'Send To'}, {id:'lock',label:'Lock / Unlock'}]
+ [{id:'shuffle',label:'Shuffle'}, {id:'send-to',label:'Send To'}, {id:'lock',label:'Lock'}]
 ] as const;
 export type RadialAction=(typeof RADIAL_ACTIONS)[number][number]['id'];
 export type RadialHit={ring:'center'|'inner'|'outer'|'outside';category:number|null;action:RadialAction|null};
