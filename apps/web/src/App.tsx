@@ -549,6 +549,9 @@ export default function App(){
                   <option value="mahogany">Mahogany</option>
                 </select>
               </div>
+              <div className="reader-block"><h3>Left tray · Dice &amp; flip coin</h3>
+                <p>Flip Coin, D04, D06, D08, D10, D12, D20 and D100 are permanent in the left box. Tap a die to select one, tap repeatedly to increase its count (maximum 20). Select different dice to combine them. Drag any selected die to throw the entire selection with natural motion, screen and tray wall rebounds, and collisions between the dice. Reaching 20 automatically throws the selection. Only one physical die of each type appears after a throw, but every selected roll is calculated and logged. The centered face displays the combined result; inspect a thrown die for its individual results.</p>
+              </div>
               <div className="reader-block"><h3>Token coins</h3>
                 <p>Six stationary generators are staggered in the right wooden box. Drag the + or − half to make a copy, or select cards and tap either half to apply that amount. Tap Custom's center number to edit it. Dropping a copy into the right box returns it to its source.</p>
                 <label>Custom coin number<input type="number" min={1} max={9999} step={1} value={customCoinValue}
