@@ -1121,6 +1121,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   }|null>(null);
   const rerollDieNow=useRef<(id:string,x:number,y:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const dieShownAt=useRef(new Map<string,{fingerprint:string;at:number}>());
+  const artworkCache=useRef(new Map<string,{img:HTMLImageElement;url:string}>());
   const rollBubbles=useRef(new Map<string,{node:HTMLDivElement;timer:number}>());
   const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
@@ -1641,6 +1642,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       hoverTimers.current.clear();
       if(activeFocusAnimation.current!==null)cancelAnimationFrame(activeFocusAnimation.current);
       staticDice3D.current?.destroy();staticDice3D.current=null;
+      for(const {img} of artworkCache.current.values()){
+        img.onload=null;img.onerror=null;img.remove();
+      }
+      artworkCache.current.clear();
       for(const bubble of rollBubbles.current.values()){
         window.clearTimeout(bubble.timer);bubble.node.remove();
       }
@@ -1909,6 +1914,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     // Builder. Third-party card art often disallows WebGL/CORS texture uploads
     // even while rendering perfectly in an ordinary HTML image.
     const artLayers:{piece:Container;img:HTMLImageElement}[]=[];
+    const visibleArtworkIds=new Set<string>();
     const imagesRoot=mount.current;
     const syncCardArtwork=()=>{
       const root=mount.current;
@@ -2026,18 +2032,31 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // through projectForActor and cannot recover private front art.
       const url=obj.faceUp ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
-        const img=document.createElement('img');
+        // Reuse DOM card artwork across journal updates, particularly die
+        // roll completion. Destroying/recreating every <img> made the ENTIRE
+        // tabletop visibly flicker whenever a die stopped tumbling.
+        visibleArtworkIds.add(obj.id);
+        const cached=artworkCache.current.get(obj.id);
+        let img:HTMLImageElement;
+        if(cached){
+          img=cached.img;
+          if(cached.url!==url){
+            cached.url=url;img.style.display='none';img.src=url;
+          }
+          if(!img.isConnected)imagesRoot.appendChild(img);
+        }else{
+          img=document.createElement('img');
+          img.draggable=false;img.decoding='async';img.loading='eager';
+          img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
+            'display:none;pointer-events:none;user-select:none;object-fit:fill;'+
+            'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:5';
+          img.onload=()=>{if(img.isConnected)img.style.display='block';};
+          img.onerror=()=>{img.style.display='none';};
+          imagesRoot.appendChild(img);
+          artworkCache.current.set(obj.id,{img,url});
+          img.src=url;
+        }
         img.alt=obj.faceUp?obj.name:obj.name+' card back';
-        img.draggable=false;
-        img.decoding='async';
-        img.loading='eager';
-        img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
-          'display:none;pointer-events:none;user-select:none;object-fit:fill;'+
-          'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:5';
-        img.onload=()=>{if(img.isConnected)img.style.display='block';};
-        img.onerror=()=>{img.style.display='none';};
-        imagesRoot.appendChild(img);
-        img.src=url;
         artLayers.push({piece,img});
       }else if(url){
         Assets.load(url).then(texture=>{
@@ -2147,6 +2166,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
     }
+    // Hide truly removed cards, but keep every unchanged decoded image.
+    for(const [id,cached] of artworkCache.current){
+      if(!visibleArtworkIds.has(id)){
+        cached.img.onload=null;cached.img.onerror=null;cached.img.remove();
+        artworkCache.current.delete(id);
+      }
+    }
     // Rendering on state change intentionally reconstructs a small scene. Large games will use
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
@@ -2161,7 +2187,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // New Pixi anchors arrive in the next effect and setEntries() updates
       // them by stable ID, without a visual resize/flicker or GPU reupload.
       staticDiceEntries.current=[];
-      for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
+      // Card images are intentionally retained across state changes.
+      // They are released only when removed from the game or on unmount.
       for(const {el} of coinLayers)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
