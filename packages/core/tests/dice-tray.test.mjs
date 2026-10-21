@@ -259,6 +259,12 @@ test('3D tabletop dice stay precisely anchored across high-DPI render targets',a
     assert.ok(backing.width>0);
   }
   assert.deepEqual(diceToCssTransform(960,540,1280,720),{x:.75,y:.75});
+  const {looseDieOpacity}=await import('../../../apps/web/src/lib/diceCoordinates.ts');
+  assert.equal(looseDieOpacity(30000,0),1,'Never fade remains visible');
+  assert.equal(looseDieOpacity(9999,10000),1);
+  assert.ok(looseDieOpacity(10425,10000)>.45&&
+    looseDieOpacity(10425,10000)<.55,'fade begins after 10s');
+  assert.equal(looseDieOpacity(10850,10000),0);
   assert.deepEqual(diceToCssTransform(1280,720,0,0),{x:1,y:1},
     'invalid resize must not create infinity-sized dice');
 });
@@ -269,7 +275,7 @@ test('the original 8 dice source models stay in the two-column wooden drawer',as
   assert.deepEqual([...new Set(from.map(p=>p.x))],[-262,-238]);
   for(let i=0;i<from.length;i++){
     const p=from[i];
-    assert.equal(p.y,-54+Math.floor(i/2)*62);
+    assert.equal(p.y,-70+Math.floor(i/2)*39);
     // The largest rack object has <10 tabletop-unit projected radius:
     // its model cannot cross the drawer's 62-unit outside boundary.
     assert.ok(Math.abs(p.x+250)+10<=31);
