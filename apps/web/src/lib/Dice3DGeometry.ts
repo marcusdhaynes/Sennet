@@ -2,7 +2,7 @@
  * deliberately excluded: displaying stationary dice does not load Cannon. */
 import * as THREE from 'three';
 import {ConvexGeometry} from 'three/addons/geometries/ConvexGeometry.js';
-import {diceTheme,DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes';
+import {diceTheme,DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
 export interface NumberedFace {normal:THREE.Vector3;value:number}
 export const radiusFor=(sides:number)=>sides===2?13.4:sides===100?14:13.7;
 /** Ten planar kite faces of a pentagonal trapezohedron, not a cone or
