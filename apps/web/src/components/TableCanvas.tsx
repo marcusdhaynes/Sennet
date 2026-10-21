@@ -21,6 +21,7 @@ const coinSector=(index:number)=>{
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
+import {diceRackLocations} from '../lib/diceCoordinates';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
@@ -1673,9 +1674,12 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
       leftTrayMat.current=mat;
       const boxX=-(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3);
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+      const slots=diceRackLocations(boxX,top);
       DICE_TYPES.forEach((sides,index)=>{
         const source=new Container();
-        source.position.set(boxX+(index%2===0?-15:15),top+41+Math.floor(index/2)*62);
+        // Fixed, real drawer-relative coordinates. Zooming and changing
+        // the camera never edits these physical positions.
+        source.position.set(slots[index].x,slots[index].y);
         const badge=diceQuantitiesRef.current[sides]??0;
         const face=makeDie(sides,undefined,badge);
         source.addChild(face);
@@ -1700,9 +1704,11 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
           themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
-        source.hitArea=new Circle(0,0,19);
-        source.on('pointerover',()=>{face.alpha=1;source.scale.set(1.09);});
-        source.on('pointerout',()=>{face.alpha=.97;source.scale.set(1);});
+        source.hitArea=new Circle(0,0,11);
+        // A die's physical size must never change just because the pointer
+        // enters its hit area. Use the native cursor, not hover zoom.
+        source.on('pointerover',()=>{source.cursor='grab';});
+        source.on('pointerout',()=>{source.cursor='grab';});
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
@@ -2015,7 +2021,9 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
     syncCardArtwork();
     return ()=>{
       session.current?.app.ticker.remove(syncCardArtwork);
-      staticDice3D.current?.setEntries([]);
+      // Do NOT reset the 3D scene during a normal Pixi rebuild.
+      // New Pixi anchors arrive in the next effect and setEntries() updates
+      // them by stable ID, without a visual resize/flicker or GPU reupload.
       staticDiceEntries.current=[];
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
       for(const {el} of coinLayers)el.remove();
@@ -2028,7 +2036,13 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
     import('../lib/Dice3DStatic').then(({createStaticDice3D})=>{
       if(cancelled||!session.current||!mount.current)return;
       try{
-        const renderer=createStaticDice3D(mount.current,session.current.app.canvas);
+        const renderer=createStaticDice3D(
+          mount.current,session.current.app.canvas,
+          ()=>({
+            width:session.current?.app.renderer.width??0,
+            height:session.current?.app.renderer.height??0
+          })
+        );
         staticDice3D.current=renderer;
         renderer.setEntries(staticDiceEntries.current);
         renderer.sync();
