@@ -11,6 +11,7 @@ export function stepDicePhysics(bodies:DiceBody[],dt:number,width:number,height:
   trays:readonly CollisionRect[]):void {
   const step=clamp(dt,0,1/30),margin=2;
   for(const b of bodies){
+    const beforeX=b.x,beforeY=b.y;
     b.x+=b.vx*step;b.y+=b.vy*step;
     b.z+=b.vz*step;b.vz-=1020*step;
     if(b.z<0){
@@ -35,7 +36,18 @@ export function stepDicePhysics(bodies:DiceBody[],dt:number,width:number,height:
       const cx=clamp(b.x,t.left,t.right),cy=clamp(b.y,t.top,t.bottom);
       let nx=b.x-cx,ny=b.y-cy,d=Math.hypot(nx,ny);
       if(d>=b.radius)continue;
-      if(d<1e-5){
+      // The normal is determined by the side of the rim approached on
+      // the PREVIOUS frame. Otherwise a fast die briefly penetrating a tray
+      // can be pushed farther inside instead of bouncing outward.
+      if(beforeX<=t.left&&b.x>beforeX&&beforeY>=t.top-b.radius&&beforeY<=t.bottom+b.radius){
+        nx=-1;ny=0;d=t.left-b.x;
+      }else if(beforeX>=t.right&&b.x<beforeX&&beforeY>=t.top-b.radius&&beforeY<=t.bottom+b.radius){
+        nx=1;ny=0;d=b.x-t.right;
+      }else if(beforeY<=t.top&&b.y>beforeY&&beforeX>=t.left-b.radius&&beforeX<=t.right+b.radius){
+        nx=0;ny=-1;d=t.top-b.y;
+      }else if(beforeY>=t.bottom&&b.y<beforeY&&beforeX>=t.left-b.radius&&beforeX<=t.right+b.radius){
+        nx=0;ny=1;d=b.y-t.bottom;
+      }else if(d<1e-5){
         const edges=[Math.abs(b.x-t.left),Math.abs(t.right-b.x),
           Math.abs(b.y-t.top),Math.abs(t.bottom-b.y)];
         const edge=edges.indexOf(Math.min(...edges));
