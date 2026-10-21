@@ -1617,7 +1617,11 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const dx=(oldChild.x-oldParent.x)*ratio,dy=(oldChild.y-oldParent.y)*ratio;
         child.x=clamp(parent.x+dx*Math.cos(delta)-dy*Math.sin(delta),0,BOARD_W);
         child.y=clamp(parent.y+dx*Math.sin(delta)+dy*Math.cos(delta),0,BOARD_H);
-        child.rotation=((oldChild.rotation+parent.rotation-oldParent.rotation)%360+360)%360;
+        // If the user explicitly rotated BOTH the carrier and its coin
+        // in one selection, the coin has already received that angle.
+        // Propagate the carrier's movement without double-rotating it.
+        if(child.rotation===oldChild.rotation)
+          child.rotation=((oldChild.rotation+parent.rotation-oldParent.rotation)%360+360)%360;
         if(parent.matSeat!==undefined)child.matSeat=parent.matSeat;
       }
     }
