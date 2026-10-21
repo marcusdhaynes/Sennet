@@ -19,6 +19,7 @@ interface DieVisual {
   group:THREE.Group;
   shadow:THREE.Mesh;
   result?:HTMLElement;
+  hidden:{piece:Container;visible:boolean}[];
 }
 export interface StaticDice3DRenderer {
   setEntries:(entries:StaticDiePlacement[])=>void;
@@ -76,6 +77,9 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
       visual.shadow.geometry.dispose();
       (visual.shadow.material as THREE.Material).dispose();
       visual.result?.remove();
+      for(const item of visual.hidden){
+        if(!item.piece.destroyed)item.piece.visible=item.visible;
+      }
     }
     visuals.length=0;
   };
@@ -101,7 +105,12 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
         result.textContent='Σ '+e.result+'  ×'+e.quantity;
         host.appendChild(result);
       }
-      visuals.push({piece:e.piece,group,shadow,result});
+      // Retire the old flat fallback picture only after real 3D is ready.
+      // The Pixi parent and its hit area stay active for selection/dragging.
+      const oldChildren=e.source?e.piece.children.slice(0,1):e.piece.children;
+      const hidden=oldChildren.map(piece=>({piece:piece as Container,visible:piece.visible}));
+      for(const item of hidden)item.piece.visible=false;
+      visuals.push({piece:e.piece,group,shadow,result,hidden});
     }
   };
   const sync=()=>{
