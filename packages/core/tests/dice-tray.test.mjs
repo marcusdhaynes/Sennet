@@ -92,3 +92,13 @@ test('faster throws travel farther before friction and collisions',()=>{
   assert.ok(fast.speed>slow.speed);
   assert.ok(fast.speed<=1120);
 });
+
+test('moving dice rebound from settled dice while settled pieces stay fixed',()=>{
+  const flying=body({x:100,y:160,vx:580});
+  const fixed=body({x:128,y:160,fixed:true,mass:1e9});
+  stepDicePhysics([flying,fixed],1/60,900,600,[]);
+  assert.ok(flying.vx<0,'moving die should rebound');
+  assert.equal(fixed.x,128,'settled die remains stationary');
+  assert.equal(fixed.vx,0);
+  assert.ok(fixed.fixed);
+});
