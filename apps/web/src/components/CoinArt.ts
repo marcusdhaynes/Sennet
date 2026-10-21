@@ -4,7 +4,7 @@ import {Container,Graphics,Text} from 'pixi.js';
 export type CoinFinish='polished'|'brushed'|'matte'|'enamel';
 export interface CoinAppearance {finish:CoinFinish;shine:number;bevel:number;size:number}
 export const DEFAULT_COIN_APPEARANCE:CoinAppearance={
-  finish:'polished',shine:75,bevel:65,size:.78
+  finish:'polished',shine:75,bevel:65,size:.9
 };
 const fillText=(text:string,size:number,color:number)=>{
   const obj=new Text({text,resolution:3,style:{
@@ -26,7 +26,7 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
   const coin=new Container();
   const finish=style.finish,shine=Math.max(0,Math.min(100,style.shine))/100;
   const bevel=Math.max(0,Math.min(100,style.bevel))/100,r=16;
-  coin.scale.set(Math.max(.55,Math.min(1.3,style.size)));
+  coin.scale.set(.82*Math.max(.55,Math.min(1.3,style.size)));
   const metal=finish==='enamel'?0xbd9855:finish==='matte'?0x8d8172:finish==='brushed'?0xb8ae96:0xe3c38a;
   const rim=new Graphics().circle(1,2,r+1.5).fill({color:0x050d10,alpha:.5})
     .circle(0,0,r+1).fill({color:0x493b2b})
