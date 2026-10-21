@@ -1824,7 +1824,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         source.hitArea=new Circle(0,0,17.5*coinAppearance.size*1.08);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=Math.max(4.3,8*coinAppearance.size*1.08))return 0;
+          if(Math.hypot(here.x,here.y)<=Math.max(5,10.3*coinAppearance.size*1.08))return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -2081,7 +2081,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             return; // Never enter generic card dragging or selection logic.
           }
           const local=piece.toLocal(e.global);
-          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*1.08);
+          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(5,10.3*coinAppearance.size*1.08);
           if(coinCenter){
             if(obj.coinText!==undefined){
               const center=piece.toGlobal(new Point(0,0));
