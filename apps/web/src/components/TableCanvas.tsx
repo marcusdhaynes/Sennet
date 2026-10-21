@@ -2333,7 +2333,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(local.x>=right&&local.x<=right+TCG_MAT.cardWidth&&
          local.y>=trayTop&&local.y<=TCG_MAT_HEIGHT/2)return;
       let target:TableObject|undefined;
-      let parent:Container|null=d.mat.parent;
+      // Coin drop coordinates must be in the SAME board/seat-layer space
+      // used to render table objects. d.mat.parent is the drawer's rotated
+      // playmat, so using it projected the drop into the wrong coordinate
+      // system and made freshly placed coins vanish off the tabletop.
+      let parent:Container|null=duelLayers.current?.get(seatRef.current)??current.board;
       for(const [id,piece] of [...visuals.current.entries()].reverse()){
         const card=currentState.current.objects.find(o=>o.id===id);
         if(!card||!['card','deck'].includes(card.kind)||card.zone!=='TABLE'||
