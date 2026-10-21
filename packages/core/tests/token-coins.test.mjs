@@ -223,3 +223,39 @@ test('rotating a card and its already-selected coin together applies one rotatio
   near(child.y,expected.y,'group rotate Y');
   assert.equal(child.carrierId,card.id);
 });
+
+test('coin radial changes are replayable, preserve color, and keep exact duplicates',()=>{
+  const initial=createGame('tcg'),card=initial.objects.find(o=>o.id==='hero-a');
+  const xy=pointOn(card,13,19);
+  const commands=[
+    {id:'coin-create',actor:'local',type:'TOKEN_PLACE',
+      payload:{seat:0,value:20,sign:-1,color:'#83c4c7',...xy,carrierId:card.id}},
+    {id:'coin-add1000',actor:'local',type:'COIN_MODIFY',
+      payload:{id:'coin-create-coin',delta:1000}},
+    {id:'coin-recolor',actor:'local',type:'COIN_MODIFY',
+      payload:{id:'coin-create-coin',color:'#d77770'}},
+    {id:'coin-duplicate',actor:'local',type:'CLONE',
+      payload:{id:'coin-create-coin',newId:'duplicate-coin'}}
+  ];
+  const state=commands.reduce((current,command)=>applyCommand(current,command),initial);
+  const original=state.objects.find(o=>o.id==='coin-create-coin');
+  const clone=state.objects.find(o=>o.id==='duplicate-coin');
+  assert.equal(original.value,1020);
+  assert.equal(original.color,'#d77770');
+  assert.equal(original.tokenSign,-1);
+  assert.equal(clone.value,original.value);
+  assert.equal(clone.color,original.color);
+  assert.equal(clone.tokenSign,original.tokenSign);
+  assert.deepEqual(state,replay(initial,commands));
+  assert.throws(()=>action(state,'COIN_MODIFY',{id:original.id,delta:2000},'bad'),
+    /Invalid coin increment/);
+  assert.throws(()=>action(state,'COIN_MODIFY',{id:original.id,color:'javascript:evil'},'bad-color'),
+    /Invalid coin color/);
+});
+test('coin value decrements never underflow below zero',()=>{
+  const base=createGame('tcg'),card=base.objects.find(o=>o.id==='hero-a');
+  let state=action(base,'TOKEN_PLACE',{seat:0,value:10,sign:1,
+    ...pointOn(card,13,13),carrierId:card.id},'value10');
+  state=action(state,'COIN_MODIFY',{id:'value10-coin',delta:-1000},'decrease');
+  assert.equal(state.objects.find(o=>o.id==='value10-coin').value,0);
+});
