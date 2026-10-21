@@ -1317,6 +1317,31 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
   const currentState=useRef(state);currentState.current=state;
   const playmatRef=useRef(playmat);playmatRef.current=playmat;
+  showRollBubble.current=(id,explicit)=>{
+    const host=mount.current;
+    const obj=currentState.current.objects.find(piece=>piece.id===id);
+    if(!host||!obj?.throwDice)return;
+    const total=obj.sides===2?
+      (obj.throwRolls??[]).filter(n=>n===1).length:obj.throwTotal??obj.value??0;
+    const line=explicit??(obj.sides===2?
+      (obj.throwQuantity??1)===1?(total?'HEADS':'TAILS'):
+        total+' Heads / '+((obj.throwQuantity??1)-total)+' Tails':
+      'D'+String(obj.sides??6).padStart(2,'0')+'  '+total+
+        ((obj.throwQuantity??1)>1?'  ×'+obj.throwQuantity:''));
+    const old=rollBubbles.current.get(id);
+    if(old){window.clearTimeout(old.timer);old.node.remove();}
+    const node=document.createElement('div');
+    node.className='sennet-dice-result-bubble';
+    node.textContent=line;node.setAttribute('role','status');
+    node.setAttribute('aria-label','Die result: '+line);
+    host.appendChild(node);
+    const timer=window.setTimeout(()=>{
+      node.remove();
+      if(rollBubbles.current.get(id)?.node===node)rollBubbles.current.delete(id);
+    },2800);
+    rollBubbles.current.set(id,{node,timer});
+  };
+
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
 
@@ -1578,6 +1603,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       hoverTimers.current.clear();
       if(activeFocusAnimation.current!==null)cancelAnimationFrame(activeFocusAnimation.current);
       staticDice3D.current?.destroy();staticDice3D.current=null;
+      for(const bubble of rollBubbles.current.values()){
+        window.clearTimeout(bubble.timer);bubble.node.remove();
+      }
+      rollBubbles.current.clear();
+      if(rerollPointer.current){
+        window.clearTimeout(rerollPointer.current.timer);
+        rerollPointer.current=null;
+      }
       dice3DStop.current?.();dice3DStop.current=null;dice3DActive.current=false;
       if(diceThrowAnimation.current!==null)cancelAnimationFrame(diceThrowAnimation.current);
       for(const flying of diceFlying.current)if(!flying.destroyed)flying.destroy({children:true});
@@ -1673,6 +1706,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       queueMicrotask(()=>setSelectedIds(still));
     }
     const staticEntries:StaticDiePlacement[]=[];
+    for(const id of [...dieShownAt.current.keys()]){
+      if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
+    }
     const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
     const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean,color='#d8b979')=>{
       const el=coinDomVisual(value,sign,source,coinAppearance,color);
@@ -1874,6 +1910,22 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         el.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
       }
       staticDice3D.current?.sync();
+      for(const [id,bubble] of rollBubbles.current){
+        const piece=visuals.current.get(id);
+        if(!piece||piece.destroyed){
+          bubble.node.style.display='none';
+          continue;
+        }
+        const pos=piece.toGlobal(new Point(0,0));
+        const rect=app.canvas.getBoundingClientRect();
+        const x=pos.x*rect.width/app.renderer.width;
+        const y=pos.y*rect.height/app.renderer.height;
+        bubble.node.style.left=x+'px';
+        bubble.node.style.top=(y-27*Math.max(.6,Math.min(1.5,Math.hypot(
+          piece.toGlobal(new Point(1,0)).x-pos.x,
+          piece.toGlobal(new Point(1,0)).y-pos.y))))+'px';
+        bubble.node.style.display='block';
+      }
     };
     session.current?.app.ticker.add(syncCardArtwork);
     for(const obj of visible){
@@ -1898,7 +1950,15 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
           heads+'H/'+((obj.throwQuantity??1)-heads)+'T'):String(obj.throwTotal??obj.value??1);
+        const signature=(obj.throwRolls??[]).join(',')+'|'+obj.throwTotal;
+        const previousRoll=dieShownAt.current.get(obj.id);
+        if(!previousRoll||previousRoll.fingerprint!==signature){
+          dieShownAt.current.set(obj.id,{fingerprint:signature,at:Date.now()});
+          queueMicrotask(()=>showRollBubble.current(obj.id));
+        }
+        const shownAt=dieShownAt.current.get(obj.id)?.at??Date.now();
         staticEntries.push({id:obj.id,piece,sides:obj.sides??6,
+          shownAt,fadeAfterMs:diceFadeMs,
           themeId:resolveDiceTheme(diceAppearance,obj.sides??6),quaternion:obj.throwQuaternion,
           quantity:obj.throwQuantity,result:display});
       }
@@ -2062,7 +2122,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
       for(const {el} of coinLayers)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,coinSources,boxClosed]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
