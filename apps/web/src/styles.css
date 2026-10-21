@@ -1409,7 +1409,7 @@ body>.reader-backdrop{
   transform-origin:0 0;z-index:7;pointer-events:none;
   display:flex;align-items:center;justify-content:center;
   box-sizing:border-box;will-change:transform;
-  filter:drop-shadow(1px 2px 2px #050b0b99);
+  filter:drop-shadow(0 3px 3px #050b0b80);
   color:#fff1cd;
   background:linear-gradient(142deg,#e4d9bd 0%,#acaaa1 33%,#666a72 62%,#292d36 100%);
   border:2px solid #ddd9c7;
