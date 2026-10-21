@@ -1345,7 +1345,7 @@ body>.reader-backdrop{
 }
 .sennet-coin-above-card-face{
   position:absolute;inset:1px;border-radius:50%;overflow:hidden;
-  box-sizing:border-box;transform:scale(calc(var(--coin-size,1) * .41));
+  box-sizing:border-box;transform:scale(calc(var(--coin-size,1) * 1.08));
   transform-origin:center;
   border:calc(1px + var(--coin-bevel,.65) * 1px) solid #fae6b5;
   box-shadow:inset 0 0 0 1.4px #4a3628,inset 0 1px 3px #fff8,
@@ -1580,3 +1580,17 @@ body>.reader-backdrop{
   transform:translateX(-50%);background:#322222f0;border:1px solid #e2a28b;
   border-radius:9px;padding:9px;color:#ffe4d4}
 .sennet-dice-engine-error button{margin-left:9px}
+
+/* The 10 actions surround the OUTSIDE edge of the original-sized coin:
+   the center is a transparent hole, not a button-covered wedge. */
+.sennet-coin-radial .sennet-coin-ring{pointer-events:none}
+.sennet-coin-radial .sennet-coin-radial-center{display:none}
+.sennet-coin-radial>.sennet-coin-radial-number{display:none}
+.sennet-coin-radial>.sennet-coin-close{display:none!important}
+.sennet-coin-radial-center-hold{position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);width:43px;height:43px;
+  background:transparent;border:0;box-shadow:none;border-radius:50%;
+  cursor:pointer;touch-action:none;z-index:5;padding:0}
+.sennet-coin-radial-center-hold:focus-visible{outline:2px solid #ffe6ad;outline-offset:1px}
+.sennet-coin-above-card-number{min-width:18px;min-height:18px;padding:1px 2px;
+  line-height:1.1}
