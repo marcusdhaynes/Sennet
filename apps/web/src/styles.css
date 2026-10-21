@@ -1663,3 +1663,51 @@ body>.reader-backdrop{
 }
 /* The LCD is a TABLETOP object, not a floating screen-width overlay. */
 .sennet-action-lcd{min-width:0;max-width:none;width:240px;transform-origin:center center}
+
+/* Compact action instrument: no unused vertical padding; undo/redo are
+   literal squares and remain square because the whole assembly scales
+   uniformly with the playmat. The center is one scrolling display. */
+.sennet-action-lcd{
+  box-sizing:border-box;
+  height:30px;min-height:0;
+  padding:2px 3px;gap:2px;
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr) auto 22px;
+  align-items:center;
+}
+.sennet-action-lcd-button{
+  width:22px;height:22px;min-width:22px;min-height:22px;
+  padding:0;line-height:1;box-sizing:border-box;
+  align-self:center;
+}
+.sennet-action-lcd-button:first-child{grid-column:1}
+.sennet-action-lcd-button:last-child{grid-column:4}
+.sennet-action-lcd-display{
+  grid-column:2;
+  box-sizing:border-box;
+  height:22px;min-height:0;
+  padding:0 5px;
+  display:flex;align-items:center;
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:thin;
+}
+.sennet-action-lcd-roll{
+  grid-column:3;height:22px;min-width:32px;
+  padding:0 4px;border-radius:4px;
+  border:1px solid #8bb4a0;
+  background:#245748;color:#e1ffeb;
+  font:800 8px/1 ui-monospace,monospace;
+  cursor:pointer;
+}
+.sennet-action-lcd-roll:hover{background:#3b876d}
+.sennet-dice-source-count{
+  position:absolute;z-index:14;box-sizing:border-box;
+  display:flex;align-items:center;justify-content:center;
+  width:18px;height:18px;pointer-events:none;
+  transform:translate(-50%,-50%);
+  border-radius:50%;border:1px solid #f9e6b3;
+  background:#0b322be9;color:#fff6c9;
+  font:900 11px/1 ui-monospace,monospace;
+  box-shadow:0 0 4px #9bf8c77a,0 1px 2px #001812;
+  text-shadow:0 1px #061d18;
+}
