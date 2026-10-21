@@ -4,6 +4,7 @@ import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHori
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
+import {formatActionDisplay} from './lib/actionDisplay';
 import {DEFAULT_COIN_APPEARANCE,type CoinAppearance,type CoinFinish} from './components/CoinArt';
 import TcgDeckBuilder from './components/TcgDeckBuilder';
 import type {SavedDeck} from './lib/deckWorkspace';
@@ -98,6 +99,7 @@ export default function App(){
   const [game,setGame]=useState<GameState>(()=>restored?.game??emptyTable());
   const [initial,setInitial]=useState<GameState>(()=>restored?.initial??emptyTable());
   const [history,setHistory]=useState<EventRecord[]>(()=>restored?.history??[]);
+  const [redoStack,setRedoStack]=useState<EventRecord[]>([]);
   const current=useRef(game);current.current=game;
   const sessionId=useRef(restored?.id??createId());
   const [recent,setRecent]=useState<SavedSession[]>(recentGames);
@@ -174,7 +176,7 @@ export default function App(){
       catch{/* Continue without persistence when browser storage is full. */}
     }
     if(connection.current)disconnect();
-    sessionId.current=id;current.current=next;setInitial(origin);setGame(next);setHistory(past);setSelected(null);setReplayAt(null);setBook(null);
+    sessionId.current=id;current.current=next;setInitial(origin);setGame(next);setHistory(past);setRedoStack([]);setSelected(null);setReplayAt(null);setBook(null);
   }
   function startGame(kind:GameKind){resetWith(createGame(kind));}
   function loadPack(pack:GamePack){resetWith(gameFromPack(pack));}
@@ -186,6 +188,7 @@ export default function App(){
     if(isConnected){try{connection.current?.send(command);}catch(e){inform(String(e));}return;}
     try{
       const next=applyCommand(current.current,command);current.current=next;setGame(next);
+      setRedoStack([]);
       setHistory(h=>[...h,{...command,seq:next.seq,at:Date.now()}]);
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
@@ -278,9 +281,26 @@ export default function App(){
   function undo(){
     if(isConnected){inform('Undo requires a server-approved action in an online game.');return;}
     if(!history.length)return;
+    if(replayAt!==null){inform('Exit replay mode before undoing.');return;}
     const previous=history.slice(0,-1);const next=replay(initial,previous);
-    current.current=next;setGame(next);setHistory(previous);setReplayAt(null);
+    setRedoStack(stack=>[...stack,history[history.length-1]]);
+    current.current=next;setGame(next);setHistory(previous);setSelected(null);setReplayAt(null);
   }
+  function redo(){
+    if(isConnected){inform('Redo requires server approval in an online game.');return;}
+    if(replayAt!==null){inform('Exit replay mode before redoing.');return;}
+    if(!redoStack.length)return;
+    const record=redoStack[redoStack.length-1];
+    try{
+      // Replay from the initial snapshot guarantees redo is the exact
+      // same state transition, with no newly randomized roll values.
+      const past=[...history,record],next=replay(initial,past);
+      current.current=next;setGame(next);setHistory(past);
+      setRedoStack(items=>items.slice(0,-1));setSelected(null);
+    }catch(error){inform(String(error));}
+  }
+  const latestAction=history.length?formatActionDisplay(history[history.length-1],
+    initial,history):'Ready · actions appear here';
   function botMove(){
     if(isConnected){inform('The demo bot is available offline.');return;}
     const action=choosePseudoBotAction(current.current);
@@ -352,7 +372,10 @@ export default function App(){
   return <div className="sennet-home">
     <div className="table-world">
       <TableCanvas bookDesign={bookDesign} bookDock={bookDock} bookOffset={bookOffset} onBookMove={setBookOffset} onBookOpen={()=>setBook('sennet')} state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
-        onSelect={setSelected} wheelMode="docked" drawer={<PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
+        onSelect={setSelected} wheelMode="docked"
+        latestAction={latestAction} canUndo={!isConnected&&replayAt===null&&history.length>0}
+        canRedo={!isConnected&&replayAt===null&&redoStack.length>0}
+        onUndo={undo} onRedo={redo} drawer={<PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
         let saved:SavedSession|null=null;
         try{saved=JSON.parse(localStorage.getItem(REWIND_SESSION_KEY)||'null') as SavedSession|null;}
         catch{/* Ignore a corrupted previous session. */}
