@@ -3,7 +3,7 @@
 export interface DiceBody {
   x:number;y:number;vx:number;vy:number;
   z:number;vz:number;angle:number;spin:number;
-  radius:number;mass:number;leftTrayExited:boolean;
+  radius:number;mass:number;leftTrayExited:boolean;fixed?:boolean;
 }
 export interface CollisionRect {left:number;top:number;right:number;bottom:number}
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n));
@@ -11,6 +11,7 @@ export function stepDicePhysics(bodies:DiceBody[],dt:number,width:number,height:
   trays:readonly CollisionRect[]):void {
   const step=clamp(dt,0,1/30),margin=2;
   for(const b of bodies){
+    if(b.fixed)continue;
     const beforeX=b.x,beforeY=b.y;
     b.x+=b.vx*step;b.y+=b.vy*step;
     b.z+=b.vz*step;b.vz-=1020*step;
@@ -71,9 +72,10 @@ export function stepDicePhysics(bodies:DiceBody[],dt:number,width:number,height:
     const a=bodies[i],b=bodies[j];
     const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
     const target=a.radius+b.radius;
-    if(d>=target||Math.abs(a.z-b.z)>24)continue;
+    if(d>=target||Math.abs(a.z-b.z)>24||a.fixed&&b.fixed)continue;
     const nx=d>1e-5?dx/d:1,ny=d>1e-5?dy/d:0;
-    const invA=1/a.mass,invB=1/b.mass,sum=invA+invB;
+    const invA=a.fixed?0:1/a.mass,invB=b.fixed?0:1/b.mass,sum=invA+invB;
+    if(sum<=0)continue;
     const penetration=(target-d+0.3)/sum;
     a.x-=nx*penetration*invA;a.y-=ny*penetration*invA;
     b.x+=nx*penetration*invB;b.y+=ny*penetration*invB;
