@@ -259,3 +259,29 @@ test('coin value decrements never underflow below zero',()=>{
   state=action(state,'COIN_MODIFY',{id:'value10-coin',delta:-1000},'decrease');
   assert.equal(state.objects.find(o=>o.id==='value10-coin').value,0);
 });
+
+test('coins dropped from a side drawer appear at exact tabletop world coordinates',async()=>{
+  const {tcgMatWorld,tcgMatOrigin}=await import('../src/index.ts');
+  const initial=createGame('tcg');
+  for(const seat of [0,3,6,9]){
+    // In the browser, drops from the drawer MUST use the board or seat
+    // layer, not the drawer's rotated, translated playmat local space.
+    const point=tcgMatWorld(-7.25,-16.75,seat);
+    const sourceLocal={x:-7.25,y:-16.75};
+    const matOrigin=tcgMatOrigin(seat);
+    assert.ok(Math.hypot(point.x-sourceLocal.x,point.y-sourceLocal.y)>200,
+      'source-local coordinates differ significantly from world space');
+    assert.ok(Math.hypot(point.x-matOrigin.x,point.y-matOrigin.y)<50,
+      'drop is within its intended playmat');
+    const landed=action(initial,'TOKEN_PLACE',{
+      seat,value:100,sign:1,x:point.x,y:point.y,color:'#83c4c7'
+    },'placed-from-drawer-'+seat);
+    const coin=landed.objects.find(o=>o.id==='placed-from-drawer-'+seat+'-coin');
+    assert.ok(coin,'coin must exist in tabletop state for seat '+seat);
+    assert.equal(coin.zone,'TABLE');
+    assert.equal(coin.matSeat,seat,'coin stays with its actual playmat');
+    near(coin.x,point.x,'exact world x');
+    near(coin.y,point.y,'exact world y');
+    assert.equal(coin.color,'#83c4c7');
+  }
+});
