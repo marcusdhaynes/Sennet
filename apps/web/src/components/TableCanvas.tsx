@@ -22,6 +22,7 @@ const coinSector=(index:number)=>{
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {diceRackLocations} from '../lib/diceCoordinates';
+import {fitActionScreenToWheel} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
@@ -1124,7 +1125,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
   const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
-  const [actionScreenGeometry,setActionScreenGeometry]=useState({x:0,y:0,scale:1,visible:false});
+  const [actionScreenGeometry,setActionScreenGeometry]=useState({left:0,y:0,width:0,heightScale:1,visible:false});
   const [playerTagGeometry,setPlayerTagGeometry]=useState({x:0,y:0,scale:1,width:320,outward:'bottom' as 'top'|'bottom'|'left'|'right'});
 
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -1555,22 +1556,28 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           setDockGeometry(previous=>
             Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
             Math.abs(previous.size-next.size)<.35?previous:next);
-          // Physically anchor the LCD beneath the bottom CENTER of the
-          // viewer's playmat, just like other tabletop objects. Its apparent
-          // size comes from the mat/camera transform, never screen width.
+          // Keep the LCD immediately below the playmat. Its LEFT edge
+          // projects from the real playmat edge; its RIGHT edge meets the
+          // leftmost point of the docked half-radial. Recalculate both using
+          // the same Pixi camera transform on every zoom/pan/seat change.
           const parent=duelLayers.current?.get(seatRef.current)??board;
           const panelY=TCG_MAT_HEIGHT/2+23;
+          const matLeft=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
+          const matRight=tcgMatWorld(TCG_MAT_WIDTH/2,panelY,seatRef.current);
           const anchor=tcgMatWorld(0,panelY,seatRef.current);
-          const leftPoint=tcgMatWorld(-120,panelY,seatRef.current);
-          const rightPoint=tcgMatWorld(120,panelY,seatRef.current);
           const screen=parent.toGlobal(new Point(anchor.x,anchor.y));
-          const l=parent.toGlobal(new Point(leftPoint.x,leftPoint.y));
-          const r=parent.toGlobal(new Point(rightPoint.x,rightPoint.y));
-          const lcdScale=Math.hypot(r.x-l.x,r.y-l.y)/240;
-          const display={x:screen.x,y:screen.y,scale:lcdScale,
-            visible:Number.isFinite(screen.x)&&lcdScale>0};
-          setActionScreenGeometry(prev=>Math.abs(prev.x-display.x)<.3&&
-            Math.abs(prev.y-display.y)<.3&&Math.abs(prev.scale-display.scale)<.001&&
+          const projectedLeft=parent.toGlobal(new Point(matLeft.x,matLeft.y));
+          const projectedRight=parent.toGlobal(new Point(matRight.x,matRight.y));
+          const matScreenWidth=Math.hypot(
+            projectedRight.x-projectedLeft.x,projectedRight.y-projectedLeft.y);
+          const display=fitActionScreenToWheel(
+            projectedLeft.x,projectedRight.x,projected.x,next.size,
+            screen.y,matScreenWidth/TCG_MAT_WIDTH);
+          setActionScreenGeometry(prev=>
+            Math.abs(prev.left-display.left)<.25&&
+            Math.abs(prev.y-display.y)<.25&&
+            Math.abs(prev.width-display.width)<.25&&
+            Math.abs(prev.heightScale-display.heightScale)<.001&&
             prev.visible===display.visible?prev:display);
         }
 
@@ -2995,8 +3002,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
 
     {state.kind==='tcg'&&actionScreenGeometry.visible&&
       <div className="sennet-action-lcd" style={{
-        left:actionScreenGeometry.x,top:actionScreenGeometry.y,
-        width:240,transform:`translate(-50%,-50%) scale(${actionScreenGeometry.scale})`
+        left:actionScreenGeometry.left,top:actionScreenGeometry.y,
+        width:actionScreenGeometry.width,
+        transform:`translateY(-50%) scaleY(${actionScreenGeometry.heightScale})`
       }} role="group" aria-label="Latest action with undo and redo"
         onPointerDown={event=>event.stopPropagation()}>
         <button type="button" className="sennet-action-lcd-button"
