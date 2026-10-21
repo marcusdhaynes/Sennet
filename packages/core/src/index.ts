@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -980,7 +980,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
     ...(typeof input.carrierId==='string'&&input.carrierId!==input.id ? {carrierId:textValue(input.carrierId,80)} : {}),
-    ...(kind==='token'&&input.tokenCoin===true?{tokenCoin:true,tokenSign:input.tokenSign===-1?-1 as const:1 as const,value:clamp(finite(input.value,1),.01,9999)}:{}),
+    ...(kind==='token'&&input.tokenCoin===true?{tokenCoin:true,tokenSign:input.tokenSign===-1?-1 as const:1 as const,value:clamp(finite(input.value,1),0,9999)}:{}),
     ...(input.scale!==undefined ? {scale:clamp(Math.round(finite(input.scale,1)*2)/2,0.5,7)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
@@ -1043,7 +1043,7 @@ const isLooseAccessory=(object:TableObject)=>
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY','COIN_MODIFY'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -1092,6 +1092,16 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(action==='shuffle'&&selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
       return 'Only card stacks can be shuffled';
   }
+  if(command.type==='COIN_MODIFY'){
+    if(!target?.tokenCoin)return 'Only physical coins can be modified';
+    const delta=command.payload.delta;
+    const color=command.payload.color;
+    if(delta===undefined&&color===undefined)return 'No coin adjustment supplied';
+    if(delta!==undefined&&![1,10,100,1000,-1,-10,-100,-1000].includes(Number(delta)))
+      return 'Invalid coin increment';
+    if(color!==undefined&&(typeof color!=='string'||!/^#[0-9a-fA-F]{6}$/.test(color)))
+      return 'Invalid coin color';
+  }
   if(command.type==='THROW_TRAY'){
     if(state.kind!=='tcg')return 'Dice tray is available for TCG tables';
     const seat=command.payload.seat;
@@ -1122,7 +1132,7 @@ export function validateCommand(state: GameState, command: Command): string | nu
   if(command.type==='TOKEN_PLACE'||command.type==='TOKEN_ADJUST'){
     if(state.kind!=='tcg')return 'Coins are available on TCG tables';
     const value=Number(command.payload.value);
-    if(!Number.isInteger(value)||value<1||value>9999)return 'Coin value must be 1–9999';
+    if(!Number.isInteger(value)||value<0||value>9999)return 'Coin value must be 0–9999';
     const seat=Number(command.payload.seat);
     if(!Number.isInteger(seat)||seat<0||seat>=SEATS)return 'Invalid token seat';
     if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
@@ -1466,6 +1476,12 @@ export function applyCommand(state: GameState, command: Command): GameState {
       }
       message='Dice throw · '+summaries.join(' · ');
     }break;
+    case 'COIN_MODIFY':if(obj){
+      if(p.delta!==undefined)obj.value=clamp((obj.value??0)+Number(p.delta),0,9999);
+      if(typeof p.color==='string')obj.color=p.color;
+      obj.name=String(obj.value);
+      message='Coin '+obj.id+' · '+obj.value+(p.color?' · color updated':'');
+    }break;
     case 'TOKEN_PLACE':{
       const x=Number(p.x),y=Number(p.y),value=Number(p.value),sign=p.sign as 1|-1;
       // Trust the physical coin center, never a nearby slot or a requested
@@ -1475,7 +1491,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       objects.push(sanitizeObject({
         id:command.id+'-coin',kind:'token',tokenCoin:true,tokenSign:sign,value,
         name:String(value),x,y,rotation:0,zone:'TABLE',order:objects.length,
-        color:'#d8b979',...(carrier?{carrierId:carrier.id,matSeat:carrier.matSeat??Number(p.seat)}:{matSeat:Number(p.seat)})
+        color:typeof p.color==='string'&&/^#[0-9a-fA-F]{6}$/.test(p.color)?p.color:'#d8b979',...(carrier?{carrierId:carrier.id,matSeat:carrier.matSeat??Number(p.seat)}:{matSeat:Number(p.seat)})
       }));
       message=(sign===1?'+':'−')+value+' coin placed'+(carrier?' on '+carrier.name:'');
     }break;
@@ -1511,7 +1527,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
             tokenSign:newTotal<0?-1:1,value:denomination,name:String(denomination),
             x:clamp(x,0,BOARD_W),y:clamp(y,0,BOARD_H),
             rotation:card.rotation,zone:'TABLE',order:objects.length,
-            matSeat:card.matSeat??Number(p.seat),carrierId:id,color:'#d8b979'
+            matSeat:card.matSeat??Number(p.seat),carrierId:id,color:attached[0]?.color??'#d8b979'
           }));
         });
       }
