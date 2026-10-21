@@ -73,6 +73,12 @@ export function createStaticDice3D(
   let entries:StaticDiePlacement[]=[];
   let stopped=false,lastFrame=0,w=0,h=0;
   let entriesRevision=0,renderedRevision=0;
+  // Texture-backed face numerals MUST retain their native transparency.
+  // Blindly making every material opaque creates visible rectangles when a
+  // tumbling die changes to its resting model.
+  const materialDefaults=new WeakMap<THREE.Material,{
+    transparent:boolean;opacity:number;depthWrite:boolean
+  }>();
   const disposeGroup=(group:THREE.Group)=>{
     group.traverse(child=>{
       if(child instanceof THREE.Mesh||child instanceof THREE.LineSegments){
@@ -229,9 +235,15 @@ export function createStaticDice3D(
         if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){
           const materials=Array.isArray(object.material)?object.material:[object.material];
           for(const material of materials){
-            material.transparent=opacity<.999;
-            material.opacity=opacity;
-            material.depthWrite=opacity>=.999;
+            let original=materialDefaults.get(material);
+            if(!original){
+              original={transparent:material.transparent,opacity:material.opacity,
+                depthWrite:material.depthWrite};
+              materialDefaults.set(material,original);
+            }
+            material.transparent=original.transparent||opacity<.999;
+            material.opacity=original.opacity*opacity;
+            material.depthWrite=opacity<.999?false:original.depthWrite;
           }
         }
       });
