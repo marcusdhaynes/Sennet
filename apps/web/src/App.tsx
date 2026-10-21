@@ -152,6 +152,12 @@ export default function App(){
     try{return normalizeDiceAppearance(JSON.parse(localStorage.getItem('sennet.dice.appearance.v1')||'null'));}
     catch{return {...DEFAULT_DICE_APPEARANCE};}
   });
+  const [customCoinText,setCustomCoinText]=useState<string>(()=>{
+    try{
+      const text=localStorage.getItem('sennet.coin.custom.text.v1');
+      return text!==null&&/^[0-9,+-]{0,20}$/.test(text)?text:'1';
+    }catch{return '1';}
+  });
   const [customCoinValue,setCustomCoinValue]=useState<number>(()=>{
     try{const saved=Number(localStorage.getItem('sennet.coin.custom.v1'));
       return Number.isInteger(saved)&&saved>=1&&saved<=9999?saved:1;
@@ -231,6 +237,7 @@ export default function App(){
   useEffect(()=>()=>connection.current?.close(),[]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
+  useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.text.v1',customCoinText);}catch{}},[customCoinText]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.hold.ms',String(diceHoldMs));}catch{}},[diceHoldMs]);
@@ -448,9 +455,12 @@ export default function App(){
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         diceAppearance={diceAppearance} diceHoldMs={diceHoldMs} diceFadeMs={diceFadeMs}
-        coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
-        onTokenPlace={(value,sign,x,y,carrierId,color)=>takeAction('TOKEN_PLACE',
-          {value,sign,x,y,seat,...(carrierId?{carrierId}:{}),...(color?{color}:{})})}
+        coinAppearance={coinAppearance} customCoinValue={customCoinValue}
+        customCoinText={customCoinText} onCustomCoinText={setCustomCoinText}
+        onCustomCoinValue={setCustomCoinValue}
+        onTokenPlace={(value,sign,x,y,carrierId,color,coinText)=>takeAction('TOKEN_PLACE',
+          {value,sign,x,y,seat,...(carrierId?{carrierId}:{}),
+          ...(color?{color}:{}),...(coinText!==undefined?{coinText}:{})})}
         onCoinModify={(id,changes)=>takeAction('COIN_MODIFY',{id,...changes})}
         onCoinDuplicate={id=>takeAction('CLONE',{id,newId:createId()})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
@@ -669,9 +679,20 @@ export default function App(){
                 </button>
               </div>
               <div className="reader-block"><h3>Token coins</h3>
-                <p>Two permanent coins live in the right drawer: the standard coin uses a ten-action radial (hold its center for 0.25 seconds), and Custom is exclusively for direct number entry. Drag either coin to make a copy. Hold the standard coin center again to collapse its radial. Side-drawer pull tabs hide and reveal each box. Drop a used die into either open box to erase it; the original die sources remain available.</p>
-                <label>Custom coin number<input type="number" min={1} max={9999} step={1} value={customCoinValue}
-                  onChange={e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=9999)setCustomCoinValue(n);}}/></label>
+                <p>The upper 1 coin is an editable inscription: click its number and type digits, commas, + or −. It has no radial. The lower 10 coin retains the radial for duplication, arithmetic and color. Drag either to place a matching coin. Small cabinet handles retract each drawer.</p>
+                <label>Editable coin inscription
+                  <input type="text" inputMode="text" maxLength={20}
+                    aria-label="Editable 1 coin inscription"
+                    value={customCoinText}
+                    onChange={e=>{
+                      const value=e.target.value;
+                      if(/^[0-9,+-]{0,20}$/.test(value)){
+                        setCustomCoinText(value);
+                        const n=Math.abs(Number(value.replaceAll(',','')));
+                        if(Number.isInteger(n)&&n>=1&&n<=9999)setCustomCoinValue(n);
+                      }
+                    }}/>
+                </label>
                 <label>Finish<select value={coinAppearance.finish}
                   onChange={e=>setCoinAppearance(p=>({...p,finish:e.target.value as CoinFinish}))}>
                   <option value="polished">Polished metal</option><option value="brushed">Brushed metal</option>
