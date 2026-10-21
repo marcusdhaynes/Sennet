@@ -887,9 +887,9 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
   const shadow=new Graphics().ellipse(4,o.tokenCoin?7:13,o.tokenCoin?15:33,o.tokenCoin?6:12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
   if(o.tokenCoin){
-    box.hitArea=new Circle(0,0,17*coinStyle.size);
+    box.hitArea=new Circle(0,0,17*coinStyle.size*.82);
     box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1,o.color));
-    if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size).stroke({color:0x9effee,width:2.2}));
+    if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size*.82).stroke({color:0x9effee,width:2.2}));
   }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
     // underneath or alongside remain selectable.
@@ -1574,16 +1574,16 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         const color=coinSources.colors[index]??'#d8b979';
         source.addChild(makeCoin(value,coinAppearance,true,1,color));
         const highlight=new Graphics();
-        highlight.scale.set(coinAppearance.size);
+        highlight.scale.set(coinAppearance.size*.82);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
         const coinOverlay=showCoinAboveArtwork(source,value,1,true,color);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
-        source.hitArea=new Circle(0,0,17.5*coinAppearance.size);
+        source.hitArea=new Circle(0,0,17.5*coinAppearance.size*.82);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=8*coinAppearance.size)return 0;
+          if(Math.hypot(here.x,here.y)<=8*coinAppearance.size*.82)return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -1748,7 +1748,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           e.stopPropagation();
           cancelActiveDrag.current();
           const local=piece.toLocal(e.global);
-          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size;
+          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size*.82;
           if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id);
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
@@ -2547,7 +2547,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     };
     const reset=()=>{selectView({kind:'overview',opponent:null});resetCamera.current();};
     const key=(event:KeyboardEvent)=>{
-      if(event.key==='Escape'){setGestureMenu(null);setRadialWheel(null);lastTap.current=null;}
+      if(event.key==='Escape'){setCoinMenu(null);setCoinColorsOpen(false);setGestureMenu(null);setRadialWheel(null);lastTap.current=null;}
       const target=event.target;
       if(target instanceof HTMLElement&&target.closest('input,textarea,select,[contenteditable="true"]'))return;
       if(currentKind.current==='tcg'&&!event.ctrlKey&&!event.metaKey&&!event.altKey){
