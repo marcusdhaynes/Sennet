@@ -842,6 +842,33 @@ function deckBoxArt(o:TableObject):Container{
     .stroke({color:0xfcdf9c,alpha:.32,width:1}));
   return art;
 }
+/** Imported card art is rendered as DOM <img> above WebGL for CORS safety.
+ * Coins need a matching DOM visual *above that artwork*, otherwise even a
+ * perfectly z-sorted Pixi coin disappears behind the card's image.
+ * This overlay is display-only: Pixi keeps all hit tests and drag gestures.
+ */
+function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearance):HTMLDivElement{
+  const root=document.createElement('div');
+  root.className='sennet-coin-above-card';
+  root.dataset.finish=style.finish;
+  root.style.setProperty('--coin-size',String(style.size));
+  root.style.setProperty('--coin-shine',String(style.shine/100));
+  root.style.setProperty('--coin-bevel',String(style.bevel/100));
+  const face=document.createElement('div');
+  face.className='sennet-coin-above-card-face';
+  const upper=document.createElement('span');
+  upper.className='sennet-coin-above-card-top';
+  upper.textContent=source||sign===1?'+':'';
+  const lower=document.createElement('span');
+  lower.className='sennet-coin-above-card-bottom';
+  lower.textContent=source||sign===-1?'−':'';
+  const center=document.createElement('span');
+  center.className='sennet-coin-above-card-number';
+  center.textContent=String(value);
+  center.style.fontSize=String(value>=10000?5:value>=1000?5.5:value>=100?6.2:7.3)+'px';
+  face.append(upper,lower,center);root.appendChild(face);
+  return root;
+}
 function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
   const shadow=new Graphics().ellipse(4,o.tokenCoin?7:13,o.tokenCoin?15:33,o.tokenCoin?6:12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
@@ -1098,7 +1125,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   };
   const drag=useRef<ActiveDrag|null>(null);
   const visuals=useRef(new Map<string,Container>());
-  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container}|null>(null);
+  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container;ghostEl:HTMLDivElement}|null>(null);
   const commitCoinEdit=()=>{
     const n=Number(coinDraft);
     if(Number.isInteger(n)&&n>=1&&n<=9999)onCustomCoinValue(n);
@@ -1266,6 +1293,13 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       selectedSet.current=new Set(still);
       queueMicrotask(()=>setSelectedIds(still));
     }
+    const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
+    const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean)=>{
+      const el=coinDomVisual(value,sign,source,coinAppearance);
+      mount.current?.appendChild(el);
+      coinLayers.push({piece,el});
+      return el;
+    };
     // Fixed, interactive source coins live inside the *local* right tray.
     // Their Pixi transform follows the mat in all three camera modes.
     if(state.kind==='tcg'){
@@ -1285,6 +1319,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         highlight.scale.set(coinAppearance.size);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
+        const coinOverlay=showCoinAboveArtwork(source,value,1,true);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
         source.hitArea=new Circle(0,0,17.5*coinAppearance.size);
@@ -1294,11 +1329,16 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
-          coinHighlight(highlight,sideAt(global));
+          const side=sideAt(global);
+          coinHighlight(highlight,side);
+          coinOverlay.dataset.hover=String(side);
         };
         source.on('pointerover',e=>highlightSide(e.global));
         source.on('pointermove',e=>highlightSide(e.global));
-        source.on('pointerout',()=>coinHighlight(highlight,0));
+        source.on('pointerout',()=>{
+          coinHighlight(highlight,0);
+          coinOverlay.dataset.hover='0';
+        });
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
@@ -1318,7 +1358,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           }
           const ghost=makeCoin(value,coinAppearance,false,sign);
           ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
-          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost};
+          const ghostEl=showCoinAboveArtwork(ghost,value,sign,false);
+          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl};
         });
       });
     }
@@ -1346,6 +1387,21 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         const ty=p.y*sy-31*bb-44*dd;
         img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
       }
+      // A separate DOM layer at z-index 6 keeps every coin above every
+      // imported card image (z-index 5), even during camera or card motion.
+      for(const {piece,el} of coinLayers){
+        if(piece.destroyed||!el.isConnected)continue;
+        if(!piece.visible){el.style.display='none';continue;}
+        el.style.display='block';
+        const p=piece.toGlobal(new Point(0,0));
+        const right=piece.toGlobal(new Point(1,0));
+        const down=piece.toGlobal(new Point(0,1));
+        const aa=(right.x-p.x)*sx,bb=(right.y-p.y)*sy;
+        const cc=(down.x-p.x)*sx,dd=(down.y-p.y)*sy;
+        const tx=p.x*sx-18*aa-18*cc;
+        const ty=p.y*sy-18*bb-18*dd;
+        el.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
+      }
     };
     session.current?.app.ticker.add(syncCardArtwork);
     for(const obj of visible){
@@ -1365,6 +1421,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
+      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false);
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=220;
@@ -1493,6 +1550,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     return ()=>{
       session.current?.app.ticker.remove(syncCardArtwork);
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
+      for(const {el} of coinLayers)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue]);
   // A source is immutable: only a transient ghost travels with the pointer.
@@ -1513,6 +1571,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const current=session.current,at=coordinates(event);
       const traveled=Math.hypot(event.clientX-d.startX,event.clientY-d.startY);
       if(d.ghost&&!d.ghost.destroyed)d.ghost.destroy();
+      d.ghostEl.remove();
       controlPointer.current=null;
       if(!commit||!current||!at)return;
       if(traveled<9){
