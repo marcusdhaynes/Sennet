@@ -1819,7 +1819,12 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       // imported card image (z-index 5), even during camera or card motion.
       for(const {piece,el} of coinLayers){
         if(piece.destroyed||!el.isConnected)continue;
-        if(!piece.visible){el.style.display='none';continue;}
+        let visible=true,ancestor:Container|null=piece;
+        while(ancestor){
+          if(!ancestor.visible){visible=false;break;}
+          ancestor=ancestor.parent;
+        }
+        if(!visible){el.style.display='none';continue;}
         el.style.display='block';
         const p=piece.toGlobal(new Point(0,0));
         const right=piece.toGlobal(new Point(1,0));
