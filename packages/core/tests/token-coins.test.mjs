@@ -175,3 +175,32 @@ test('card-zone changes preserve the physical coin association',()=>{
     state.objects.find(o=>o.id===card.id).x+
     (pointOn(card,12,12).x-card.x));
 });
+
+test('newly added and duplicated accessories determine attachment by their center',()=>{
+  let state=createGame('tcg');
+  const card=state.objects.find(o=>o.id==='hero-a');
+  const where=pointOn(card,20,15);
+  state=action(state,'ADD',{object:{id:'new-die',kind:'die',name:'New die',
+    ...where,rotation:0,faceUp:true,color:'#ffffff',zone:'TABLE',order:900
+  }},'new-die-add');
+  assert.equal(state.objects.find(o=>o.id==='new-die').carrierId,card.id);
+  state=action(state,'CLONE',{id:'new-die',newId:'new-die-clone'},'clone-die');
+  const duplicate=state.objects.find(o=>o.id==='new-die-clone');
+  assert.equal(duplicate.carrierId,undefined,
+    'a clone must not inherit an attachment when its center is outside');
+  near(duplicate.x,where.x+45,'copy X is not magnetized');
+  near(duplicate.y,where.y+40,'copy Y is not magnetized');
+});
+test('rotating an attached coin on its own does not get cancelled by its carrier',()=>{
+  let state=createGame('tcg');
+  const card=state.objects.find(o=>o.id==='hero-a');
+  const where=pointOn(card,18,15);
+  state=action(state,'TOKEN_PLACE',{seat:0,value:10,sign:1,
+    ...where,carrierId:card.id},'self-rotate');
+  state=action(state,'ROTATE',{id:'self-rotate-coin',degrees:90},'self-rotate-action');
+  const coin=state.objects.find(o=>o.id==='self-rotate-coin');
+  assert.equal(coin.rotation,90);
+  near(coin.x,where.x,'self rotation X');
+  near(coin.y,where.y,'self rotation Y');
+  assert.equal(coin.carrierId,card.id);
+});
