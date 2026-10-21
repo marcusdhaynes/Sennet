@@ -18,6 +18,9 @@ export interface StaticDiePlacement {
   source?:boolean;
 }
 interface DieVisual {
+  id:string;
+  sides:number;
+  themeId?:DiceThemeId;
   piece:Container;
   group:THREE.Group;
   shadow:THREE.Mesh;
@@ -88,33 +91,73 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
   };
   const setEntries=(next:StaticDiePlacement[])=>{
     if(stopped)return;
-    clear();
-    entries=next;
-    for(const e of entries){
-      const {group}=createDie3DModel(e.sides,undefined,e.themeId);
-      const q=e.quaternion??[0,0,0,1];
-      group.quaternion.set(...q);
-      scene.add(group);
-      const shadow=new THREE.Mesh(new THREE.PlaneGeometry(57,57),
-        new THREE.MeshBasicMaterial({map:shadowTexture,transparent:true,
-          depthWrite:false,opacity:.54}));
-      shadow.position.z=.4;scene.add(shadow);
-      let result:HTMLSpanElement|undefined;
-      // Multiple selected dice retain their physical TOP face and shape.
-      // Show the aggregate separately, without a rectangular die replacement.
-      if(!e.source&&e.quantity&&e.quantity>1&&e.result){
-        result=document.createElement('span');
-        result.className='sennet-dice-aggregate';
-        result.textContent='Σ '+e.result+'  ×'+e.quantity;
-        host.appendChild(result);
+    const previous=new Map(visuals.map(visual=>[visual.id,visual]));
+    const updated:DieVisual[]=[];
+    for(const e of next){
+      const old=previous.get(e.id);
+      if(old)previous.delete(e.id);
+      const reusable=old&&old.sides===e.sides&&old.themeId===e.themeId;
+      let visual:DieVisual;
+      if(reusable){
+        visual=old;
+        // The Pixi presentation is reconstructed after selection changes,
+        // but the GPU buffers, PBR material and atlas need not be.
+        for(const item of old.hidden){
+          if(!item.piece.destroyed)item.piece.visible=item.visible;
+        }
+        const children=e.source?e.piece.children.slice(0,1):e.piece.children;
+        visual.hidden=children.map(piece=>({piece:piece as Container,visible:piece.visible}));
+        visual.piece=e.piece;
+        for(const item of visual.hidden)item.piece.visible=false;
+      }else{
+        if(old){
+          scene.remove(old.group,old.shadow);
+          disposeGroup(old.group);
+          old.shadow.geometry.dispose();
+          (old.shadow.material as THREE.Material).dispose();
+          old.result?.remove();
+          for(const item of old.hidden){
+            if(!item.piece.destroyed)item.piece.visible=item.visible;
+          }
+        }
+        const {group}=createDie3DModel(e.sides,undefined,e.themeId);
+        scene.add(group);
+        const shadow=new THREE.Mesh(new THREE.PlaneGeometry(57,57),
+          new THREE.MeshBasicMaterial({map:shadowTexture,transparent:true,
+            depthWrite:false,opacity:.54}));
+        shadow.position.z=.4;scene.add(shadow);
+        const children=e.source?e.piece.children.slice(0,1):e.piece.children;
+        const hidden=children.map(piece=>({piece:piece as Container,visible:piece.visible}));
+        for(const item of hidden)item.piece.visible=false;
+        visual={id:e.id,sides:e.sides,themeId:e.themeId,piece:e.piece,
+          group,shadow,hidden};
       }
-      // Retire the old flat fallback picture only after real 3D is ready.
-      // The Pixi parent and its hit area stay active for selection/dragging.
-      const oldChildren=e.source?e.piece.children.slice(0,1):e.piece.children;
-      const hidden=oldChildren.map(piece=>({piece:piece as Container,visible:piece.visible}));
-      for(const item of hidden)item.piece.visible=false;
-      visuals.push({piece:e.piece,group,shadow,result,hidden});
+      const q=e.quaternion??[0,0,0,1];
+      visual.group.quaternion.set(...q);
+      if(!e.source&&e.quantity&&e.quantity>1&&e.result){
+        if(!visual.result){
+          visual.result=document.createElement('span');
+          visual.result.className='sennet-dice-aggregate';
+          host.appendChild(visual.result);
+        }
+        visual.result.textContent='Σ '+e.result+'  ×'+e.quantity;
+      }else{
+        visual.result?.remove();
+        visual.result=undefined;
+      }
+      updated.push(visual);
     }
+    for(const orphan of previous.values()){
+      scene.remove(orphan.group,orphan.shadow);
+      disposeGroup(orphan.group);
+      orphan.shadow.geometry.dispose();
+      (orphan.shadow.material as THREE.Material).dispose();
+      orphan.result?.remove();
+      for(const item of orphan.hidden)
+        if(!item.piece.destroyed)item.piece.visible=item.visible;
+    }
+    visuals.splice(0,visuals.length,...updated);
+    entries=next;
   };
   const sync=()=>{
     if(stopped)return;
