@@ -1254,7 +1254,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     const rect=app.canvas.getBoundingClientRect();
     const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
     if(rect.width<=0||rect.height<=0)return;
-    const convert=(point:Point)=>({x:point.x*sx,y:point.y*sy});
+    const convert=(point:{x:number;y:number})=>({x:point.x*sx,y:point.y*sy});
     const origin=tcgMatOrigin(seatRef.current);
     const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
     const distance=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
