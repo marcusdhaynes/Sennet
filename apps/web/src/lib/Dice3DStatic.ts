@@ -122,7 +122,15 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
     const xScale=w/canvas.width,yScale=h/canvas.height;
     for(let i=0;i<visuals.length;i++){
       const visual=visuals[i],entry=entries[i];
-      if(!entry||visual.piece.destroyed||!visual.piece.visible){
+      // Sliding drawers can hide their entire subtree. A child may still
+      // report visible=true when an ancestor drawer is tucked under the mat.
+      let visible=!visual.piece.destroyed;
+      let ancestor:Container|null=visible?visual.piece:null;
+      while(ancestor){
+        if(!ancestor.visible){visible=false;break;}
+        ancestor=ancestor.parent;
+      }
+      if(!entry||!visible){
         visual.group.visible=false;visual.shadow.visible=false;
         if(visual.result)visual.result.style.display='none';
         continue;
