@@ -1,11 +1,12 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
+import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;readonly?:boolean}
+interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
 let activeBookPointer:number|null=null;
@@ -841,10 +842,14 @@ function deckBoxArt(o:TableObject):Container{
     .stroke({color:0xfcdf9c,alpha:.32,width:1}));
   return art;
 }
-function createPiece(o:TableObject,isSelected:boolean){
+function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
-  const shadow=new Graphics().ellipse(4,13,33,12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
-  if(o.kind==='deck-box'){
+  const shadow=new Graphics().ellipse(4,o.tokenCoin?7:13,o.tokenCoin?15:33,o.tokenCoin?6:12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
+  if(o.tokenCoin){
+    box.hitArea=new Circle(0,0,17*coinStyle.size);
+    box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1));
+    if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size).stroke({color:0x9effee,width:2.2}));
+  }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
     // underneath or alongside remain selectable.
     box.hitArea=new Rectangle(-38,-51,76,107);
@@ -984,7 +989,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,readonly=false}:Props){
+export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
@@ -1031,6 +1036,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const hoverTimers=useRef(new Set<number>());
   const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
+  const [coinEditing,setCoinEditing]=useState<{x:number;y:number}|null>(null);
+  const [coinDraft,setCoinDraft]=useState('');
   const selectedSet=useRef(new Set<string>());
   const [dockPosition,setDockPosition]=useState<{x:number;y:number}|null>(()=>{
     try {const saved=JSON.parse(localStorage.getItem('sennet.radial.dock-position.v2')||'null');
@@ -1080,7 +1087,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     setGestureMenu({id,x:left,y:top,inspect:false});
     lastTap.current=null;
   };
-  const callbacks=useRef({onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange});callbacks.current={onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange};
+  const callbacks=useRef({onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange,onTokenPlace,onTokenAdjust});callbacks.current={onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,onMergeCenter,onViewChange,onTokenPlace,onTokenAdjust};
   type ActiveDrag={
     id:string;pointerId:number;visual:Container;card:boolean;
     x:number;y:number;startX:number;startY:number;
@@ -1091,6 +1098,12 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   };
   const drag=useRef<ActiveDrag|null>(null);
   const visuals=useRef(new Map<string,Container>());
+  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container}|null>(null);
+  const commitCoinEdit=()=>{
+    const n=Number(coinDraft);
+    if(Number.isInteger(n)&&n>=1&&n<=9999)onCustomCoinValue(n);
+    setCoinEditing(null);
+  };
   const cancelActiveDrag=useRef<()=>void>(()=>{});
   const snapHighlight=useRef<Graphics|null>(null);
   const currentKind=useRef(state.kind);currentKind.current=state.kind;
@@ -1253,6 +1266,62 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       selectedSet.current=new Set(still);
       queueMicrotask(()=>setSelectedIds(still));
     }
+    // Fixed, interactive source coins live inside the *local* right tray.
+    // Their Pixi transform follows the mat in all three camera modes.
+    if(state.kind==='tcg'){
+      const origin=tcgMatOrigin(seat);
+      const mat=new Container();
+      mat.position.set(origin.x,origin.y);
+      mat.rotation=origin.angle;
+      (seatGroups?.get(seat)??board).addChild(mat);
+      const values=[customCoinValue,10,20,30,50,100];
+      const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+      const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+      values.forEach((value,index)=>{
+        const source=new Container();
+        source.position.set(boxX+(index%2===0?-8:8),top+22+index*34);
+        source.addChild(makeCoin(value,coinAppearance,true));
+        const highlight=new Graphics();
+        highlight.scale.set(coinAppearance.size);
+        highlight.eventMode='none';source.addChild(highlight);
+        mat.addChild(source);
+        if(readonly)return;
+        source.eventMode='static';source.cursor='pointer';
+        source.hitArea=new Circle(0,0,17.5*coinAppearance.size);
+        const sideAt=(global:Point):1|-1|0=>{
+          const here=source.toLocal(global);
+          if(Math.hypot(here.x,here.y)<=7.5*coinAppearance.size)return 0;
+          return here.y<0?1:-1;
+        };
+        const highlightSide=(global:Point)=>{
+          coinHighlight(highlight,sideAt(global));
+        };
+        source.on('pointerover',e=>highlightSide(e.global));
+        source.on('pointermove',e=>highlightSide(e.global));
+        source.on('pointerout',()=>coinHighlight(highlight,0));
+        source.on('pointerdown',e=>{
+          if(e.button!==0)return;
+          e.stopPropagation();
+          controlPointer.current=e.pointerId;
+          const sign=sideAt(e.global);
+          if(sign===0){
+            if(index===0){
+              const projected=source.toGlobal(new Point(0,0));
+              const canvasRect=app.canvas.getBoundingClientRect();
+              setCoinDraft(String(customCoinValue));
+              setCoinEditing({
+                x:projected.x*canvasRect.width/app.renderer.width,
+                y:projected.y*canvasRect.height/app.renderer.height
+              });
+            }
+            return;
+          }
+          const ghost=makeCoin(value,coinAppearance,false,sign);
+          ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
+          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost};
+        });
+      });
+    }
     // Use browser <img> elements for actual card art, just like the Deck
     // Builder. Third-party card art often disallows WebGL/CORS texture uploads
     // even while rendering perfectly in an ordinary HTML image.
@@ -1285,7 +1354,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           state.players.find(p=>p.id===obj.owner)?.seat)??
         (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges,true)?.seat:undefined);
       if(seatGroups&&!seatGroups.has(assumedOwner??-1))continue;
-      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id));
+      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),coinAppearance);
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
         drag.current.visual=piece;
@@ -1425,7 +1494,77 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       session.current?.app.ticker.remove(syncCardArtwork);
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue]);
+  // A source is immutable: only a transient ghost travels with the pointer.
+  // Commit one deterministic TOKEN_PLACE or TOKEN_ADJUST event on release.
+  useEffect(()=>{
+    const coordinates=(event:PointerEvent)=>{
+      const current=session.current;if(!current)return null;
+      const rect=current.app.canvas.getBoundingClientRect();
+      if(rect.width<=0||rect.height<=0)return null;
+      return new Point(
+        (event.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (event.clientY-rect.top)*current.app.renderer.height/rect.height);
+    };
+    const finish=(event:PointerEvent,commit:boolean)=>{
+      const d=tokenDrag.current;
+      if(!d||d.pointerId!==event.pointerId)return;
+      tokenDrag.current=null;
+      const current=session.current,at=coordinates(event);
+      const traveled=Math.hypot(event.clientX-d.startX,event.clientY-d.startY);
+      if(d.ghost&&!d.ghost.destroyed)d.ghost.destroy();
+      controlPointer.current=null;
+      if(!commit||!current||!at)return;
+      if(traveled<9){
+        // A stationary click only acts when cards have been selected.
+        const ids=[...selectedSet.current].filter(id=>{
+          const card=currentState.current.objects.find(o=>o.id===id);
+          return card&&(card.kind==='card'||card.kind==='deck');
+        });
+        if(ids.length)callbacks.current.onTokenAdjust(ids,d.value,d.sign);
+        return;
+      }
+      const local=d.mat.toLocal(at,current.app.stage);
+      const right=TCG_MAT_WIDTH/2+3;
+      const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+      // Every return disappears back into the permanently positioned coin.
+      if(local.x>=right&&local.x<=right+TCG_MAT.cardWidth&&
+         local.y>=trayTop&&local.y<=TCG_MAT_HEIGHT/2)return;
+      let target:TableObject|undefined;
+      let parent:Container|null=d.mat.parent;
+      for(const [id,piece] of [...visuals.current.entries()].reverse()){
+        const card=currentState.current.objects.find(o=>o.id===id);
+        if(!card||!['card','deck'].includes(card.kind)||card.zone!=='TABLE'||
+           card.locked||(card.owner&&card.owner!==actorId))continue;
+        const hit=piece.toLocal(at,current.app.stage);
+        if(Math.abs(hit.x)<=31&&Math.abs(hit.y)<=44){
+          target=card;parent=piece.parent;break;
+        }
+      }
+      if(!parent)return;
+      const spot=parent.toLocal(at,current.app.stage);
+      callbacks.current.onTokenPlace(d.value,d.sign,
+        Math.round(spot.x),Math.round(spot.y),target?.id);
+    };
+    const move=(event:PointerEvent)=>{
+      const d=tokenDrag.current,at=coordinates(event);
+      if(!d||d.pointerId!==event.pointerId||!at||d.ghost.destroyed)return;
+      if(Math.hypot(event.clientX-d.startX,event.clientY-d.startY)<9)return;
+      const local=d.mat.toLocal(at,session.current!.app.stage);
+      d.ghost.position.copyFrom(local);d.ghost.visible=true;
+    };
+    const up=(event:PointerEvent)=>finish(event,true);
+    const cancel=(event:PointerEvent)=>finish(event,false);
+    window.addEventListener('pointermove',move);
+    window.addEventListener('pointerup',up);
+    window.addEventListener('pointercancel',cancel);
+    return()=>{
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',up);
+      window.removeEventListener('pointercancel',cancel);
+    };
+  },[actorId]);
+
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -2066,6 +2205,13 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
+    {coinEditing&&<input autoFocus className="sennet-coin-editor" type="number" min={1} max={9999} step={1}
+      aria-label="Edit Custom coin value" value={coinDraft} onChange={e=>setCoinDraft(e.target.value)}
+      style={{left:coinEditing.x,top:coinEditing.y}} onPointerDown={e=>e.stopPropagation()}
+      onBlur={commitCoinEdit} onKeyDown={e=>{
+        if(e.key==='Enter'){e.preventDefault();commitCoinEdit();}
+        if(e.key==='Escape')setCoinEditing(null);
+      }}/>}
 
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
