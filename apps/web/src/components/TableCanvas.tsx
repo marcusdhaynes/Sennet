@@ -146,7 +146,8 @@ function drawTcgMats(
   onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
-  eyeHoldMs:number,selectedEnemy:number|null
+  eyeHoldMs:number,selectedEnemy:number|null,
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void
 ){
   const drawnSeats=seatLayers
     ? [...seatLayers.keys()]
@@ -244,7 +245,30 @@ function drawTcgMats(
               .stroke({color:shine,width:1,alpha:.8});
           }
         }
-        tray.eventMode='none';mat.addChild(tray);
+        const drawerGroup=new Container();
+        drawerGroup.eventMode='auto';
+        drawerGroup.addChild(tray);
+        mat.addChild(drawerGroup);
+        drawerGroups.set(side,drawerGroup);
+        const isClosed=side===-1?drawerState.left:drawerState.right;
+        const pull=new Container();
+        pull.eventMode='static';pull.cursor='pointer';
+        pull.hitArea=new Rectangle(-11,-27,22,54);
+        const pullArt=new Graphics()
+          .roundRect(-9,-24,18,48,6).fill({color:wood})
+          .stroke({color:shine,width:1.8})
+          .roundRect(-4,-13,8,26,3).fill({color:rim})
+          .moveTo(-2,-8).lineTo(2,-8).moveTo(-2,-2).lineTo(2,-2)
+          .moveTo(-2,4).lineTo(2,4).moveTo(-2,10).lineTo(2,10)
+          .stroke({color:shine,width:1.6,alpha:.85});
+        pullArt.eventMode='none';pull.addChild(pullArt);
+        const arrow=label(isClosed?(side===-1?'‹':'›'):(side===-1?'›':'‹'),
+          13,0xf8dfb6,'bold');
+        arrow.position.set(0,19);arrow.eventMode='none';pull.addChild(arrow);
+        pull.position.set(side*(TCG_MAT_WIDTH/2+trayW+16),cy);
+        pull.on('pointerdown',e=>{e.stopPropagation();onControlDown(e.pointerId);});
+        pull.on('pointertap',e=>{e.stopPropagation();onToggleDrawer(side as -1|1);});
+        mat.addChild(pull);drawerTabs.set(side,pull);
       }
     }
     if(seat===viewerSeat){
@@ -303,7 +327,7 @@ function drawTcgMats(
         window.addEventListener('pointercancel',onUp,true);
       });
       book.on('destroyed',()=>{if(release)activeBookPointer=null;});
-      mat.addChild(book);
+      (drawerGroups.get(side)??mat).addChild(book);
       // Capture the drag before the table background can initiate camera pan.
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
@@ -712,7 +736,8 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,
   viewport:{width:number;height:number},
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
-  selectedEnemy:number|null):Map<number,Container>|null{
+  selectedEnemy:number|null,
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void):Map<number,Container>|null{
   const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
@@ -760,7 +785,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,layers,
-    eyeHoldMs,selectedEnemy);
+    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -1057,6 +1082,19 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
+  const [boxClosed,setBoxClosed]=useState<{left:boolean;right:boolean}>(()=>{
+    try{
+      const saved=JSON.parse(localStorage.getItem('sennet.box.closed.v1')||'null');
+      return {left:saved?.left===true,right:saved?.right===true};
+    }catch{return {left:false,right:false};}
+  });
+  useEffect(()=>{try{localStorage.setItem('sennet.box.closed.v1',JSON.stringify(boxClosed));}catch{}},[boxClosed]);
+  const drawerGroups=useRef(new Map<number,Container>());
+  const drawerTabs=useRef(new Map<number,Container>());
+  const lastBoxClosed=useRef(boxClosed);
+  const toggleBox=(side:-1|1)=>setBoxClosed(previous=>({
+    ...previous,[side===-1?'left':'right']:!previous[side===-1?'left':'right']
+  }));
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
   const leftTrayMat=useRef<Container|null>(null);
@@ -1523,6 +1561,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     hoverTimers.current.clear();
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     diceSources.current.clear();diceBadges.current.clear();leftTrayMat.current=null;
+    drawerGroups.current.clear();drawerTabs.current.clear();
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
@@ -1540,7 +1579,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       eyeView.kind==='castle',eyeView.castleMode??preferredCastleMode.current,
       preferredCastleMode.current,
       {ally:eyeView.castleFocusedAlly??null,enemy:eyeView.castleFocusedEnemy??null},
-      viewport,relations,250,eyeView.castleSelectedEnemy??null);
+      viewport,relations,250,eyeView.castleSelectedEnemy??null,
+      boxClosed,drawerGroups.current,drawerTabs.current,toggleBox);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
@@ -1612,10 +1652,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     // source counts it; dragging a source instead throws ALL selected types.
     // Quantities update without rebuilding the Pixi scene or disturbing cards.
     if(state.kind==='tcg'){
-      const origin=tcgMatOrigin(seat);
-      const mat=new Container();mat.position.set(origin.x,origin.y);
-      mat.rotation=origin.angle;
-      (seatGroups?.get(seat)??board).addChild(mat);
+      const mat=drawerGroups.current.get(-1);
+      if(!mat)throw new Error('Left drawer is missing');
       leftTrayMat.current=mat;
       const boxX=-(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3);
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
@@ -1661,11 +1699,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     // Fixed, interactive source coins live inside the *local* right tray.
     // Their Pixi transform follows the mat in all three camera modes.
     if(state.kind==='tcg'){
-      const origin=tcgMatOrigin(seat);
-      const mat=new Container();
-      mat.position.set(origin.x,origin.y);
-      mat.rotation=origin.angle;
-      (seatGroups?.get(seat)??board).addChild(mat);
+      const mat=drawerGroups.current.get(1);
+      if(!mat)throw new Error('Right drawer is missing');
       // Exactly two permanent sources: adjustable standard and entry-only Custom.
       const values=[coinSources.values[0]??10,customCoinValue];
       const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
@@ -1727,6 +1762,35 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         });
       });
     }
+    // Drawer body, sources and book are one Pixi group. Animate its entire
+    // translation; the tab alone remains visible when fully tucked away.
+    for(const side of [-1,1]){
+      const body=drawerGroups.current.get(side),tab=drawerTabs.current.get(side);
+      if(!body||!tab)continue;
+      const closed=side===-1?boxClosed.left:boxClosed.right;
+      const wasClosed=side===-1?lastBoxClosed.current.left:lastBoxClosed.current.right;
+      const shift=-side*(TCG_MAT.cardWidth+16);
+      const outer=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth+16);
+      const inner=side*(TCG_MAT_WIDTH/2+8);
+      if(closed===wasClosed){
+        body.position.x=closed?shift:0;body.visible=!closed;
+        tab.position.x=closed?inner:outer;
+      }else{
+        const start=performance.now(),duration=245;
+        body.visible=true;body.position.x=wasClosed?shift:0;
+        tab.position.x=wasClosed?inner:outer;
+        const animate=(now:number)=>{
+          if(body.destroyed||tab.destroyed)return;
+          const t=Math.min(1,(now-start)/duration),ease=1-Math.pow(1-t,3);
+          body.position.x=(wasClosed?shift:0)+((closed?shift:0)-(wasClosed?shift:0))*ease;
+          tab.position.x=(wasClosed?inner:outer)+((closed?inner:outer)-(wasClosed?inner:outer))*ease;
+          if(t<1)animations.current.push(requestAnimationFrame(animate));
+          else body.visible=!closed;
+        };
+        animations.current.push(requestAnimationFrame(animate));
+      }
+    }
+    lastBoxClosed.current=boxClosed;
     // Use browser <img> elements for actual card art, just like the Deck
     // Builder. Third-party card art often disallows WebGL/CORS texture uploads
     // even while rendering perfectly in an ordinary HTML image.
@@ -1932,7 +1996,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
       for(const {el} of coinLayers)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue,coinSources]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue,coinSources,boxClosed]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
