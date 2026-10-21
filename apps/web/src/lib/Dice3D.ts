@@ -22,28 +22,32 @@ const rand=(max:number)=>{
   do{crypto.getRandomValues(word);}while(word[0]>=limit);
   return word[0]%max+1;
 };
+/** Ten planar kite faces of a pentagonal trapezohedron, not a cone or
+ * billboard. Each quadrilateral is triangulated only for GPU/solver use. */
 function tenSidedGeometry(radius:number):THREE.BufferGeometry{
-  const points:THREE.Vector3[]=[new THREE.Vector3(0,0,radius)];
-  for(let i=0;i<10;i++){
+  const phi=Math.PI/5,cos=Math.cos(phi);
+  const apex=radius,low=radius*(1-cos)/(1+cos);
+  const ring=Array.from({length:10},(_,i)=>{
     const angle=2*Math.PI*i/10;
-    points.push(new THREE.Vector3(Math.cos(angle)*radius*.94,
-      Math.sin(angle)*radius*.94,(i%2?-.32:.32)*radius));
-  }
-  points.push(new THREE.Vector3(0,0,-radius));
-  const vertices:number[]=[];
-  const add=(a:THREE.Vector3,b:THREE.Vector3,c:THREE.Vector3)=>{
-    const normal=new THREE.Vector3().subVectors(b,a)
-      .cross(new THREE.Vector3().subVectors(c,a));
-    const center=a.clone().add(b).add(c).multiplyScalar(1/3);
-    const [second,third]=normal.dot(center)>=0?[b,c]:[c,b];
-    for(const p of [a,second,third])vertices.push(p.x,p.y,p.z);
+    return new THREE.Vector3(Math.cos(angle)*radius*.94,
+      Math.sin(angle)*radius*.94,(i%2?low:-low));
+  });
+  const top=new THREE.Vector3(0,0,apex),bottom=new THREE.Vector3(0,0,-apex);
+  const coords:number[]=[];
+  const triangle=(a:THREE.Vector3,b:THREE.Vector3,c:THREE.Vector3)=>{
+    const cross=b.clone().sub(a).cross(c.clone().sub(a));
+    const center=a.clone().add(b).add(c);
+    const oriented=cross.dot(center)<0?[a,c,b]:[a,b,c];
+    for(const vertex of oriented)coords.push(vertex.x,vertex.y,vertex.z);
   };
-  for(let i=0;i<10;i++){
-    add(points[0],points[i+1],points[(i+1)%10+1]);
-    add(points[11],points[(i+1)%10+1],points[i+1]);
+  for(let i=0;i<5;i++){
+    const j=2*i,a=ring[j],b=ring[j+1],c=ring[(j+2)%10],d=ring[(j+3)%10];
+    triangle(top,a,b);triangle(top,b,c);
+    triangle(bottom,b,c);triangle(bottom,c,d);
   }
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-  g.computeVertexNormals();return g;
+  const geom=new THREE.BufferGeometry();
+  geom.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+  geom.computeVertexNormals();return geom;
 }
 export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
   switch(sides){
@@ -57,7 +61,7 @@ export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
     case 10:return tenSidedGeometry(r);
     case 12:return new THREE.DodecahedronGeometry(r,0).toNonIndexed();
     case 20:return new THREE.IcosahedronGeometry(r,0).toNonIndexed();
-    default:return new THREE.IcosahedronGeometry(r,1).toNonIndexed();
+    default:return new THREE.SphereGeometry(r,25,3).toNonIndexed();
   }
 }
 interface NumberedFace {normal:THREE.Vector3;value:number}
@@ -206,7 +210,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
       material:dieMat,linearDamping:.13,angularDamping:.14,
       allowSleep:true,sleepSpeedLimit:.22,sleepTimeLimit:.7});
-    body.addShape(side===100?new CANNON.Sphere(r*.9):side===2?
+    body.addShape(side===2?
       new CANNON.Cylinder(r,r,4,32):convexShape(geom),
       undefined,side===2?new CANNON.Quaternion().setFromAxisAngle(
         new CANNON.Vec3(1,0,0),Math.PI/2):undefined);
