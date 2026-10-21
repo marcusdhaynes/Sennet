@@ -138,6 +138,16 @@ export default function App(){
         bevel:Math.max(0,Math.min(100,saved.bevel)),size:Math.max(.55,Math.min(1.3,saved.size))}
       :DEFAULT_COIN_APPEARANCE;
   }catch{return DEFAULT_COIN_APPEARANCE;}});
+  const [diceHoldMs,setDiceHoldMs]=useState(()=>{
+    try{const n=Number(localStorage.getItem('sennet.dice.hold.ms'));
+      return n>=100&&n<=1500?n:250;}catch{return 250;}
+  });
+  const [diceFadeMs,setDiceFadeMs]=useState(()=>{
+    try{const raw=localStorage.getItem('sennet.dice.fade.ms');
+      if(raw===null)return 10000;
+      const n=Number(raw);return n===0||n>=2000&&n<=120000?n:10000;
+    }catch{return 10000;}
+  });
   const [diceAppearance,setDiceAppearance]=useState<DiceAppearance>(()=>{
     try{return normalizeDiceAppearance(JSON.parse(localStorage.getItem('sennet.dice.appearance.v1')||'null'));}
     catch{return {...DEFAULT_DICE_APPEARANCE};}
@@ -223,6 +233,8 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
+  useEffect(()=>{try{localStorage.setItem('sennet.dice.hold.ms',String(diceHoldMs));}catch{}},[diceHoldMs]);
+  useEffect(()=>{try{localStorage.setItem('sennet.dice.fade.ms',String(diceFadeMs));}catch{}},[diceFadeMs]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
     try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
@@ -435,7 +447,7 @@ export default function App(){
             snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
-        diceAppearance={diceAppearance}
+        diceAppearance={diceAppearance} diceHoldMs={diceHoldMs} diceFadeMs={diceFadeMs}
         coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
         onTokenPlace={(value,sign,x,y,carrierId,color)=>takeAction('TOKEN_PLACE',
           {value,sign,x,y,seat,...(carrierId?{carrierId}:{}),...(color?{color}:{})})}
@@ -594,6 +606,26 @@ export default function App(){
               </div>
               <div className="reader-block"><h3>Left tray · Dice &amp; flip coin</h3>
                 <p>Flip Coin, D04, D06, D08, D10, D12, D20 and D100 are permanent in the left box. Tap a die to select one, tap repeatedly to increase its count (maximum 20). Select different dice to combine them. Drag any selected die to throw the entire selection with natural motion, screen and tray wall rebounds, and collisions between the dice. Reaching 20 automatically throws the selection. Only one physical die of each type appears after a throw, but every selected roll is calculated and logged. The centered face displays the combined result; inspect a thrown die for its individual results.</p>
+              </div>
+              <div className="reader-block">
+                <h3>Die interactions</h3>
+                <p>Hold a die, move it naturally with the cursor, then release to reroll. A quick click repeats the result bubble. Loose dice slowly fade out after the selected time; source dice stay in the box.</p>
+                <label>Hold to pick up — {(diceHoldMs/1000).toFixed(2)} seconds
+                  <input type="range" min={100} max={1000} step={50} value={diceHoldMs}
+                    onChange={e=>setDiceHoldMs(Number(e.target.value))}/>
+                </label>
+                <label>Loose die fade
+                  <select value={diceFadeMs} onChange={e=>setDiceFadeMs(Number(e.target.value))}>
+                    <option value={0}>Never</option>
+                    <option value={2000}>2 seconds</option>
+                    <option value={5000}>5 seconds</option>
+                    <option value={10000}>10 seconds</option>
+                    <option value={15000}>15 seconds</option>
+                    <option value={30000}>30 seconds</option>
+                    <option value={60000}>1 minute</option>
+                    <option value={120000}>2 minutes</option>
+                  </select>
+                </label>
               </div>
               <div className="reader-block sennet-dice-appearance-settings">
                 <h3>Dice Appearance</h3>
