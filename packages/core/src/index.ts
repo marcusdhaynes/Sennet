@@ -1238,7 +1238,17 @@ export function applyCommand(state: GameState, command: Command): GameState {
     }
   };
   switch(command.type) {
-    case 'ADD':objects.push(sanitizeObject(p.object as Record<string,unknown>)); message='New object placed';break;
+    case 'ADD':{
+      const added=sanitizeObject(p.object as Record<string,unknown>);
+      if(isLooseAccessory(added)&&added.zone==='TABLE'){
+        const parent=cardAtPoint(objects,added.x,added.y,added.matSeat??0,added.id);
+        if(parent){
+          added.carrierId=parent.id;
+          if(parent.matSeat!==undefined)added.matSeat=parent.matSeat;
+        }else delete added.carrierId;
+      }
+      objects.push(added);message='New object placed';
+    }break;
     case 'MOVE': if(obj){
       const x=clamp(finite(p.x,obj.x),0,BOARD_W);
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
@@ -1476,7 +1486,18 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'ROTATE': if(obj){obj.rotation=((obj.rotation+finite(p.degrees,30))%360+360)%360;message=`Rotated ${obj.name}`;}break;
     case 'FLIP':if(obj){obj.faceUp=!obj.faceUp;message=`Flipped ${obj.name}`;}break;
     case 'DELETE':objects=objects.filter(o=>o.id!==p.id);message='Object removed';break;
-    case 'CLONE':if(obj){objects.push({...obj,id:textValue(p.newId||createId(),80),x:clamp(obj.x+45,0,BOARD_W),y:clamp(obj.y+40,0,BOARD_H)});message=`Duplicated ${obj.name}`;}break;
+    case 'CLONE':if(obj){
+      const clone={...obj,id:textValue(p.newId||createId(),80),
+        x:clamp(obj.x+45,0,BOARD_W),y:clamp(obj.y+40,0,BOARD_H)};
+      if(isLooseAccessory(clone)){
+        const carrier=cardAtPoint(objects,clone.x,clone.y,clone.matSeat??0,clone.id);
+        if(carrier){
+          clone.carrierId=carrier.id;
+          if(carrier.matSeat!==undefined)clone.matSeat=carrier.matSeat;
+        }else delete clone.carrierId;
+      }
+      objects.push(clone);message=`Duplicated ${obj.name}`;
+    }break;
     case 'ROLL':if(obj){const n=obj.sides||6;const rng=prng(finite(p.seed,1));obj.value=1+Math.floor(rng()*n);message=`Rolled ${obj.name}: ${obj.value}`;}break;
     case 'DRAW':{
       const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix))) &&
@@ -1585,7 +1606,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       propagate(parent);
       const oldParent=beforeById.get(parent.id);
       const oldChild=beforeById.get(child.id);
-      if(oldParent&&oldChild&&!movingIds.has(child.id)){
+      if(oldParent&&oldChild&&!movingIds.has(child.id)&&
+         (positionChanged(parent,oldParent)||
+          parent.rotation!==oldParent.rotation||
+          (parent.scale??1)!==(oldParent.scale??1))){
         // The point on the card scales and rotates about the carrier center,
         // while the accessory retains its own un-snapped local position.
         const delta=(parent.rotation-oldParent.rotation)*Math.PI/180;
