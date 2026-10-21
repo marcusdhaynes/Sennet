@@ -67,7 +67,8 @@ export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
 interface NumberedFace {normal:THREE.Vector3;value:number}
 function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
   group:THREE.Group):NumberedFace[]{
-  if(sides===2||sides===100)return [];
+  // Include D100 numerals on every small facet. The flip coin gets its
+  // own HEADS/TAILS marking on its two flat surfaces.
   const attr=geometry.getAttribute('position'),faces=new Map<string,{
     normal:THREE.Vector3;center:THREE.Vector3;count:number
   }>();
@@ -83,24 +84,47 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
     if(prev){prev.center.add(centroid);prev.count++;}
     else faces.set(key,{normal,center:centroid,count:1});
   }
+  if(sides===2){
+    const faces2=[{normal:new THREE.Vector3(0,0,1),value:1},
+      {normal:new THREE.Vector3(0,0,-1),value:2}];
+    for(const entry of faces2){
+      const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
+      const ctx=canvas.getContext('2d');if(!ctx)continue;
+      ctx.fillStyle='#fff6da';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='900 84px system-ui,sans-serif';
+      ctx.strokeStyle='#282b2c';ctx.lineWidth=6;
+      ctx.strokeText(entry.value===1?'H':'T',64,66);
+      ctx.fillText(entry.value===1?'H':'T',64,66);
+      const texture=new THREE.CanvasTexture(canvas);
+      const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,
+        depthWrite:false,side:THREE.DoubleSide});
+      const label=new THREE.Mesh(new THREE.PlaneGeometry(17,17),material);
+      label.position.set(0,0,entry.value===1?2.3:-2.3);
+      label.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),entry.normal);
+      label.renderOrder=3;group.add(label);
+    }
+    return faces2;
+  }
   const result:NumberedFace[]=[];
   let i=0;
   for(const face of faces.values()){
     const value=i%sides+1;i++;
     result.push({normal:face.normal,value});
-    if(sides===10&&i>20)break;
+    // Each outward-facing planar facet receives its own numeral.
     const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;
     const ctx=canvas.getContext('2d');
     if(!ctx)continue;
     ctx.clearRect(0,0,96,96);
-    ctx.fillStyle='#151a23';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font='900 58px system-ui,sans-serif';ctx.fillText(String(value),48,50);
-    ctx.strokeStyle='#f5e3bd';ctx.lineWidth=1.8;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='900 63px system-ui,sans-serif';
+    ctx.strokeStyle='#18282d';ctx.lineWidth=8;
     ctx.strokeText(String(value),48,50);
+    ctx.fillStyle='#fff5d2';ctx.fillText(String(value),48,50);
     const tex=new THREE.CanvasTexture(canvas);
     const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,
       side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
-    const label=new THREE.Mesh(new THREE.PlaneGeometry(sides===20?9:11,sides===20?9:11),mat);
+    const label=new THREE.Mesh(new THREE.PlaneGeometry(sides===100?4.6:sides===20?7.5:11,
+      sides===100?4.6:sides===20?7.5:11),mat);
     label.position.copy(face.center.divideScalar(face.count)).addScaledVector(face.normal,.8);
     label.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),face.normal);
     label.renderOrder=3;group.add(label);
@@ -160,7 +184,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   world.addContactMaterial(new CANNON.ContactMaterial(dieMat,wallMat,
     {friction:.43,restitution:.35}));
   world.addContactMaterial(new CANNON.ContactMaterial(dieMat,dieMat,
-    {friction:.36,restitution:.51}));
+    {friction:.30,restitution:.56}));
   const floor=new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:wallMat});
   world.addBody(floor);
   const z=78,wall=17;
@@ -215,12 +239,22 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       undefined,side===2?new CANNON.Quaternion().setFromAxisAngle(
         new CANNON.Vec3(1,0,0),Math.PI/2):undefined);
     let startX=source.x,startY=source.y;
-    // Emerge over the LEFT tray's inner edge, so solid wooden rims never
-    // trap a die born inside its storage pocket.
-    const leftTray=opts.trays[0];
-    if(leftTray&&startX>=leftTray.left-12&&startX<=leftTray.right+12&&
-       startY>=leftTray.top-12&&startY<=leftTray.bottom+12)
-      startX=leftTray.right+r+13;
+    // Spawn a mixed throw as a close but NON-intersecting cluster. Widely
+    // separated dice started in different storage slots rarely collided.
+    // These small staggered offsets give Cannon real die-to-die contacts.
+    if(opts.sources.length>1){
+      const meanX=opts.sources.reduce((n,s)=>n+s.x,0)/opts.sources.length;
+      const meanY=opts.sources.reduce((n,s)=>n+s.y,0)/opts.sources.length;
+      startX=meanX+(i%3-1)*37;
+      startY=meanY+Math.floor(i/3)*35-25;
+    }
+    // Spawn on the table side of any tray rim, not inside its walls.
+    for(const tray of opts.trays){
+      if(startX>=tray.left-r&&startX<=tray.right+r&&
+         startY>=tray.top-r&&startY<=tray.bottom+r){
+        startX=tray.right+r+13;
+      }
+    }
     const scatter=(i-(opts.sources.length-1)/2)*.18;
     const theta=Math.atan2(vy,vx)+scatter;
     body.position.set(THREE.MathUtils.clamp(startX,30,w-30),h-
@@ -233,7 +267,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     body.angularVelocity.set((Math.random()-.5)*24,(Math.random()-.5)*24,
       (Math.random()-.5)*23);
     world.addBody(body);scene.add(mesh);
-    const shadow=new THREE.Mesh(new THREE.PlaneGeometry(58,58),
+    const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
       new THREE.MeshBasicMaterial({map:shadowTex,transparent:true,opacity:.44,depthWrite:false}));
     shadow.position.z=.4;scene.add(shadow);
     objects.push({sides:side,quantity:source.quantity,mesh,body,faces,shadow});
