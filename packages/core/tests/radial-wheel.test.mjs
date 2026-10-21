@@ -261,3 +261,29 @@ test('Reveal exposes selected cards without toggling a face-up card back down',(
  const repeat=apply(shown,'reveal',ids.slice(0,3));
  assert.ok(ids.slice(0,3).every(id=>repeat.objects.find(o=>o.id===id)?.faceUp===true));
 });
+
+test('LCD left edge meets playmat; right edge touches wheel across zoom and pan',async()=>{
+  const {fitActionScreenToWheel}=await import('../../../apps/web/src/lib/actionScreenFit.ts');
+  const eq=(actual,expected,what)=>assert.ok(Math.abs(actual-expected)<1e-6,
+    what+': '+actual+' vs '+expected);
+  for(const zoom of [.25,.5,1,1.5,3]){
+    const panX=320,panelY=680+zoom*25;
+    const matLeft=panX-240*zoom,matRight=panX+240*zoom;
+    const wheelCenter=panX+25*zoom,wheelSize=144*zoom;
+    const radialLeft=wheelCenter-wheelSize/2;
+    const result=fitActionScreenToWheel(matLeft,matRight,wheelCenter,
+      wheelSize,panelY,zoom);
+    assert.equal(result.visible,true);
+    eq(result.left,matLeft,'LCD left edge at zoom '+zoom);
+    eq(result.left+result.width,radialLeft,'LCD touches wheel at zoom '+zoom);
+    eq(result.y,panelY,'LCD stays below mat');
+    eq(result.heightScale,zoom,'LCD height follows camera');
+    const reversed=fitActionScreenToWheel(matRight,matLeft,wheelCenter,
+      wheelSize,panelY,zoom);
+    eq(reversed.left,result.left,'reversed mat left edge');
+    eq(reversed.width,result.width,'reversed mat width');
+  }
+  const noRoom=fitActionScreenToWheel(200,600,195,80,700,1);
+  assert.equal(noRoom.visible,false);
+  assert.equal(noRoom.width,0);
+});
