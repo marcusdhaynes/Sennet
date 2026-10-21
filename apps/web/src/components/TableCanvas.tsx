@@ -1124,7 +1124,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
   const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
-  const [actionScreenGeometry,setActionScreenGeometry]=useState({x:0,y:0,width:250,visible:false});
+  const [actionScreenGeometry,setActionScreenGeometry]=useState({x:0,y:0,scale:1,visible:false});
   const [playerTagGeometry,setPlayerTagGeometry]=useState({x:0,y:0,scale:1,width:320,outward:'bottom' as 'top'|'bottom'|'left'|'right'});
 
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -1550,18 +1550,22 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           setDockGeometry(previous=>
             Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
             Math.abs(previous.size-next.size)<.35?previous:next);
-          // Track a wood-framed LCD in the narrow real screen-space strip
-          // between the left playmat edge and the left edge of the wheel.
-          const leftWorld=tcgMatWorld(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2,
-            seatRef.current);
-          const leftScreen=(duelLayers.current?.get(seatRef.current)??board)
-            .toGlobal(new Point(leftWorld.x,leftWorld.y));
-          const start=Math.min(leftScreen.x,projected.x-next.size/2)+5;
-          const end=Math.max(leftScreen.x,projected.x-next.size/2)-5;
-          const display={x:(start+end)/2,y:next.y-20,
-            width:Math.max(92,end-start),visible:Number.isFinite(start)};
-          setActionScreenGeometry(prev=>Math.abs(prev.x-display.x)<.35&&
-            Math.abs(prev.y-display.y)<.35&&Math.abs(prev.width-display.width)<.35&&
+          // Physically anchor the LCD beneath the bottom CENTER of the
+          // viewer's playmat, just like other tabletop objects. Its apparent
+          // size comes from the mat/camera transform, never screen width.
+          const parent=duelLayers.current?.get(seatRef.current)??board;
+          const panelY=TCG_MAT_HEIGHT/2+23;
+          const anchor=tcgMatWorld(0,panelY,seatRef.current);
+          const leftPoint=tcgMatWorld(-120,panelY,seatRef.current);
+          const rightPoint=tcgMatWorld(120,panelY,seatRef.current);
+          const screen=parent.toGlobal(new Point(anchor.x,anchor.y));
+          const l=parent.toGlobal(new Point(leftPoint.x,leftPoint.y));
+          const r=parent.toGlobal(new Point(rightPoint.x,rightPoint.y));
+          const lcdScale=Math.hypot(r.x-l.x,r.y-l.y)/240;
+          const display={x:screen.x,y:screen.y,scale:lcdScale,
+            visible:Number.isFinite(screen.x)&&lcdScale>0};
+          setActionScreenGeometry(prev=>Math.abs(prev.x-display.x)<.3&&
+            Math.abs(prev.y-display.y)<.3&&Math.abs(prev.scale-display.scale)<.001&&
             prev.visible===display.visible?prev:display);
         }
 
@@ -2984,7 +2988,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     {state.kind==='tcg'&&actionScreenGeometry.visible&&
       <div className="sennet-action-lcd" style={{
         left:actionScreenGeometry.x,top:actionScreenGeometry.y,
-        width:actionScreenGeometry.width
+        width:240,transform:`translate(-50%,-50%) scale(${actionScreenGeometry.scale})`
       }} role="group" aria-label="Latest action with undo and redo"
         onPointerDown={event=>event.stopPropagation()}>
         <button type="button" className="sennet-action-lcd-button"
