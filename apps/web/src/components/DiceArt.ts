@@ -73,12 +73,11 @@ export function makeDie(sides:number,result?:string,selected=0):Container{
   }
   root.addChild(g);
   if(result!==undefined){
-    root.addChild(new Graphics().roundRect(-14.7,-9.8,29.4,19.6,5)
-      .fill({color:0x17262c,alpha:.97})
-      .stroke({color:0xf9dfae,width:1.2}));
+    // The value is engraved over the facet. No square, plaque or
+    // rectangular background should ever appear below a die.
     const size=result.length>7?6.5:result.length>4?7.5:
       result.length>2?9:13.2;
-    const t=number(result,size,0xffeed0);t.position.y=-.4;root.addChild(t);
+    const t=number(result,size,0xfff8e5);t.position.y=-.4;root.addChild(t);
   }else{
     const t=number(sides===2?'⇅':String(sides),sides===100?10:13.2,
       sides===2?0x3e3527:0x21323c);
