@@ -6,6 +6,9 @@ import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import {formatActionDisplay} from './lib/actionDisplay';
 import {DEFAULT_COIN_APPEARANCE,type CoinAppearance,type CoinFinish} from './components/CoinArt';
+import {DICE_THEMES,DICE_SIDES,DEFAULT_DICE_APPEARANCE,
+  normalizeDiceAppearance,type DiceAppearance,type DiceThemeId,diceLabel}
+  from './lib/diceThemes';
 import TcgDeckBuilder from './components/TcgDeckBuilder';
 import type {SavedDeck} from './lib/deckWorkspace';
 import {tcgCardBack,cachedTcgCatalog} from './lib/tcgCatalog';
@@ -135,6 +138,10 @@ export default function App(){
         bevel:Math.max(0,Math.min(100,saved.bevel)),size:Math.max(.55,Math.min(1.3,saved.size))}
       :DEFAULT_COIN_APPEARANCE;
   }catch{return DEFAULT_COIN_APPEARANCE;}});
+  const [diceAppearance,setDiceAppearance]=useState<DiceAppearance>(()=>{
+    try{return normalizeDiceAppearance(JSON.parse(localStorage.getItem('sennet.dice.appearance.v1')||'null'));}
+    catch{return {...DEFAULT_DICE_APPEARANCE};}
+  });
   const [customCoinValue,setCustomCoinValue]=useState<number>(()=>{
     try{const saved=Number(localStorage.getItem('sennet.coin.custom.v1'));
       return Number.isInteger(saved)&&saved>=1&&saved<=9999?saved:1;
@@ -215,6 +222,7 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
+  useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
     try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
@@ -427,6 +435,7 @@ export default function App(){
             snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
+        diceAppearance={diceAppearance}
         coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
         onTokenPlace={(value,sign,x,y,carrierId,color)=>takeAction('TOKEN_PLACE',
           {value,sign,x,y,seat,...(carrierId?{carrierId}:{}),...(color?{color}:{})})}
@@ -585,6 +594,47 @@ export default function App(){
               </div>
               <div className="reader-block"><h3>Left tray · Dice &amp; flip coin</h3>
                 <p>Flip Coin, D04, D06, D08, D10, D12, D20 and D100 are permanent in the left box. Tap a die to select one, tap repeatedly to increase its count (maximum 20). Select different dice to combine them. Drag any selected die to throw the entire selection with natural motion, screen and tray wall rebounds, and collisions between the dice. Reaching 20 automatically throws the selection. Only one physical die of each type appears after a throw, but every selected roll is calculated and logged. The centered face displays the combined result; inspect a thrown die for its individual results.</p>
+              </div>
+              <div className="reader-block sennet-dice-appearance-settings">
+                <h3>Dice Appearance</h3>
+                <p>Choose the finish for every die and the flip coin. Styles use lightweight, procedurally rendered materials—no texture downloads. The same finish appears in the tray, during 3D rolls, and after landing.</p>
+                <div className="sennet-dice-theme-grid" role="group" aria-label="Dice designs">
+                  {DICE_THEMES.map(theme=>
+                    <button type="button" key={theme.id}
+                      className={'sennet-dice-theme-card'+(diceAppearance.all===theme.id?' selected':'')}
+                      aria-pressed={diceAppearance.all===theme.id}
+                      onClick={()=>setDiceAppearance(p=>({...p,all:theme.id}))}>
+                      <span className="sennet-dice-theme-preview" style={{
+                        background:`radial-gradient(circle at 26% 23%, ${theme.second}, ${theme.base} 57%, #161926 100%)`,
+                        borderColor:theme.edge,
+                        boxShadow:`inset -5px -6px 7px #0007,inset 3px 3px 5px #fff6,0 4px 10px #0006`,
+                        color:theme.ink
+                      }} aria-hidden="true">20</span>
+                      <span>{theme.name}</span>
+                    </button>)}
+                </div>
+                <h4>Individual die designs</h4>
+                <p>Optional overrides let each die have its own appearance. “Use set” follows the selected theme above.</p>
+                <div className="sennet-dice-per-die">
+                  {DICE_SIDES.map(sides=><label key={sides}>
+                    <span>{diceLabel(sides)}</span>
+                    <select aria-label={diceLabel(sides)+' appearance'}
+                      value={diceAppearance.overrides[String(sides)]??''}
+                      onChange={e=>setDiceAppearance(p=>{
+                        const overrides={...p.overrides};
+                        if(!e.target.value)delete overrides[String(sides)];
+                        else overrides[String(sides)]=e.target.value as DiceThemeId;
+                        return {...p,overrides};
+                      })}>
+                      <option value="">Use set</option>
+                      {DICE_THEMES.map(theme=><option value={theme.id} key={theme.id}>{theme.name}</option>)}
+                    </select>
+                  </label>)}
+                </div>
+                <button type="button" className="reader-secondary"
+                  onClick={()=>setDiceAppearance({all:DEFAULT_DICE_APPEARANCE.all,overrides:{}})}>
+                  Reset dice designs
+                </button>
               </div>
               <div className="reader-block"><h3>Token coins</h3>
                 <p>Two permanent coins live in the right drawer: the standard coin uses a ten-action radial (hold its center for 0.25 seconds), and Custom is exclusively for direct number entry. Drag either coin to make a copy. Hold the standard coin center again to collapse its radial. Side-drawer pull tabs hide and reveal each box. Drop a used die into either open box to erase it; the original die sources remain available.</p>
