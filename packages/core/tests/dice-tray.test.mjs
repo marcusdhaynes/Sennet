@@ -194,3 +194,24 @@ test('reroll respects original quantity and actual die face count',()=>{
   assert.throws(()=>mk([2,4,5]),/preserve the selected dice quantity/);
   assert.deepEqual(mk([9,13]).objects.find(o=>o.id==='rolled-throw-0').throwRolls,[9,13]);
 });
+
+test('Cannon 3D dice collide with each other and exchange x momentum',()=>{
+  const world=new CANNON.World({gravity:new CANNON.Vec3(0,0,0)});
+  const mat=new CANNON.Material('solid-die');
+  world.addContactMaterial(new CANNON.ContactMaterial(mat,mat,{
+    friction:.2,restitution:.7
+  }));
+  const geom=dieGeometry(6,16),shape=convexShape(geom);
+  const a=new CANNON.Body({mass:1,material:mat,linearDamping:0,angularDamping:0,
+    shape});
+  const b=new CANNON.Body({mass:1,material:mat,linearDamping:0,angularDamping:0,
+    shape});
+  a.position.set(-35,0,25);b.position.set(35,0,25);
+  a.velocity.set(80,0,0);b.velocity.set(-80,0,0);
+  world.addBody(a);world.addBody(b);
+  for(let i=0;i<120;i++)world.step(1/60);
+  assert.ok(a.velocity.x<0,'first die must rebound after impact');
+  assert.ok(b.velocity.x>0,'second die must rebound after impact');
+  assert.ok(b.position.x>a.position.x,'dice must stay physically separated');
+  geom.dispose();
+});
