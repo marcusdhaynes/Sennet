@@ -33,7 +33,9 @@ interface DieVisual {
 }
 export interface StaticDice3DRenderer {
   setEntries:(entries:StaticDiePlacement[])=>void;
-  sync:()=>void;
+  sync:(force?:boolean)=>void;
+  setSourceQuantity:(sides:number,quantity:number)=>void;
+  getRenderedRevision:()=>number;
   destroy:()=>void;
 }
 export function createStaticDice3D(
@@ -70,6 +72,7 @@ export function createStaticDice3D(
   const visuals:DieVisual[]=[];
   let entries:StaticDiePlacement[]=[];
   let stopped=false,lastFrame=0,w=0,h=0;
+  let entriesRevision=0,renderedRevision=0;
   const disposeGroup=(group:THREE.Group)=>{
     group.traverse(child=>{
       if(child instanceof THREE.Mesh||child instanceof THREE.LineSegments){
@@ -141,13 +144,15 @@ export function createStaticDice3D(
       }
       const q=e.quaternion??[0,0,0,1];
       visual.group.quaternion.set(...q);
-      if(!e.source&&e.quantity&&e.quantity>1&&e.result){
+      // A selected source's tiny count belongs DIRECTLY on the center of
+      // its real 3D die, never in a floating selection/roll panel.
+      if(e.source&&(e.quantity??0)>0){
         if(!visual.result){
           visual.result=document.createElement('span');
-          visual.result.className='sennet-dice-aggregate';
           host.appendChild(visual.result);
         }
-        visual.result.textContent='Σ '+e.result+'  ×'+e.quantity;
+        visual.result.className='sennet-dice-source-count';
+        visual.result.textContent=String(e.quantity);
       }else{
         visual.result?.remove();
         visual.result=undefined;
@@ -165,11 +170,12 @@ export function createStaticDice3D(
     }
     visuals.splice(0,visuals.length,...updated);
     entries=next;
+    entriesRevision++;
   };
-  const sync=()=>{
+  const sync=(force=false)=>{
     if(stopped)return;
     const now=performance.now();
-    if(now-lastFrame<28)return;
+    if(!force&&now-lastFrame<28)return;
     lastFrame=now;
     const rect=canvas.getBoundingClientRect();
     if(rect.width<=0||rect.height<=0)return;
@@ -237,10 +243,15 @@ export function createStaticDice3D(
         visual.result.style.display=opacity>0?'block':'none';
         visual.result.style.opacity=String(opacity);
         visual.result.style.left=x+'px';
-        visual.result.style.top=(y+20*sf)+'px';
+        visual.result.style.top=y+'px';
+        const counterSize=Math.max(10,Math.min(18,15*sf));
+        visual.result.style.width=counterSize+'px';
+        visual.result.style.height=counterSize+'px';
+        visual.result.style.fontSize=Math.max(8,Math.min(11,9.5*sf))+'px';
       }
     }
     renderer.render(scene,camera);
+    renderedRevision=entriesRevision;
   };
   const destroy=()=>{
     if(stopped)return;
@@ -248,5 +259,13 @@ export function createStaticDice3D(
     renderer.dispose();renderer.forceContextLoss();
     renderer.domElement.remove();
   };
-  return {setEntries,sync,destroy};
+  const setSourceQuantity=(sides:number,quantity:number)=>{
+    const id='source-'+sides;
+    const current=entries.find(e=>e.id===id);
+    if(!current||current.quantity===quantity)return;
+    setEntries(entries.map(e=>e.id===id?{...e,quantity}:e));
+    sync(true);
+  };
+  return {setEntries,sync,setSourceQuantity,
+    getRenderedRevision:()=>renderedRevision,destroy};
 }
