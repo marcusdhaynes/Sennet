@@ -1643,6 +1643,31 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false);
+      if(obj.throwDice){
+        // A display-only DOM die is drawn over imported card art, exactly
+        // like the coin layer. Pixi still handles picking and movement.
+        const rolls=obj.throwRolls??[],heads=rolls.filter(n=>n===1).length;
+        const display=obj.sides===2?(rolls.length===1?(heads?'H':'T'):
+          heads+'H/'+(rolls.length-heads)+'T'):
+          String(obj.throwTotal??obj.value??1);
+        const overlay=document.createElement('div');
+        overlay.className='sennet-rolled-die-above-card';
+        overlay.dataset.sides=String(obj.sides??6);
+        overlay.title=obj.description??obj.name;
+        const face=document.createElement('span');
+        face.className='sennet-rolled-die-center';
+        face.textContent=display;
+        face.style.fontSize=display.length>6?'6px':display.length>4?'7px':
+          display.length>2?'9px':'13px';
+        overlay.appendChild(face);
+        if((obj.throwQuantity??1)>1){
+          const count=document.createElement('small');
+          count.textContent='×'+obj.throwQuantity;
+          overlay.appendChild(count);
+        }
+        mount.current?.appendChild(overlay);
+        coinLayers.push({piece,el:overlay});
+      }
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=220;
