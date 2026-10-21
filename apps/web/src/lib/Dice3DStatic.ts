@@ -4,7 +4,8 @@
  * settled quaternion exactly when the throw finishes. */
 import * as THREE from 'three';
 import type {Container} from 'pixi.js';
-import {createDie3DModel} from './Dice3DGeometry';
+import {createDie3DModel,radiusFor} from './Dice3DGeometry';
+import {diceToCssTransform} from './diceCoordinates';
 import type {DiceThemeId} from './diceThemes';
 
 export interface StaticDiePlacement {
@@ -32,7 +33,10 @@ export interface StaticDice3DRenderer {
   sync:()=>void;
   destroy:()=>void;
 }
-export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):StaticDice3DRenderer{
+export function createStaticDice3D(
+  host:HTMLElement,canvas:HTMLCanvasElement,
+  pixiSize:()=>{width:number;height:number}
+):StaticDice3DRenderer{
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,
     powerPreference:'low-power',premultipliedAlpha:false});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.8));
@@ -174,7 +178,12 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
       camera.position.set(w/2,h/2,1100);camera.lookAt(w/2,h/2,0);
       camera.updateProjectionMatrix();
     }
-    const xScale=w/canvas.width,yScale=h/canvas.height;
+    // Pixi's stage coordinates are LOGICAL renderer pixels. canvas.width
+    // and canvas.height are GPU backing pixels (multiplied by device DPR).
+    // Mixing them displaced every die and shrank it on high-DPI displays.
+    const logical=pixiSize();
+    const transform=diceToCssTransform(w,h,logical.width,logical.height);
+    const xScale=transform.x,yScale=transform.y;
     for(let i=0;i<visuals.length;i++){
       const visual=visuals[i],entry=entries[i];
       // Sliding drawers can hide their entire subtree. A child may still
@@ -194,11 +203,16 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
       const edge=visual.piece.toGlobal({x:1,y:0});
       const scale=Math.hypot(edge.x-p.x,edge.y-p.y)*Math.max(xScale,yScale);
       const x=p.x*xScale,y=p.y*yScale;
-      const sf=Math.max(.15,Math.min(4,scale));
-      visual.group.position.set(x,h-y,24*sf);
+      // One unchanging size in physical TABLE units for each tray die;
+      // the Pixi camera provides the ONLY view-dependent scaling.
+      // The compact rack copy is smaller than a die resting on the board,
+      // so two polyhedra fit comfortably in the original narrow drawer.
+      const rackScale=entry.source?.62:1;
+      const sf=scale*rackScale;
+      visual.group.position.set(x,h-y,radiusFor(entry.sides)*sf);
       visual.group.scale.setScalar(sf);
       visual.group.visible=true;
-      visual.shadow.position.set(x,h-y,1);
+      visual.shadow.position.set(x,h-y,.4);
       visual.shadow.scale.setScalar(sf);
       visual.shadow.visible=true;
       if(visual.result){
