@@ -6,7 +6,7 @@ import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
 export {dieGeometry,createDie3DModel} from './Dice3DGeometry.ts';
 import * as CANNON from 'cannon-es';
 
-export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;themeId?:DiceThemeId}
+export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;scale?:number;themeId?:DiceThemeId}
 const rand=(max:number)=>{
   const word=new Uint32Array(1),limit=Math.floor(4294967296/max)*max;
   do{crypto.getRandomValues(word);}while(word[0]>=limit);
@@ -17,6 +17,8 @@ export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rot
 export interface Dice3DOptions {
   host:HTMLElement;width:number;height:number;
   sources:Dice3DSource[];aimX:number;aimY:number;durationMs:number;
+  /** A picked-up die must launch at the pointer, not be pushed out of a source tray. */
+  reroll?:boolean;
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
 }
@@ -111,7 +113,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     ctx.fillStyle=g;ctx.fillRect(0,0,64,64);}
   const shadowTex=new THREE.CanvasTexture(shadowCanvas);
   for(let i=0;i<opts.sources.length;i++){
-    const source=opts.sources[i],side=source.sides,r=radiusFor(side);
+    const source=opts.sources[i],side=source.sides,
+      r=radiusFor(side)*Math.max(.08,Math.min(4,source.scale??1));
     const {group:mesh,geometry:geom,faces}=createDie3DModel(side,r,source.themeId??DEFAULT_DICE_THEME);
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
       material:dieMat,linearDamping:.13,angularDamping:.14,
@@ -124,14 +127,14 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     // Spawn a mixed throw as a close but NON-intersecting cluster. Widely
     // separated dice started in different storage slots rarely collided.
     // These small staggered offsets give Cannon real die-to-die contacts.
-    if(opts.sources.length>1){
+    if(!opts.reroll&&opts.sources.length>1){
       const meanX=opts.sources.reduce((n,s)=>n+s.x,0)/opts.sources.length;
       const meanY=opts.sources.reduce((n,s)=>n+s.y,0)/opts.sources.length;
       startX=meanX+(i%3-1)*37;
       startY=meanY+Math.floor(i/3)*35-25;
     }
     // Spawn on the table side of any tray rim, not inside its walls.
-    for(const tray of opts.trays){
+    for(const tray of opts.reroll?[]:opts.trays){
       if(startX>=tray.left-r&&startX<=tray.right+r&&
          startY>=tray.top-r&&startY<=tray.bottom+r){
         startX=tray.right+r+13;
@@ -139,8 +142,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     }
     const scatter=(i-(opts.sources.length-1)/2)*.18;
     const theta=Math.atan2(vy,vx)+scatter;
-    body.position.set(THREE.MathUtils.clamp(startX,30,w-30),h-
-      THREE.MathUtils.clamp(startY,30,h-30),65+i*7);
+    body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
+      THREE.MathUtils.clamp(startY,r+2,h-r-2),Math.max(r+6,42*(source.scale??1))+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
     body.velocity.set(Math.cos(theta)*throwSpeed*(.85+Math.random()*.26),
