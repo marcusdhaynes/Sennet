@@ -1953,7 +1953,26 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           if(e.button!==0)return;
           e.stopPropagation();
           cancelActiveDrag.current();
-          if(obj.throwDice)rerollPointer.current={pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY};
+          if(obj.throwDice){
+            if(obj.locked||obj.owner&&obj.owner!==actorId)return;
+            const old=rerollPointer.current;
+            if(old)window.clearTimeout(old.timer);
+            const held={
+              pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY,
+              lastX:e.clientX,lastY:e.clientY,at:performance.now(),
+              held:false,timer:0,piece,oldX:piece.x,oldY:piece.y
+            };
+            held.timer=window.setTimeout(()=>{
+              if(rerollPointer.current!==held)return;
+              held.held=true;
+              piece.cursor='grabbing';
+              // Physics starts only on release. Until then the actual
+              // tabletop die follows the mouse under the 3D renderer.
+            },diceHoldMs);
+            rerollPointer.current=held;
+            controlPointer.current=e.pointerId;
+            return; // Never enter generic card dragging or selection logic.
+          }
           const local=piece.toLocal(e.global);
           const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*1.08);
           if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
@@ -2097,21 +2116,53 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   },[]);
 
   useEffect(()=>{
-    const release=(e:PointerEvent)=>{
-      const tap=rerollPointer.current;
-      if(!tap||tap.pointerId!==e.pointerId)return;
-      rerollPointer.current=null;
-      if(e.type!=='pointerup'||Math.hypot(tap.x-e.clientX,tap.y-e.clientY)>9)return;
-      // A tap is a deliberate reroll. Never trigger a card-wheel drag,
-      // clone a die, or reroll its former value without animation.
-      cancelActiveDrag.current();
-      rerollDieNow.current(tap.id);
+    const move=(e:PointerEvent)=>{
+      const active=rerollPointer.current;
+      if(!active||active.pointerId!==e.pointerId)return;
+      active.lastX=e.clientX;active.lastY=e.clientY;
+      if(!active.held)return;
+      const current=session.current,piece=active.piece;
+      if(!current||piece.destroyed||!piece.parent)return;
+      const rect=current.app.canvas.getBoundingClientRect();
+      if(rect.width<=0||rect.height<=0)return;
+      const stagePoint=new Point(
+        (e.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (e.clientY-rect.top)*current.app.renderer.height/rect.height);
+      const local=piece.parent.toLocal(stagePoint,current.app.stage);
+      // The model center itself remains exactly at the pointer.
+      piece.position.set(local.x,local.y);
+      staticDice3D.current?.sync();
     };
+    const release=(e:PointerEvent)=>{
+      const active=rerollPointer.current;
+      if(!active||active.pointerId!==e.pointerId)return;
+      rerollPointer.current=null;
+      window.clearTimeout(active.timer);
+      if(controlPointer.current===e.pointerId)controlPointer.current=null;
+      if(!active.piece.destroyed){
+        active.piece.cursor='pointer';
+        active.piece.position.set(active.oldX,active.oldY);
+      }
+      if(e.type!=='pointerup')return;
+      if(!active.held){
+        // A single quick click repeats the existing result bubble.
+        showRollBubble.current(active.id);
+        return;
+      }
+      const elapsed=Math.max(80,performance.now()-active.at);
+      const dx=e.clientX-active.x,dy=e.clientY-active.y;
+      rerollDieNow.current(active.id,e.clientX,e.clientY,dx,dy,elapsed);
+    };
+    window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',release);
     window.addEventListener('pointercancel',release);
-    return()=>{window.removeEventListener('pointerup',release);
-      window.removeEventListener('pointercancel',release);};
+    return()=>{
+      window.removeEventListener('pointermove',move);
+      window.removeEventListener('pointerup',release);
+      window.removeEventListener('pointercancel',release);
+    };
   },[]);
+
 
   // A source is immutable: only a transient ghost travels with the pointer.
   // Commit one deterministic TOKEN_PLACE or TOKEN_ADJUST event on release.
