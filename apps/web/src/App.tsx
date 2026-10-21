@@ -130,7 +130,7 @@ export default function App(){
     return saved&&['polished','brushed','matte','enamel'].includes(saved.finish)&&
       Number.isFinite(saved.shine)&&Number.isFinite(saved.bevel)&&Number.isFinite(saved.size)
       ?{finish:saved.finish,shine:Math.max(0,Math.min(100,saved.shine)),
-        bevel:Math.max(0,Math.min(100,saved.bevel)),size:Math.max(.7,Math.min(1.3,saved.size))}
+        bevel:Math.max(0,Math.min(100,saved.bevel)),size:Math.max(.55,Math.min(1.3,saved.size))}
       :DEFAULT_COIN_APPEARANCE;
   }catch{return DEFAULT_COIN_APPEARANCE;}});
   const [customCoinValue,setCustomCoinValue]=useState<number>(()=>{
@@ -405,7 +405,10 @@ export default function App(){
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
-        onTokenPlace={(value,sign,x,y,carrierId)=>takeAction('TOKEN_PLACE',{value,sign,x,y,seat,...(carrierId?{carrierId}:{})})}
+        onTokenPlace={(value,sign,x,y,carrierId,color)=>takeAction('TOKEN_PLACE',
+          {value,sign,x,y,seat,...(carrierId?{carrierId}:{}),...(color?{color}:{})})}
+        onCoinModify={(id,changes)=>takeAction('COIN_MODIFY',{id,...changes})}
+        onCoinDuplicate={id=>takeAction('CLONE',{id,newId:createId()})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
         onDiceThrow={throws=>takeAction('THROW_TRAY',{seat,throws})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
@@ -553,7 +556,7 @@ export default function App(){
                 <p>Flip Coin, D04, D06, D08, D10, D12, D20 and D100 are permanent in the left box. Tap a die to select one, tap repeatedly to increase its count (maximum 20). Select different dice to combine them. Drag any selected die to throw the entire selection with natural motion, screen and tray wall rebounds, and collisions between the dice. Reaching 20 automatically throws the selection. Only one physical die of each type appears after a throw, but every selected roll is calculated and logged. The centered face displays the combined result; inspect a thrown die for its individual results.</p>
               </div>
               <div className="reader-block"><h3>Token coins</h3>
-                <p>Six stationary generators are staggered in the right wooden box. Drag the + or − half to make a copy, or select cards and tap either half to apply that amount. Tap Custom's center number to edit it. Dropping a copy into the right box returns it to its source.</p>
+                <p>Six stationary generators are staggered in the right wooden box. Drag the + or − half to make a copy, or select cards and tap either half to apply that amount. Hold the center number for 0.25 seconds to open its ten-part coin radial: duplicate, add/subtract 1/10/100/1000 and choose its color. A quick tap on Custom's number opens direct editing. The radial works on loose copies too.</p>
                 <label>Custom coin number<input type="number" min={1} max={9999} step={1} value={customCoinValue}
                   onChange={e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=9999)setCustomCoinValue(n);}}/></label>
                 <label>Finish<select value={coinAppearance.finish}
@@ -565,7 +568,7 @@ export default function App(){
                   value={coinAppearance.shine} onChange={e=>setCoinAppearance(p=>({...p,shine:Number(e.target.value)}))}/></label>
                 <label>Rim depth — {coinAppearance.bevel}%<input type="range" min={0} max={100} step={5}
                   value={coinAppearance.bevel} onChange={e=>setCoinAppearance(p=>({...p,bevel:Number(e.target.value)}))}/></label>
-                <label>Coin size — {Math.round(coinAppearance.size*100)}%<input type="range" min={.7} max={1.3} step={.05}
+                <label>Coin size — {Math.round(coinAppearance.size*100)}%<input type="range" min={.55} max={1.3} step={.05}
                   value={coinAppearance.size} onChange={e=>setCoinAppearance(p=>({...p,size:Number(e.target.value)}))}/></label>
                 <button className="reader-secondary" onClick={()=>setCoinAppearance(DEFAULT_COIN_APPEARANCE)}>Restore coin appearance</button>
               </div><PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
