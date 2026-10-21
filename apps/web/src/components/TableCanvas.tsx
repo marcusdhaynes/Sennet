@@ -28,7 +28,7 @@ import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}[])=>void;
+interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number])=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
@@ -1080,7 +1080,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
@@ -1111,8 +1111,15 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
   const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const diceThrowCallback=useRef(onDiceThrow);diceThrowCallback.current=onDiceThrow;
   const diceRerollCallback=useRef(onDiceReroll);diceRerollCallback.current=onDiceReroll;
-  const rerollPointer=useRef<{pointerId:number;id:string;x:number;y:number}|null>(null);
-  const rerollDieNow=useRef<(id:string)=>void>(()=>{});
+  const rerollPointer=useRef<{
+    pointerId:number;id:string;x:number;y:number;lastX:number;lastY:number;
+    at:number;held:boolean;timer:number;piece:Container;
+    oldX:number;oldY:number
+  }|null>(null);
+  const rerollDieNow=useRef<(id:string,x:number,y:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
+  const dieShownAt=useRef(new Map<string,{fingerprint:string;at:number}>());
+  const rollBubbles=useRef(new Map<string,{node:HTMLDivElement;timer:number}>());
+  const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
@@ -1343,7 +1350,11 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
     const sources=types.map(sides=>{
       const p=diceSources.current.get(sides)?.toGlobal(new Point(0,0))??
         mat.toGlobal(new Point(-distance,top+40));
-      return {sides,quantity:selected[sides],themeId:resolveDiceTheme(diceAppearance,sides),...convert(p)};
+      const origin=diceSources.current.get(sides);
+      const edge=origin?.toGlobal(new Point(1,0))??new Point(p.x+1,p.y);
+      const scale=Math.hypot(edge.x-p.x,edge.y-p.y)*Math.max(sx,sy);
+      return {sides,quantity:selected[sides],
+        scale,themeId:resolveDiceTheme(diceAppearance,sides),...convert(p)};
     });
     const obstacles=[...visuals.current.entries()].filter(([id])=>{
       const obj=currentState.current.objects.find(o=>o.id===id);
@@ -1386,7 +1397,7 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
     });
     void origin;
   };
-  rerollDieNow.current=id=>{
+  rerollDieNow.current=(id,cursorX,cursorY,dx,dy,elapsed)=>{
     if(dice3DActive.current)return;
     const current=session.current,host=mount.current;
     const die=currentState.current.objects.find(o=>o.id===id);
@@ -1396,7 +1407,11 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
     if(rect.width<=0||rect.height<=0)return;
     const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
     const pos=visual.toGlobal(new Point(0,0));
-    const start={x:pos.x*sx,y:pos.y*sy};
+    // Screen-space cursor release is authoritative; never use the die's
+    // old position or an arbitrary center-of-screen destination.
+    const start={x:cursorX-rect.left,y:cursorY-rect.top};
+    const edge=visual.toGlobal(new Point(1,0));
+    const scale=Math.hypot(edge.x-pos.x,edge.y-pos.y)*Math.max(sx,sy);
     const origin=tcgMatOrigin(seatRef.current);
     const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
     const distance=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
@@ -1426,9 +1441,9 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
       try{
         const stop=roll3DDice({host,width:rect.width,height:rect.height,
           sources:[{sides:die.sides??6,quantity:die.throwQuantity??1,
-            themeId:resolveDiceTheme(diceAppearance,die.sides??6),...start}],
-          aimX:Math.abs(rect.width/2-start.x)>25?(rect.width/2-start.x)*.8:145,
-          aimY:(rect.height/2-start.y)*.6-25,durationMs:220,trays,obstacles,
+            themeId:resolveDiceTheme(diceAppearance,die.sides??6),scale,...start}],
+          aimX:dx,aimY:dy,durationMs:elapsed,
+          reroll:true,trays,obstacles,
           done:results=>{
             dice3DActive.current=false;dice3DStop.current=null;
             if(session.current?.app!==app)return;
@@ -1684,7 +1699,7 @@ export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,
         const face=makeDie(sides,undefined,badge);
         source.addChild(face);
         const name=label(diceLabel(sides),8,0xffedbe,'bold');
-        name.position.set(0,24);
+        name.position.set(0,18);
         source.addChild(name);
         // Live-updated badge is a separate child so click counting does
         // not create a new scene or interrupt another piece's drag.
