@@ -26,7 +26,7 @@ import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}[])=>void;
+interface Props{latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number])=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
@@ -1078,7 +1078,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
@@ -1115,6 +1115,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
   const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
+  const [actionScreenGeometry,setActionScreenGeometry]=useState({x:0,y:0,width:250,visible:false});
   const [playerTagGeometry,setPlayerTagGeometry]=useState({x:0,y:0,scale:1,width:320,outward:'bottom' as 'top'|'bottom'|'left'|'right'});
 
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -1506,6 +1507,19 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           setDockGeometry(previous=>
             Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
             Math.abs(previous.size-next.size)<.35?previous:next);
+          // Track a wood-framed LCD in the narrow real screen-space strip
+          // between the left playmat edge and the left edge of the wheel.
+          const leftWorld=tcgMatWorld(-TCG_MAT_WIDTH/2,TCG_MAT_HEIGHT/2,
+            seatRef.current);
+          const leftScreen=(duelLayers.current?.get(seatRef.current)??board)
+            .toGlobal(new Point(leftWorld.x,leftWorld.y));
+          const start=Math.min(leftScreen.x,projected.x-next.size/2)+5;
+          const end=Math.max(leftScreen.x,projected.x-next.size/2)-5;
+          const display={x:(start+end)/2,y:next.y-20,
+            width:Math.max(92,end-start),visible:Number.isFinite(start)};
+          setActionScreenGeometry(prev=>Math.abs(prev.x-display.x)<.35&&
+            Math.abs(prev.y-display.y)<.35&&Math.abs(prev.width-display.width)<.35&&
+            prev.visible===display.visible?prev:display);
         }
 
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
@@ -2820,6 +2834,23 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         if(e.key==='Escape')setCoinEditing(null);
       }}/>}
 
+    {state.kind==='tcg'&&actionScreenGeometry.visible&&
+      <div className="sennet-action-lcd" style={{
+        left:actionScreenGeometry.x,top:actionScreenGeometry.y,
+        width:actionScreenGeometry.width
+      }} role="group" aria-label="Latest action with undo and redo"
+        onPointerDown={event=>event.stopPropagation()}>
+        <button type="button" className="sennet-action-lcd-button"
+          onClick={onUndo} disabled={!canUndo}
+          aria-label="Undo last action" title="Undo">↶</button>
+        <div className="sennet-action-lcd-display" role="status"
+          aria-live="polite" title={latestAction}>
+          <span>{latestAction}</span>
+        </div>
+        <button type="button" className="sennet-action-lcd-button"
+          onClick={onRedo} disabled={!canRedo}
+          aria-label="Redo last undone action" title="Redo">↷</button>
+      </div>}
     {state.kind==='tcg'&&!readonly&&Object.values(diceQuantities).some(n=>n>0)&&
       <div className="sennet-dice-selection" onPointerDown={e=>e.stopPropagation()}>
         <strong>{DICE_TYPES.filter(s=>diceQuantities[s]).map(s=>diceLabel(s)+' ×'+diceQuantities[s]).join(' · ')}</strong>
