@@ -23,7 +23,7 @@ import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {diceRackLocations} from '../lib/diceCoordinates';
-import {fitActionScreenToWheel} from '../lib/actionScreenFit';
+import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
@@ -1584,7 +1584,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           // leftmost point of the docked half-radial. Recalculate both using
           // the same Pixi camera transform on every zoom/pan/seat change.
           const parent=duelLayers.current?.get(seatRef.current)??board;
-          const panelY=TCG_MAT_HEIGHT/2+23;
+          const panelY=actionScreenContactCenter(TCG_MAT_HEIGHT);
           const matLeft=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
           const matRight=tcgMatWorld(TCG_MAT_WIDTH/2,panelY,seatRef.current);
           const anchor=tcgMatWorld(0,panelY,seatRef.current);
@@ -3063,7 +3063,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         onPointerDown={event=>event.stopPropagation()}>
         <button type="button" className="sennet-action-lcd-button"
           onClick={onUndo} disabled={!canUndo}
-          aria-label="Undo last action" title="Undo">↶</button>
+          aria-label="Undo last action" title="Undo">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"
+            stroke="currentColor" strokeWidth="2.15" strokeLinecap="round"
+            strokeLinejoin="round" aria-hidden="true">
+            <path d="M9 14 4 9l5-5"/>
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+          </svg>
+        </button>
         <div className="sennet-action-lcd-display" role="status"
           aria-live="polite" title={selectionReadout||latestAction}>
           <span>{selectionReadout||latestAction}</span>
@@ -3073,7 +3080,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             if(die!==undefined)throwDiceNow.current(die,0,0,240);}}>ROLL</button>}
         <button type="button" className="sennet-action-lcd-button"
           onClick={onRedo} disabled={!canRedo}
-          aria-label="Redo last undone action" title="Redo">↷</button>
+          aria-label="Redo last undone action" title="Redo">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none"
+            stroke="currentColor" strokeWidth="2.15" strokeLinecap="round"
+            strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 14 5-5-5-5"/>
+            <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>
+          </svg>
+        </button>
       </div>}
 
     {dice3DError&&<div className="sennet-dice-engine-error" role="alert">
