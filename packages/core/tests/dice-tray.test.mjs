@@ -157,3 +157,40 @@ test('actual 3D rigid bodies tumble in quaternion space and collide with a floor
   assert.ok(die.position.z>=0,'solid table constrains downward penetration');
   mesh.dispose();
 });
+
+test('reroll updates the SAME physical die and its center numeral, never clones it',()=>{
+  const original=createGame('tcg');
+  const card=original.objects.find(o=>o.id==='hero-a');
+  const thrown=applyCommand(original,command('first-roll',[
+    {sides:6,rolls:[1,2,3],x:card.x+7,y:card.y-12,rotation:0},
+    {sides:2,rolls:[1],x:card.x+90,y:card.y+60,rotation:0}
+  ]));
+  const die=thrown.objects.find(o=>o.id==='first-roll-throw-0');
+  assert.ok(die);
+  assert.equal(die.throwTotal,6);
+  const reroll={id:'again',type:'REROLL_DIE',actor:'local',
+    payload:{id:die.id,rolls:[6,6,5],x:card.x+14.25,
+      y:card.y-8.5,rotation:47}};
+  const result=applyCommand(thrown,reroll);
+  assert.equal(result.objects.length,thrown.objects.length);
+  const updated=result.objects.find(o=>o.id===die.id);
+  assert.deepEqual(updated.throwRolls,[6,6,5]);
+  assert.equal(updated.throwTotal,17);
+  assert.equal(updated.value,17);
+  assert.equal(updated.throwQuantity,3);
+  assert.equal(updated.rotation,47);
+  assert.equal(updated.carrierId,card.id);
+  assert.equal(updated.x,card.x+14.25);
+  assert.deepEqual(result,replay(thrown,[reroll]));
+  assert.ok(result.message.includes('Rerolled D06 ×3 = 17'));
+});
+test('reroll respects original quantity and actual die face count',()=>{
+  const start=applyCommand(createGame('tcg'),
+    command('rolled',[{sides:20,rolls:[19,20],x:2200,y:2100,rotation:0}]));
+  const mk=rolls=>applyCommand(start,{id:'reroll',type:'REROLL_DIE',actor:'local',
+    payload:{id:'rolled-throw-0',rolls,x:2100,y:2000,rotation:15}});
+  assert.throws(()=>mk([19]),/preserve the selected dice quantity/);
+  assert.throws(()=>mk([7,21]),/preserve the selected dice quantity/);
+  assert.throws(()=>mk([2,4,5]),/preserve the selected dice quantity/);
+  assert.deepEqual(mk([9,13]).objects.find(o=>o.id==='rolled-throw-0').throwRolls,[9,13]);
+});
