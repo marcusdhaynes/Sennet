@@ -2,7 +2,7 @@ import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
-import {createDrawerBody,createDrawerHandle} from './RealisticSideDrawer';
+import {createDrawerBody} from './RealisticSideDrawer';
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
@@ -234,18 +234,33 @@ function drawTcgMats(
         drawerGroup.addChild(tray);
         mat.addChild(drawerGroup);
         drawerGroups.set(side,drawerGroup);
-        const isClosed=side===-1?drawerState.left:drawerState.right;
-        const pull=new Container();
-        pull.eventMode='static';pull.cursor='pointer';
-        pull.hitArea=new Rectangle(-20,-15,40,30);
-        // Sculpted inset cast-metal pull with actual highlights and screws.
-        // Keep a generous hit area even when the drawer is fully tucked in.
-        const hardware=createDrawerHandle(side as -1|1,isClosed,woodFinish);
-        hardware.eventMode='none';pull.addChild(hardware);
-        pull.position.set(side*(TCG_MAT_WIDTH/2+trayW+16),cy);
-        pull.on('pointerdown',e=>{e.stopPropagation();onControlDown(e.pointerId);});
-        pull.on('pointertap',e=>{e.stopPropagation();onToggleDrawer(side as -1|1);});
-        mat.addChild(pull);drawerTabs.set(side,pull);
+        // The drawer slides UNDER the mat. Only the genuine outer wooden
+        // sidewall remains uncovered (~10 tabletop units) when fully shut.
+        // A stencil clips everything else behind the playmat, including
+        // the dice, coins, and the book. No handles or separate controls.
+        const mask=new Graphics();
+        const clipX=side===1?TCG_MAT_WIDTH/2:-TCG_MAT_WIDTH/2-180;
+        mask.rect(clipX,-TCG_MAT_HEIGHT/2-25,180,TCG_MAT_HEIGHT+50)
+          .fill(0xffffff);
+        mask.eventMode='none';
+        mat.addChild(mask);
+        drawerGroup.mask=mask;
+        const bodyOuterX=cx+side*(trayW+24)/2;
+        const wall=new Graphics().rect(bodyOuterX-7,
+          cy-trayH/2-8,14,trayH+16).fill({color:0xffffff,alpha:.001});
+        // This is the EXISTING outer wall: clicking it opens/closes the
+        // drawer, while its wood grain remains the only visible artwork.
+        wall.eventMode='static';
+        wall.cursor='pointer';
+        wall.on('pointerdown',e=>{
+          e.stopPropagation();onControlDown(e.pointerId);
+        });
+        wall.on('pointertap',e=>{
+          e.stopPropagation();onToggleDrawer(side as -1|1);
+        });
+        drawerGroup.addChild(wall);
+        drawerTabs.set(side,wall);
+
       }
     }
     if(seat===viewerSeat){
@@ -1868,30 +1883,28 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         });
       });
     }
-    // Drawer body, sources and book are one Pixi group. Animate its entire
-    // translation; the tab alone remains visible when fully tucked away.
+    // Slide actual contents behind the stationary mat stencil. The
+    // outermost wall stays exposed and clickable even when closed.
     for(const side of [-1,1]){
-      const body=drawerGroups.current.get(side),tab=drawerTabs.current.get(side);
-      if(!body||!tab)continue;
+      const body=drawerGroups.current.get(side);
+      if(!body)continue;
       const closed=side===-1?boxClosed.left:boxClosed.right;
       const wasClosed=side===-1?lastBoxClosed.current.left:lastBoxClosed.current.right;
-      const shift=-side*(TCG_MAT.cardWidth+16);
-      const outer=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth+16);
-      const inner=side*(TCG_MAT_WIDTH/2+8);
+      // Drawer artwork is trayW + 24 wide, starts 3 units off the mat,
+      // and extends 77 units out. Retract 67 => a 10-unit wooden lip.
+      const shift=-side*(TCG_MAT.cardWidth+5);
       if(closed===wasClosed){
-        body.position.x=closed?shift:0;body.visible=!closed;
-        tab.position.x=closed?inner:outer;
+        body.position.x=closed?shift:0;
       }else{
         const start=performance.now(),duration=245;
-        body.visible=true;body.position.x=wasClosed?shift:0;
-        tab.position.x=wasClosed?inner:outer;
+        body.position.x=wasClosed?shift:0;
         const animate=(now:number)=>{
-          if(body.destroyed||tab.destroyed)return;
-          const t=Math.min(1,(now-start)/duration),ease=1-Math.pow(1-t,3);
-          body.position.x=(wasClosed?shift:0)+((closed?shift:0)-(wasClosed?shift:0))*ease;
-          tab.position.x=(wasClosed?inner:outer)+((closed?inner:outer)-(wasClosed?inner:outer))*ease;
+          if(body.destroyed)return;
+          const t=Math.min(1,(now-start)/duration);
+          const ease=1-Math.pow(1-t,3);
+          body.position.x=(wasClosed?shift:0)+
+            ((closed?shift:0)-(wasClosed?shift:0))*ease;
           if(t<1)animations.current.push(requestAnimationFrame(animate));
-          else body.visible=!closed;
         };
         animations.current.push(requestAnimationFrame(animate));
       }
