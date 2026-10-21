@@ -636,16 +636,25 @@ test('unmerged spaces always snap and appearance defaults are independent and no
   assert.equal(safe.snapMerged,false);
 });
 
-test('TCG card, token, miniature and die pieces snap to unmerged mat spaces',()=>{
+test('TCG cards/tiles snap to mat slots, loose pieces preserve exact drop locations',()=>{
   const state=createGame('tcg');
   const cell=tcgMatCells(0).find(c=>c.row===1&&c.column===2);
-  for(const kind of ['card','token','miniature','die','tile','deck']){
+  for(const kind of ['card','tile','deck']){
     const obj={id:'snap-test',kind,name:'Snap Test',x:1000,y:1000,
       rotation:0,faceUp:true,color:'#eeeeee',zone:'TABLE',order:200};
     const start={...state,objects:[...state.objects,obj]};
     const moved=applyCommand(start,c('MOVE',{id:'snap-test',x:cell.x+4,y:cell.y-7})).objects.find(o=>o.id==='snap-test');
     assert.equal(moved.matSeat,0,kind+' should occupy selected mat');
     assert.ok(Math.hypot(moved.x-cell.x,moved.y-cell.y)<1e-6,kind+' should snap to slot center');
+  }
+  for(const kind of ['token','miniature','die','marker']){
+    const obj={id:'free-piece',kind,name:'Free Piece',x:1000,y:1000,
+      rotation:0,faceUp:true,color:'#eeeeee',zone:'TABLE',order:200};
+    const start={...state,objects:[...state.objects,obj]};
+    const x=cell.x+4.37,y=cell.y-7.19;
+    const moved=applyCommand(start,c('MOVE',{id:'free-piece',x,y})).objects.find(o=>o.id==='free-piece');
+    assert.equal(moved.x,x,kind+' should retain exact X');
+    assert.equal(moved.y,y,kind+' should retain exact Y');
   }
 });
 
