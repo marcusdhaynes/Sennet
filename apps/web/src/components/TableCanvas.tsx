@@ -1231,6 +1231,20 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       sprites.push(die);
     });
     diceFlying.current=sprites;
+    // Previously landed dice and coins are real, immovable obstacles for
+    // the current throw. Source generators remain permanently in their trays.
+    const settled=Array.from(visuals.current.entries())
+      .filter(([id])=>{
+        const obj=currentState.current.objects.find(o=>o.id===id);
+        return !!obj&&(obj.throwDice||obj.tokenCoin||obj.kind==='die');
+      }).slice(-40).map(([,piece])=>{
+        const p=piece.toGlobal(new Point(0,0));
+        return {x:p.x,y:p.y};
+      });
+    const fixedBodies:DiceBody[]=settled.map(p=>({
+      x:p.x,y:p.y,vx:0,vy:0,z:0,vz:0,angle:0,spin:0,
+      radius:15,mass:1e9,leftTrayExited:true,fixed:true
+    }));
     let elapsedTime=0,previous=performance.now(),accumulator=0;
     const finish=()=>{
       diceThrowAnimation.current=null;
@@ -1256,7 +1270,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       previous=now;elapsedTime+=dt;accumulator+=dt;
       let cycles=0;
       while(accumulator>=1/60&&cycles++<6){
-        stepDicePhysics(bodies,1/60,app.renderer.width,app.renderer.height,trayRects);
+        stepDicePhysics([...bodies,...fixedBodies],1/60,
+          app.renderer.width,app.renderer.height,trayRects);
         accumulator-=1/60;
       }
       bodies.forEach((b,index)=>{
