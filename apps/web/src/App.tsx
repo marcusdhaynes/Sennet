@@ -1,9 +1,10 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
+import {DEFAULT_COIN_APPEARANCE,type CoinAppearance,type CoinFinish} from './components/CoinArt';
 import TcgDeckBuilder from './components/TcgDeckBuilder';
 import type {SavedDeck} from './lib/deckWorkspace';
 import {tcgCardBack,cachedTcgCatalog} from './lib/tcgCatalog';
@@ -109,6 +110,9 @@ export default function App(){
   useEffect(()=>{localStorage.setItem('sennet.book.design',bookDesign)},[bookDesign]);
   useEffect(()=>{localStorage.setItem('sennet.book.dock.v2',bookDock)},[bookDock]);
   useEffect(()=>{localStorage.setItem('sennet.book.offset.v2',JSON.stringify(bookOffset))},[bookOffset]);
+  // Token appearance and the Custom generator are independent user preferences.
+  // Physical coin copies live in the normal replayable game state instead.
+
 
   const [tcgStudioOpen,setTcgStudioOpen]=useState(false);
   const [gamesPage,setGamesPage]=useState<GamePage>('all');
@@ -121,6 +125,19 @@ export default function App(){
   // can never be loaded as the default for another player identity.
   const actor=useMemo(localActor,[]);
   const [playmat,setPlaymat]=useState<PlaymatAppearance>(()=>storedPlaymatAppearance(actor));
+  const [coinAppearance,setCoinAppearance]=useState<CoinAppearance>(()=>{try{
+    const saved=JSON.parse(localStorage.getItem('sennet.coin.appearance.v1')||'null');
+    return saved&&['polished','brushed','matte','enamel'].includes(saved.finish)&&
+      Number.isFinite(saved.shine)&&Number.isFinite(saved.bevel)&&Number.isFinite(saved.size)
+      ?{finish:saved.finish,shine:Math.max(0,Math.min(100,saved.shine)),
+        bevel:Math.max(0,Math.min(100,saved.bevel)),size:Math.max(.7,Math.min(1.3,saved.size))}
+      :DEFAULT_COIN_APPEARANCE;
+  }catch{return DEFAULT_COIN_APPEARANCE;}});
+  const [customCoinValue,setCustomCoinValue]=useState<number>(()=>{
+    try{const saved=Number(localStorage.getItem('sennet.coin.custom.v1'));
+      return Number.isInteger(saved)&&saved>=1&&saved<=9999?saved:1;
+    }catch{return 1;}
+  });
   const [notice,setNotice]=useState('');
   const [search,setSearch]=useState('');
   const [packs,setPacks]=useState<GamePack[]>(getPacks);
@@ -193,6 +210,8 @@ export default function App(){
   }
   useEffect(()=>()=>connection.current?.close(),[]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
+  useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
+  useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
     try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
@@ -385,6 +404,9 @@ export default function App(){
             snapMerged:playmat.snapMerged,snapMergedSeat:seat});
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
+        coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
+        onTokenPlace={(value,sign,x,y,carrierId)=>takeAction('TOKEN_PLACE',{value,sign,x,y,seat,...(carrierId?{carrierId}:{})})}
+        onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
@@ -393,8 +415,16 @@ export default function App(){
         }}
         onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
-          if(old&&Math.hypot(old.x-x,old.y-y)>=2)
+          if(old&&Math.hypot(old.x-x,old.y-y)>=2){
+            const local=tcgMatLocal(x,y,seat);
+            const right=TCG_MAT_WIDTH/2+3;
+            const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+            if(old.tokenCoin&&local.x>=right&&local.x<=right+TCG_MAT.cardWidth&&
+              local.y>=top&&local.y<=TCG_MAT_HEIGHT/2){
+              takeAction('DELETE',{id});return;
+            }
             takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+          }
         }} readonly={replayAt!==null}/>
     </div>
     {actionLogOpen&&<aside className="sennet-action-log" aria-label="Table action history">
@@ -517,6 +547,23 @@ export default function App(){
                   <option value="ebony">Ebony</option>
                   <option value="mahogany">Mahogany</option>
                 </select>
+              </div>
+              <div className="reader-block"><h3>Token coins</h3>
+                <p>Six stationary generators are staggered in the right wooden box. Drag the + or − half to make a copy, or select cards and tap either half to apply that amount. Tap Custom's center number to edit it. Dropping a copy into the right box returns it to its source.</p>
+                <label>Custom coin number<input type="number" min={1} max={9999} step={1} value={customCoinValue}
+                  onChange={e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=9999)setCustomCoinValue(n);}}/></label>
+                <label>Finish<select value={coinAppearance.finish}
+                  onChange={e=>setCoinAppearance(p=>({...p,finish:e.target.value as CoinFinish}))}>
+                  <option value="polished">Polished metal</option><option value="brushed">Brushed metal</option>
+                  <option value="matte">Antique matte</option><option value="enamel">Lacquered enamel</option>
+                </select></label>
+                <label>Shine — {coinAppearance.shine}%<input type="range" min={0} max={100} step={5}
+                  value={coinAppearance.shine} onChange={e=>setCoinAppearance(p=>({...p,shine:Number(e.target.value)}))}/></label>
+                <label>Rim depth — {coinAppearance.bevel}%<input type="range" min={0} max={100} step={5}
+                  value={coinAppearance.bevel} onChange={e=>setCoinAppearance(p=>({...p,bevel:Number(e.target.value)}))}/></label>
+                <label>Coin size — {Math.round(coinAppearance.size*100)}%<input type="range" min={.7} max={1.3} step={.05}
+                  value={coinAppearance.size} onChange={e=>setCoinAppearance(p=>({...p,size:Number(e.target.value)}))}/></label>
+                <button className="reader-secondary" onClick={()=>setCoinAppearance(DEFAULT_COIN_APPEARANCE)}>Restore coin appearance</button>
               </div><PlaymatEditor appearance={playmat} setAppearance={setPlaymat}
                 merges={viewedGame.centerMerges??[]} seat={seat} inform={inform}/>
               <div className="reader-block">
