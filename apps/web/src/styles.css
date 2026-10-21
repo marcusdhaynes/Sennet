@@ -1594,3 +1594,45 @@ body>.reader-backdrop{
 .sennet-coin-radial-center-hold:focus-visible{outline:2px solid #ffe6ad;outline-offset:1px}
 .sennet-coin-above-card-number{min-width:18px;min-height:18px;padding:1px 2px;
   line-height:1.1}
+
+/* Table-integrated action chronometer: bronze walnut casing, crisp digital
+   glass readout, tactile undo/redo. Anchored to the real playmat geometry. */
+.sennet-action-lcd{
+  position:absolute;transform:translate(-50%,-50%);z-index:81;
+  display:grid;grid-template-columns:24px minmax(0,1fr) 24px;gap:3px;
+  align-items:center;box-sizing:border-box;padding:5px 6px;
+  min-width:92px;max-width:min(480px,88vw);height:47px;
+  border:2px solid #a17a45;border-radius:8px;
+  box-shadow:0 3px 6px #030b08b3,inset 0 1px 1px #e0bf7c66,
+    inset 0 -2px 3px #0b0e0bc9;
+  background:linear-gradient(150deg,#684b30,#39291e 40%,#241e19 85%,#725536);
+  pointer-events:auto;isolation:isolate;
+}
+.sennet-action-lcd-display{
+  min-width:0;height:33px;display:flex;align-items:center;
+  overflow-x:auto;overflow-y:hidden;border-radius:4px;
+  padding:2px 7px;box-sizing:border-box;scrollbar-width:thin;
+  border:1px solid #142e28;
+  background:linear-gradient(165deg,#061b19,#092725 60%,#081e1d);
+  box-shadow:inset 0 2px 6px #020907de,0 1px 0 #ceb58255;
+  color:#aaffcf;font:700 11px/1.22 ui-monospace,'Cascadia Code',monospace;
+  text-shadow:0 0 5px #4cffa45c;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.sennet-action-lcd-display span{white-space:nowrap;display:block}
+.sennet-action-lcd-button{
+  border-radius:5px;border:1px solid #95754c;
+  width:24px;height:29px;padding:0;cursor:pointer;
+  background:linear-gradient(145deg,#8d6940,#483626);
+  color:#f4deba;font:700 17px/1 system-ui,sans-serif;
+  box-shadow:inset 0 1px #fde7b655,0 1px 2px #000a;
+}
+.sennet-action-lcd-button:not(:disabled):hover{
+  background:#bb975f;color:#1e2a22
+}
+.sennet-action-lcd-button:disabled{
+  opacity:.35;cursor:not-allowed;filter:saturate(.35)
+}
+.sennet-action-lcd-button:focus-visible{
+  outline:2px solid #a7fbd8;outline-offset:2px
+}
