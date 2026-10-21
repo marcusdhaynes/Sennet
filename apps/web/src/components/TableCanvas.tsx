@@ -1944,7 +1944,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     const move=(e:PointerEvent)=>{
       // A pointer moving into a drag must never accidentally activate the radial.
       const h=coinHold.current,d=drag.current;
-      if(h&&d?.pointerId===e.pointerId&&d.moved){
+      if(h&&h.pointerId===e.pointerId&&
+        (Math.hypot(e.clientX-h.startX,e.clientY-h.startY)>8||
+        (d?.pointerId===e.pointerId&&d.moved))){
         window.clearTimeout(h.timer);coinHold.current=null;
       }
     };
@@ -2627,7 +2629,10 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     {dice3DError&&<div className="sennet-dice-engine-error" role="alert">
       {dice3DError}<button onClick={()=>setDice3DError(null)}>Dismiss</button>
     </div>}
-    {coinMenu&&<div className="sennet-coin-radial-layer" onPointerDown={e=>e.stopPropagation()}>
+    {coinMenu&&<div className="sennet-coin-radial-layer" onPointerDown={e=>{
+      if(e.target===e.currentTarget){setCoinMenu(null);setCoinColorsOpen(false);}
+      e.stopPropagation();
+    }}>
       <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
         <svg viewBox="0 0 248 248" role="group" aria-label="Coin action radial">
           {COIN_ACTIONS.map((action,i)=>{
