@@ -179,7 +179,7 @@ test('card-zone changes preserve the physical coin association',()=>{
 test('newly added and duplicated accessories determine attachment by their center',()=>{
   let state=createGame('tcg');
   const card=state.objects.find(o=>o.id==='hero-a');
-  const where=pointOn(card,20,15);
+  const where=pointOn(card,-20,-30);
   state=action(state,'ADD',{object:{id:'new-die',kind:'die',name:'New die',
     ...where,rotation:0,faceUp:true,color:'#ffffff',zone:'TABLE',order:900
   }},'new-die-add');
