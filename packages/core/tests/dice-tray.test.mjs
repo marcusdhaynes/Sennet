@@ -286,3 +286,29 @@ test('the original 8 dice source models stay in the two-column wooden drawer',as
     }
   }
 });
+
+test('the LCD shows an evolving mixed-dice count without a floating dialog',async()=>{
+  const {formatDiceSelection}=await import('../../../apps/web/src/lib/actionDisplay.ts');
+  assert.equal(formatDiceSelection({}),'');
+  assert.equal(formatDiceSelection({8:2}),'Roll · 2D8');
+  assert.equal(formatDiceSelection({20:3,8:2,2:1,100:4}),
+    'Roll · 1Flip + 2D8 + 3D20 + 4D100');
+  assert.equal(formatDiceSelection({6:20,10:1}),'Roll · 20D6 + 1D10');
+});
+test('rolling and resting polyhedra scale uniformly including flip-coin thickness',()=>{
+  // The rolling engine builds a full-size mesh in CSS pixels; the static
+  // renderer builds the exact same mesh at its base size then scales it.
+  // Each geometric dimension must therefore scale by the same factor.
+  for(const sides of [2,4,6,8,10,12,20,100]){
+    const base=dieGeometry(sides,13.7);
+    const bigger=dieGeometry(sides,13.7*1.4);
+    base.computeBoundingBox();bigger.computeBoundingBox();
+    const a=base.boundingBox,b=bigger.boundingBox;
+    for(const axis of ['x','y','z']){
+      const original=a.max[axis]-a.min[axis];
+      const scaled=b.max[axis]-b.min[axis];
+      near(scaled/original,1.4,'D'+sides+' '+axis+' scale');
+    }
+    base.dispose();bigger.dispose();
+  }
+});
