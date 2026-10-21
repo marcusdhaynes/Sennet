@@ -204,3 +204,22 @@ test('rotating an attached coin on its own does not get cancelled by its carrier
   near(coin.y,where.y,'self rotation Y');
   assert.equal(coin.carrierId,card.id);
 });
+
+test('rotating a card and its already-selected coin together applies one rotation',()=>{
+  let state=createGame('tcg');
+  const card=state.objects.find(o=>o.id==='hero-a');
+  const offset=pointOn(card,12,15);
+  state=action(state,'TOKEN_PLACE',{seat:0,value:20,sign:1,
+    ...offset,carrierId:card.id},'paired-coin');
+  state=action(state,'BATCH_CARD_ACTION',{
+    ids:[card.id,'paired-coin-coin'],action:'rotate-cw'
+  },'rotate-pair');
+  const child=state.objects.find(o=>o.id==='paired-coin-coin');
+  const rotated=state.objects.find(o=>o.id===card.id);
+  assert.equal(rotated.rotation,45);
+  assert.equal(child.rotation,45,'coin rotates exactly once, not twice');
+  const expected=pointOn(rotated,12,15);
+  near(child.x,expected.x,'group rotate X');
+  near(child.y,expected.y,'group rotate Y');
+  assert.equal(child.carrierId,card.id);
+});
