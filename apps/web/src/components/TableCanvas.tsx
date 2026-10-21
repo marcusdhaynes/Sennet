@@ -1206,7 +1206,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       const i=m.index;
       if(i!==1){setCoinMenu(null);return;}
       const value=coinSources.values[0]??10;
-      const color=coinSources.colors[i]??'#d8b979';
+      const color=coinSources.colors[0]??'#d8b979';
       if(index===0){
         const point=tcgMatWorld(0,
           -TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap+35+i*20,seat);
