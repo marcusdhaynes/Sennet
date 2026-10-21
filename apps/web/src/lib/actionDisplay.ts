@@ -56,3 +56,11 @@ export function formatActionDisplay(event:EventRecord,_initial:GameState,history
     .filter(x=>typeof x==='string'||typeof x==='number').map(String);
   return action+(suffix.length?' · '+suffix.join(' · '):'');
 }
+
+/** Compact live selection for the integrated LCD, never a floating dialog. */
+export function formatDiceSelection(counts:Readonly<Record<number,number>>):string{
+  const names=[2,4,6,8,10,12,20,100] as const;
+  const tokens=names.filter(sides=>(counts[sides]??0)>0)
+    .map(sides=>String(counts[sides])+(sides===2?'Flip':'D'+sides));
+  return tokens.length?'Roll · '+tokens.join(' + '):'';
+}
