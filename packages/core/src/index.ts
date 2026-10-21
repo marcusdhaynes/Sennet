@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number];
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -1013,7 +1013,9 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
         input.throwRolls.slice(0,20).map(v=>Math.floor(finite(v,1))):[],
       throwQuantity:clamp(Math.floor(finite(input.throwQuantity,1)),1,20),
       throwTotal:clamp(Math.floor(finite(input.throwTotal,1)),0,2000),
-      ...(validThrowQuaternion(input.throwQuaternion)?{throwQuaternion:input.throwQuaternion as [number,number,number,number]}:{})
+      ...(validThrowQuaternion(input.throwQuaternion)?{throwQuaternion:input.throwQuaternion as [number,number,number,number]}:{}),
+      ...(typeof input.throwAltitude==='number'&&Number.isFinite(input.throwAltitude)?
+        {throwAltitude:clamp(input.throwAltitude,0,500)}:{})
     }:{}),
     ...(frameUrls?.length?{frameUrls}:{}),
     ...(safeUrl(input.faceUrl)?{faceUrl:safeUrl(input.faceUrl)}:{}),
@@ -1128,6 +1130,10 @@ export function validateCommand(state: GameState, command: Command): string | nu
        !Number.isFinite(command.payload.rotation))return 'Invalid reroll landing';
     if(command.payload.quaternion!==undefined&&!validThrowQuaternion(command.payload.quaternion))
       return 'Invalid 3D die orientation';
+    if(command.payload.altitude!==undefined&&
+       (typeof command.payload.altitude!=='number'||!Number.isFinite(command.payload.altitude)||
+        Number(command.payload.altitude)<0||Number(command.payload.altitude)>500))
+      return 'Invalid die resting height';
   }
   if(command.type==='COIN_MODIFY'){
     if(!target?.tokenCoin)return 'Only physical coins can be modified';
@@ -1165,6 +1171,9 @@ export function validateCommand(state: GameState, command: Command): string | nu
       if(typeof t.rotation!=='number'||!Number.isFinite(t.rotation))return 'Invalid die rotation';
       if(t.quaternion!==undefined&&!validThrowQuaternion(t.quaternion))
         return 'Invalid 3D die orientation';
+      if(t.altitude!==undefined&&
+         (typeof t.altitude!=='number'||!Number.isFinite(t.altitude)||t.altitude<0||t.altitude>500))
+        return 'Invalid die resting height';
     }
     if(state.objects.length+throws.length>1000)return 'Maximum objects reached';
   }
@@ -1489,7 +1498,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
     }break;
     case 'THROW_TRAY':{
-      const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}>;
+      const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}>;
       const summaries:string[]=[];
       for(let i=0;i<thrown.length;i++){
         const toss=thrown[i],isCoin=toss.sides===2;
@@ -1506,6 +1515,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
           throwRolls:toss.rolls,throwQuantity:toss.rolls.length,throwTotal:total,
           sides:toss.sides,value:isCoin?(heads?1:2):Math.min(100,total),
           ...(toss.quaternion?{throwQuaternion:toss.quaternion}:{}),
+          ...(toss.altitude!==undefined?{throwAltitude:toss.altitude}:{}),
           name:label,x:toss.x,y:toss.y,rotation:toss.rotation,
           zone:'TABLE',order:objects.length+100,faceUp:true,
           color:isCoin?'#d5b87f':'#b9c6b9',matSeat:carrier?.matSeat??Number(p.seat),
@@ -1525,6 +1535,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
       obj.x=Number(p.x);obj.y=Number(p.y);
       obj.rotation=((Number(p.rotation)%360)+360)%360;
       if(validThrowQuaternion(p.quaternion))obj.throwQuaternion=p.quaternion;
+      if(typeof p.altitude==='number'&&Number.isFinite(p.altitude))
+        obj.throwAltitude=clamp(p.altitude,0,500);
       const face=obj.sides===2?(rolls.length===1?(heads?'HEADS':'TAILS'):
         heads+'H / '+(rolls.length-heads)+'T'):String(total);
       obj.description=obj.name+' × '+rolls.length+': '+rolls.join(', ')+' → '+face;
