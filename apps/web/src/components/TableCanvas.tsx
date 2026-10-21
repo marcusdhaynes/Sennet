@@ -1460,10 +1460,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     }).slice(-70).map(([,piece])=>toScreen(piece.toGlobal(new Point(0,0))));
     const parent=visual.parent??board;
     dice3DActive.current=true;setDice3DError(null);
-    visual.visible=false;
+    // Hide the old mesh only once airborne physics is initialized.
     import('../lib/Dice3D').then(({roll3DDice})=>{
       if(session.current?.app!==app){dice3DActive.current=false;return;}
       try{
+        visual.visible=false;
         const stop=roll3DDice({host,width:rect.width,height:rect.height,
           sources:[{sides:die.sides??6,quantity:die.throwQuantity??1,
             themeId:resolveDiceTheme(diceAppearance,die.sides??6),scale,...start}],
@@ -1473,6 +1474,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             dice3DActive.current=false;dice3DStop.current=null;
             if(session.current?.app!==app)return;
             const result=results[0];
+            dieShownAt.current.set(id,{fingerprint:'reroll-in-progress',at:Date.now()});
             const at=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
             diceRerollCallback.current(id,result.rolls,
               Math.max(0,Math.min(BOARD_W,at.x)),
@@ -1482,12 +1484,15 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           }});
         dice3DStop.current=stop;
       }catch(error){
-        dice3DActive.current=false;dice3DStop.current=null;visual.visible=true;
+        dice3DActive.current=false;dice3DStop.current=null;
+        visual.position.set(die.x,die.y);visual.visible=true;
         setDice3DError('3D reroll unavailable: '+String(error));
       }
     }).catch(error=>{
       dice3DActive.current=false;dice3DStop.current=null;
-      if(!visual.destroyed)visual.visible=true;
+      if(!visual.destroyed){
+        visual.position.set(die.x,die.y);visual.visible=true;
+      }
       setDice3DError('3D reroll unavailable: '+String(error));
     });
   };
@@ -2205,7 +2210,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(controlPointer.current===e.pointerId)controlPointer.current=null;
       if(!active.piece.destroyed){
         active.piece.cursor='pointer';
-        active.piece.position.set(active.oldX,active.oldY);
+        // Keep the held 3D die right at the release cursor until its
+        // airborne renderer takes ownership. Restoring the old position
+        // here caused the very visible jerk before each reroll.
+        if(!active.held)active.piece.position.set(active.oldX,active.oldY);
       }
       if(e.type!=='pointerup')return;
       if(!active.held){
