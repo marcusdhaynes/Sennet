@@ -45,7 +45,7 @@ function tenSidedGeometry(radius:number):THREE.BufferGeometry{
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
   g.computeVertexNormals();return g;
 }
-function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
+export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
   switch(sides){
     case 2:{
       const g=new THREE.CylinderGeometry(r,r,4,32,1);
@@ -103,7 +103,7 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
   }
   return result;
 }
-function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
+export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
   const attr=geom.getAttribute('position');
   const vertices:CANNON.Vec3[]=[],indices=new Map<string,number>(),faces:number[][]=[];
   for(let i=0;i+2<attr.count;i+=3){
