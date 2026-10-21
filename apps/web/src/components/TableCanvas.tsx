@@ -1256,8 +1256,19 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     const deckTop=new Map<string,TableObject>();
     for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))
       if(!deckTop.has(pileKey(o)))deckTop.set(pileKey(o),o);
-    const visible=state.objects.filter(o=>o.zone!=='DECK'||
-      deckTop.get(pileKey(o))?.id===o.id);
+    const byId=new Map(state.objects.map(o=>[o.id,o]));
+    const visible=state.objects.filter(o=>{
+      // Carried tokens remain attached to cards in hands and decks, but a
+      // hidden carrier must never leave floating coins exposed on the table.
+      let ancestor=o;
+      for(let n=0;ancestor.carrierId&&n<state.objects.length;n++){
+        const parent=byId.get(ancestor.carrierId);
+        if(!parent||parent.zone==='DECK'||(parent.zone==='HAND'&&
+          parent.owner!==actorId&&parent.owner!=='local'))return false;
+        ancestor=parent;
+      }
+      return o.zone!=='DECK'||deckTop.get(pileKey(o))?.id===o.id;
+    });
     // Draw lower stack-order cards first, so a wheel Shuffle visibly
     // changes which overlapping card sits on top, without disrupting
     // object ordering elsewhere on the table.
@@ -1603,7 +1614,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       if(!parent)return;
       const spot=parent.toLocal(at,current.app.stage);
       callbacks.current.onTokenPlace(d.value,d.sign,
-        Math.round(spot.x),Math.round(spot.y),target?.id);
+        spot.x,spot.y,target?.id);
     };
     const move=(event:PointerEvent)=>{
       const d=tokenDrag.current,at=coordinates(event);
@@ -1694,7 +1705,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         if(hint.parent!==parent)parent.addChild(hint);
         hint.clear();hint.removeChildren().forEach(child=>child.destroy());
         const cardScale=currentState.current.objects.find(o=>o.id===d.id)?.scale??1;
-        const cell=d.card&&currentKind.current==='tcg'?tcgSnapPoint(
+        const dragged=currentState.current.objects.find(o=>o.id===d.id);
+        const magnetic=dragged&&['card','deck','tile'].includes(dragged.kind);
+        const cell=magnetic&&currentKind.current==='tcg'?tcgSnapPoint(
           d.x,d.y,currentState.current.centerMerges,
           playmatRef.current.snapMerged,seatRef.current,cardScale):null;
         if(cell){
@@ -1767,7 +1780,12 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         callbacks.current.onMoveStack(d.id,Math.round(d.x),Math.round(d.y));
       }else{
         oldLocations.current.set(d.id,{x:d.x,y:d.y});
-        callbacks.current.onMove(d.id,Math.round(d.x),Math.round(d.y));
+        // Accessories land exactly beneath their center, with no rounding
+        // to a slot or nearby anchor.
+        const object=currentState.current.objects.find(o=>o.id===d.id);
+        const exact=object&&['token','marker','die','miniature'].includes(object.kind);
+        callbacks.current.onMove(d.id,
+          exact?d.x:Math.round(d.x),exact?d.y:Math.round(d.y));
       }
     };
     const cancel=(event:PointerEvent)=>{
