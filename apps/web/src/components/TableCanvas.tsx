@@ -1081,7 +1081,6 @@ type EyeView={
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
-  const selectedRef=useRef(selected);selectedRef.current=selected;
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
   const [boxClosed,setBoxClosed]=useState<{left:boolean;right:boolean}>(()=>{
