@@ -887,7 +887,16 @@ function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearanc
 }
 function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
-  const shadow=new Graphics().ellipse(4,o.tokenCoin?7:13,o.tokenCoin?15:33,o.tokenCoin?6:12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
+  // Diffuse overhead contact shading, not the old oversized oval/rectangle.
+  const shadow=new Graphics();
+  if(o.kind==='die'){
+    shadow.ellipse(0,5,14,6).fill({color:0x010b0a,alpha:.17});
+    shadow.ellipse(0,5,10,3.8).fill({color:0x020b09,alpha:.11});
+  }else{
+    shadow.ellipse(3,o.tokenCoin?3:13,o.tokenCoin?7:33,o.tokenCoin?3.3:12)
+      .fill({color:0x050c0b,alpha:o.tokenCoin?.14:.32});
+  }
+  shadow.eventMode='none';box.addChild(shadow);
   if(o.tokenCoin){
     box.hitArea=new Circle(0,0,17*coinStyle.size*.41);
     box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1,o.color));
@@ -1756,7 +1765,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         const overlay=document.createElement('div');
         overlay.className='sennet-rolled-die-above-card';
         overlay.dataset.sides=String(obj.sides??6);
-        overlay.title=obj.description??obj.name;
+        overlay.title='Tap to reroll · '+(obj.description??obj.name);
         const face=document.createElement('span');
         face.className='sennet-rolled-die-center';
         face.textContent=display;
