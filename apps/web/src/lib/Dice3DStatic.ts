@@ -4,11 +4,13 @@
  * settled quaternion exactly when the throw finishes. */
 import * as THREE from 'three';
 import type {Container} from 'pixi.js';
-import {createDie3DModel} from './Dice3D';
+import {createDie3DModel} from './Dice3DGeometry';
+import type {DiceThemeId} from './diceThemes';
 
 export interface StaticDiePlacement {
   piece:Container;
   sides:number;
+  themeId?:DiceThemeId;
   quaternion?:[number,number,number,number];
   quantity?:number;
   result?:string;
@@ -88,7 +90,7 @@ export function createStaticDice3D(host:HTMLElement,canvas:HTMLCanvasElement):St
     clear();
     entries=next;
     for(const e of entries){
-      const {group}=createDie3DModel(e.sides);
+      const {group}=createDie3DModel(e.sides,undefined,e.themeId);
       const q=e.quaternion??[0,0,0,1];
       group.quaternion.set(...q);
       scene.add(group);
