@@ -3005,8 +3005,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     {state.kind==='tcg'&&actionScreenGeometry.visible&&
       <div className="sennet-action-lcd" style={{
         left:actionScreenGeometry.left,top:actionScreenGeometry.y,
-        width:actionScreenGeometry.width,
-        transform:`translateY(-50%) scaleY(${actionScreenGeometry.heightScale})`
+        width:actionScreenGeometry.width/Math.max(.0001,actionScreenGeometry.heightScale),
+        transformOrigin:'left center',
+        transform:`translateY(-50%) scale(${actionScreenGeometry.heightScale})`
       }} role="group" aria-label="Latest action with undo and redo"
         onPointerDown={event=>event.stopPropagation()}>
         <button type="button" className="sennet-action-lcd-button"
