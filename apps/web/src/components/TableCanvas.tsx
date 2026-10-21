@@ -2,6 +2,7 @@ import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
+import {createDrawerBody,createDrawerHandle} from './RealisticSideDrawer';
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
@@ -221,34 +222,13 @@ function drawTcgMats(
       const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
       const trayBottom=TCG_MAT_HEIGHT/2;
       const trayH=trayBottom-trayTop;
-      const finishes={
-        walnut:[0x34251d,0x6b4830,0x120e0d,0xb68a59],
-        carved:[0x765033,0xaf8050,0x3c2330,0xe3bf83],
-        maple:[0xb88551,0xe0ba80,0x715037,0xf2d6a4],
-        ebony:[0x15191a,0x383335,0x090d0e,0x907b71],
-        mahogany:[0x4b201d,0x883c31,0x240f13,0xc88164]
-      } as const;
-      const [wood,rim,well,shine]=finishes[playmat.sideBoxStyle??'walnut'];
+      const woodFinish=playmat.sideBoxStyle??'walnut';
       for(const side of [-1,1]){
         const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=(trayTop+trayBottom)/2;
-        const tray=new Graphics()
-          .roundRect(cx-trayW/2-4,cy-trayH/2-5,trayW+8,trayH+10,7)
-          .fill({color:wood}).stroke({color:shine,width:1.6})
-          .roundRect(cx-trayW/2,cy-trayH/2,trayW,trayH,4)
-          .fill({color:rim})
-          .roundRect(cx-trayW/2+7,cy-trayH/2+7,trayW-14,trayH-14,3)
-          .fill({color:well}).stroke({color:0x08090a,width:2})
-          .moveTo(cx-trayW/2+5,cy-trayH/2+5)
-          .lineTo(cx+trayW/2-5,cy-trayH/2+5)
-          .stroke({color:shine,width:2,alpha:.72});
-        if(playmat.sideBoxStyle==='carved'){
-          for(let i=0;i<6;i++){
-            const y=cy-trayH/2+16+i*(trayH-32)/5;
-            tray.moveTo(cx-trayW/2+2,y).lineTo(cx-trayW/2+6,y+5)
-              .moveTo(cx+trayW/2-2,y).lineTo(cx+trayW/2-6,y+5)
-              .stroke({color:shine,width:1,alpha:.8});
-          }
-        }
+        // High-resolution wood, hand-worked chamfers, brass corner pins,
+        // recessed velvet, and stable baked light/shadow. The drawer remains
+        // one Pixi object in the SAME tabletop coordinate system as cards.
+        const tray=createDrawerBody(cx,cy,trayW,trayH,woodFinish);
         const drawerGroup=new Container();
         drawerGroup.eventMode='auto';
         drawerGroup.addChild(tray);
@@ -257,18 +237,11 @@ function drawTcgMats(
         const isClosed=side===-1?drawerState.left:drawerState.right;
         const pull=new Container();
         pull.eventMode='static';pull.cursor='pointer';
-        pull.hitArea=new Rectangle(-11,-27,22,54);
-        const pullArt=new Graphics()
-          .roundRect(-9,-24,18,48,6).fill({color:wood})
-          .stroke({color:shine,width:1.8})
-          .roundRect(-4,-13,8,26,3).fill({color:rim})
-          .moveTo(-2,-8).lineTo(2,-8).moveTo(-2,-2).lineTo(2,-2)
-          .moveTo(-2,4).lineTo(2,4).moveTo(-2,10).lineTo(2,10)
-          .stroke({color:shine,width:1.6,alpha:.85});
-        pullArt.eventMode='none';pull.addChild(pullArt);
-        const arrow=label(isClosed?(side===-1?'‹':'›'):(side===-1?'›':'‹'),
-          13,0xf8dfb6,'bold');
-        arrow.position.set(0,19);arrow.eventMode='none';pull.addChild(arrow);
+        pull.hitArea=new Rectangle(-19,-38,38,76);
+        // Sculpted inset cast-metal pull with actual highlights and screws.
+        // Keep a generous hit area even when the drawer is fully tucked in.
+        const hardware=createDrawerHandle(side as -1|1,isClosed,woodFinish);
+        hardware.eventMode='none';pull.addChild(hardware);
         pull.position.set(side*(TCG_MAT_WIDTH/2+trayW+16),cy);
         pull.on('pointerdown',e=>{e.stopPropagation();onControlDown(e.pointerId);});
         pull.on('pointertap',e=>{e.stopPropagation();onToggleDrawer(side as -1|1);});
