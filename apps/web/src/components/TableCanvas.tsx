@@ -30,8 +30,8 @@ import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '..
 import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
-import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
+import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition,coinNumericValue,validCoinText} from '@sennet/core';
+interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number],altitude?:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
@@ -237,7 +237,7 @@ function drawTcgMats(
         const isClosed=side===-1?drawerState.left:drawerState.right;
         const pull=new Container();
         pull.eventMode='static';pull.cursor='pointer';
-        pull.hitArea=new Rectangle(-19,-38,38,76);
+        pull.hitArea=new Rectangle(-20,-15,40,30);
         // Sculpted inset cast-metal pull with actual highlights and screws.
         // Keep a generous hit area even when the drawer is fully tucked in.
         const hardware=createDrawerHandle(side as -1|1,isClosed,woodFinish);
@@ -1055,7 +1055,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const selectionReadout=formatDiceSelection(diceQuantities);
@@ -1143,7 +1143,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const hoverTimers=useRef(new Set<number>());
   const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
-  const [coinEditing,setCoinEditing]=useState<{x:number;y:number}|null>(null);
+  const [coinEditing,setCoinEditing]=useState<{x:number;y:number;id?:string}|null>(null);
   const [coinDraft,setCoinDraft]=useState('');
   const [coinSources,setCoinSources]=useState<{values:Record<number,number>;colors:Record<number,string>}>(()=>{
     try{const saved=JSON.parse(localStorage.getItem('sennet.coin.sources.v1')||'null');
@@ -1201,7 +1201,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       else onCoinModify(m.id,{delta:increments[index]});
     }else if(m.type==='source'&&m.index!==undefined){
       const i=m.index;
-      const value=i===0?coinSources.values[0]??10:customCoinValue;
+      if(i!==1){setCoinMenu(null);return;}
+      const value=coinSources.values[0]??10;
       const color=coinSources.colors[i]??'#d8b979';
       if(index===0){
         const point=tcgMatWorld(0,
@@ -1209,7 +1210,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         onTokenPlace(value,1,point.x,point.y,undefined,color);
       }else{
         const next=Math.max(0,Math.min(9999,value+increments[index]));
-        if(i===0)setCoinSources(p=>({...p,values:{...p.values,0:next}}));
+        setCoinSources(p=>({...p,values:{...p.values,0:next}}));
       }
     }
     setCoinMenu(null);setCoinColorsOpen(false);
@@ -1283,10 +1284,16 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   };
   const drag=useRef<ActiveDrag|null>(null);
   const visuals=useRef(new Map<string,Container>());
-  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container;ghostEl:HTMLDivElement;color:string}|null>(null);
+  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;
+    coinText?:string;startX:number;startY:number;mat:Container;ghost:Container;
+    ghostEl:HTMLDivElement;color:string}|null>(null);
   const commitCoinEdit=()=>{
-    const n=Number(coinDraft);
-    if(Number.isInteger(n)&&n>=1&&n<=9999)onCustomCoinValue(n);
+    if(validCoinText(coinDraft)){
+      if(coinEditing?.id)onCoinModify(coinEditing.id,{coinText:coinDraft});
+      else onCustomCoinText(coinDraft);
+      const n=coinNumericValue(coinDraft).value;
+      if(n>=1&&n<=9999)onCustomCoinValue(n);
+    }
     setCoinEditing(null);
   };
   const cancelActiveDrag=useRef<()=>void>(()=>{});
@@ -1794,19 +1801,21 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       const mat=drawerGroups.current.get(1);
       if(!mat)throw new Error('Right drawer is missing');
       // Exactly two permanent sources: adjustable standard and entry-only Custom.
-      const values=[coinSources.values[0]??10,customCoinValue];
+      const values=[coinNumericValue(customCoinText).value,coinSources.values[0]??10];
+      const faces=[customCoinText,String(values[1])];
       const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       values.forEach((value,index)=>{
         const source=new Container();
         source.position.set(boxX,top+58+index*86);
-        const color=coinSources.colors[index]??'#d8b979';
-        source.addChild(makeCoin(value,coinAppearance,true,1,color));
+        const isEditable=index===0;
+        const color=coinSources.colors[isEditable?1:0]??(isEditable?'#c4d8d9':'#d8b979');
+        source.addChild(makeCoin(isEditable?faces[index]:value,coinAppearance,true,1,color,isEditable));
         const highlight=new Graphics();
         highlight.scale.set(coinAppearance.size*1.08);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
-        const coinOverlay=showCoinAboveArtwork(source,value,1,true,color);
+        const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
         source.hitArea=new Circle(0,0,17.5*coinAppearance.size*1.08);
@@ -1832,14 +1841,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            if(index===0)
+            if(index===1)
               startCoinHold(source,e.pointerId,'source',undefined,index,e.clientX,e.clientY);
             else{
               // The Custom source never opens a radial. Its center is an
               // immediate dedicated number entry, even on a long press.
               const projected=source.toGlobal(new Point(0,0));
               const rect=app.canvas.getBoundingClientRect();
-              setCoinDraft(String(customCoinValue));
+              setCoinDraft(customCoinText);
               setCoinEditing({
                 x:projected.x*rect.width/app.renderer.width,
                 y:projected.y*rect.height/app.renderer.height
@@ -1847,10 +1856,12 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             }
             return;
           }
-          const ghost=makeCoin(value,coinAppearance,false,sign,color);
+          const ghost=makeCoin(isEditable?faces[index]:value,coinAppearance,false,sign,color,isEditable);
           ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
-          const ghostEl=showCoinAboveArtwork(ghost,value,sign,false,color);
-          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl,color};
+          const ghostEl=showCoinAboveArtwork(ghost,isEditable?faces[index]:value,sign,false,color,isEditable);
+          tokenDrag.current={pointerId:e.pointerId,value,sign,
+            ...(isEditable?{coinText:faces[index]}:{}),
+            startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl,color};
         });
       });
     }
@@ -2164,7 +2175,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // They are released only when removed from the game or on unmount.
       for(const {el} of coinLayers)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
@@ -2323,7 +2334,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!parent)return;
       const spot=parent.toLocal(at,current.app.stage);
       callbacks.current.onTokenPlace(d.value,d.sign,
-        spot.x,spot.y,target?.id,d.color);
+        spot.x,spot.y,target?.id,d.color,d.coinText);
     };
     const move=(event:PointerEvent)=>{
       const d=tokenDrag.current,at=coordinates(event);
