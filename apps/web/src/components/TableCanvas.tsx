@@ -1126,7 +1126,10 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     const app=session.current?.app;
     if(!app)return;
     const p=piece.toGlobal(new Point(0,0)),rect=app.canvas.getBoundingClientRect();
-    const x=p.x*rect.width/app.renderer.width,y=p.y*rect.height/app.renderer.height;
+    const px=p.x*rect.width/app.renderer.width,py=p.y*rect.height/app.renderer.height;
+    const clampRadial=(n:number,edge:number)=>edge<248?edge/2:
+      Math.max(124,Math.min(edge-124,n));
+    const x=clampRadial(px,rect.width),y=clampRadial(py,rect.height);
     const timer=window.setTimeout(()=>{
       if(coinHold.current?.pointerId!==pointerId)return;
       coinHold.current=null;cancelActiveDrag.current();
