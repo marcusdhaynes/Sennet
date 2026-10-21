@@ -372,12 +372,16 @@ export const PLAYMAT_BOTTOM_BUTTON_OFFSET=22;
  * Applied equally at the divider, outer viewport edges, and between mats.
  */
 export const BATTLEFIELD_PLAYMAT_PADDING=PLAYMAT_BOTTOM_BUTTON_HIT_RADIUS+3;
-export function battlefieldFitBounds(columns:number,padding=BATTLEFIELD_PLAYMAT_PADDING){
+export function battlefieldFitBounds(columns:number,padding=BATTLEFIELD_PLAYMAT_PADDING,
+  includeSideBoxes=false){
   const pad=Math.max(0,padding);
   const count=Math.max(1,Math.trunc(columns));
   const step=TCG_MAT_WIDTH+Math.max(ALLY_MAT_GAP,2*pad);
+  // Eye view must frame the full geometry of both retractable boxes,
+  // including wood trim and an exposed drawer pull at either extreme.
+  const outside=includeSideBoxes?TCG_MAT.cardWidth+18:0;
   return {
-    width:TCG_MAT_WIDTH+(count-1)*step+2*pad,
+    width:TCG_MAT_WIDTH+(count-1)*step+2*pad+2*outside,
     height:2*TCG_MAT_HEIGHT+4*pad
   };
 }
