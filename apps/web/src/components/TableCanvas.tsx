@@ -2,13 +2,24 @@ import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
+const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
+  'Color Selector','−1','−10','−100','−1000'] as const;
+const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
+  '#9e8dd2','#f2c27c','#f1a6cb','#dde4ea','#657da2','#44464a'];
+const coinSector=(index:number)=>{
+  const coord=(angle:number,r:number)=>({x:124+r*Math.cos(angle*Math.PI/180),
+    y:124-r*Math.sin(angle*Math.PI/180)});
+  const a=180-index*36,p=coord(a+18,116),q=coord(a-18,116),t=coord(a,83);
+  return {d:'M124 124 L'+p.x+' '+p.y+' A116 116 0 0 1 '+q.x+' '+q.y+' Z',
+    x:t.x,y:t.y};
+};
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number}[])=>void;readonly?:boolean}
+interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number}[])=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
 let activeBookPointer:number|null=null;
@@ -1029,7 +1040,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,readonly=false}:Props){
+export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
@@ -1088,6 +1099,62 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
   const [coinEditing,setCoinEditing]=useState<{x:number;y:number}|null>(null);
   const [coinDraft,setCoinDraft]=useState('');
+  const [coinSources,setCoinSources]=useState<{values:Record<number,number>;colors:Record<number,string>}>(()=>{
+    try{const saved=JSON.parse(localStorage.getItem('sennet.coin.sources.v1')||'null');
+      return {values:saved?.values??{},colors:saved?.colors??{}};}
+    catch{return {values:{},colors:{}};}
+  });
+  useEffect(()=>{try{localStorage.setItem('sennet.coin.sources.v1',JSON.stringify(coinSources));}catch{}},[coinSources]);
+  const [coinMenu,setCoinMenu]=useState<{type:'source'|'copy';index?:number;id?:string;x:number;y:number}|null>(null);
+  const [coinColorsOpen,setCoinColorsOpen]=useState(false);
+  const coinHold=useRef<{pointerId:number;timer:number}|null>(null);
+  const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
+    const current=session.current;if(!current)return;
+    const p=piece.toGlobal(new Point(0,0)),rect=current.app.canvas.getBoundingClientRect();
+    setCoinMenu({type,id,index,x:p.x*rect.width/current.app.renderer.width,
+      y:p.y*rect.height/current.app.renderer.height});setCoinColorsOpen(false);
+  };
+  const startCoinHold=(piece:Container,pointerId:number,type:'source'|'copy',id?:string,index?:number)=>{
+    if(coinHold.current)window.clearTimeout(coinHold.current.timer);
+    const timer=window.setTimeout(()=>{
+      if(coinHold.current?.pointerId!==pointerId)return;
+      coinHold.current=null;cancelActiveDrag.current();
+      openCoinMenu(piece,type,id,index);
+    },250);
+    coinHold.current={pointerId,timer};
+  };
+  const applyCoinAction=(index:number)=>{
+    const m=coinMenu;if(!m)return;
+    if(index===5){setCoinColorsOpen(true);return;}
+    const increments=[0,1,10,100,1000,0,-1,-10,-100,-1000];
+    if(m.type==='copy'&&m.id){
+      if(index===0)onCoinDuplicate(m.id);
+      else onCoinModify(m.id,{delta:increments[index]});
+    }else if(m.type==='source'&&m.index!==undefined){
+      const i=m.index,defaults=[customCoinValue,10,20,30,50,100];
+      const value=i===0?customCoinValue:(coinSources.values[i]??defaults[i]);
+      const color=coinSources.colors[i]??'#d8b979';
+      if(index===0){
+        const point=tcgMatWorld(TCG_MAT_WIDTH/2+100,
+          -TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap+25+i*31,seat);
+        onTokenPlace(value,1,point.x,point.y,undefined,color);
+      }else{
+        const next=Math.max(0,Math.min(9999,value+increments[index]));
+        if(i===0)onCustomCoinValue(next);
+        else setCoinSources(p=>({...p,values:{...p.values,[i]:next}}));
+      }
+    }
+    setCoinMenu(null);setCoinColorsOpen(false);
+  };
+  const applyCoinColor=(color:string)=>{
+    const m=coinMenu;
+    if(!m||!/^#[0-9a-fA-F]{6}$/.test(color))return;
+    if(m.type==='copy'&&m.id)onCoinModify(m.id,{color});
+    else if(m.type==='source'&&m.index!==undefined){
+      setCoinSources(p=>({...p,colors:{...p.colors,[m.index!]:color}}));
+    }
+    setCoinMenu(null);setCoinColorsOpen(false);
+  };
   const selectedSet=useRef(new Set<string>());
   const [dockPosition,setDockPosition]=useState<{x:number;y:number}|null>(()=>{
     try {const saved=JSON.parse(localStorage.getItem('sennet.radial.dock-position.v2')||'null');
