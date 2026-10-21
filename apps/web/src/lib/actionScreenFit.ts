@@ -20,3 +20,11 @@ export function fitActionScreenToWheel(
     heightScale:cameraScale,
     visible:valid&&width>0&&cameraScale>0};
 }
+
+/** Place the LCD with its upper edge flush to the playmat's bottom edge.
+ * Both measurements are in LOCAL playmat units; the viewer's camera later
+ * applies the same scale to the mat and the LCD. */
+export const ACTION_LCD_HEIGHT=30;
+export function actionScreenContactCenter(matHeight:number):number{
+  return matHeight/2+ACTION_LCD_HEIGHT/2;
+}
