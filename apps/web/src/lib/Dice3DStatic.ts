@@ -8,6 +8,7 @@ import {createDie3DModel} from './Dice3DGeometry';
 import type {DiceThemeId} from './diceThemes';
 
 export interface StaticDiePlacement {
+  id:string;
   piece:Container;
   sides:number;
   themeId?:DiceThemeId;
