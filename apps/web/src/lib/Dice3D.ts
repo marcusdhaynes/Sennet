@@ -5,7 +5,7 @@ import * as CANNON from 'cannon-es';
 
 export interface Dice3DSource {sides:number;quantity:number;x:number;y:number}
 export interface Dice3DRect {left:number;top:number;right:number;bottom:number}
-export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rotation:number}
+export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion:[number,number,number,number]}
 export interface Dice3DOptions {
   host:HTMLElement;width:number;height:number;
   sources:Dice3DSource[];aimX:number;aimY:number;durationMs:number;
@@ -131,6 +131,19 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
   }
   return result;
 }
+/** The ONE visual model used for storage, flying and landed dice. */
+export function createDie3DModel(sides:number,r=radiusFor(sides)){
+  const geometry=dieGeometry(sides,r);
+  geometry.computeVertexNormals();
+  const group=new THREE.Group();
+  const material=new THREE.MeshStandardMaterial({color:colorFor(sides),
+    roughness:.31,metalness:.28,flatShading:true,side:THREE.DoubleSide});
+  group.add(new THREE.Mesh(geometry,material));
+  const edges=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.35});
+  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry,23),edges));
+  const faces=faceLabels(geometry,sides,r,group);
+  return {group,geometry,faces};
+}
 export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
   const attr=geom.getAttribute('position');
   const vertices:CANNON.Vec3[]=[],indices=new Map<string,number>(),faces:number[][]=[];
@@ -222,15 +235,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const shadowTex=new THREE.CanvasTexture(shadowCanvas);
   for(let i=0;i<opts.sources.length;i++){
     const source=opts.sources[i],side=source.sides,r=radiusFor(side);
-    const geom=dieGeometry(side,r);
-    geom.computeVertexNormals();
-    const mesh=new THREE.Group();
-    const material=new THREE.MeshStandardMaterial({color:colorFor(side),
-      roughness:.31,metalness:.28,flatShading:true,side:THREE.DoubleSide});
-    mesh.add(new THREE.Mesh(geom,material));
-    const rimMaterial=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.35});
-    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geom,23),rimMaterial));
-    const faces=faceLabels(geom,side,r,mesh);
+    const {group:mesh,geometry:geom,faces}=createDie3DModel(side,r);
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
       material:dieMat,linearDamping:.13,angularDamping:.14,
       allowSleep:true,sleepSpeedLimit:.22,sleepTimeLimit:.7});
@@ -305,7 +310,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
         x:THREE.MathUtils.clamp(obj.body.position.x,0,w),
         y:THREE.MathUtils.clamp(h-obj.body.position.y,0,h),
         rotation:Math.atan2(2*(q.w*q.z+q.x*q.y),
-          1-2*(q.y*q.y+q.z*q.z))*180/Math.PI};
+          1-2*(q.y*q.y+q.z*q.z))*180/Math.PI,
+        quaternion:[q.x,q.y,q.z,q.w] as [number,number,number,number]};
     });
     cleanup();opts.done(result);
   };
