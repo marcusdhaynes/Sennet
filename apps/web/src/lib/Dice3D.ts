@@ -1,10 +1,17 @@
 /** Real 3D dice: WebGL geometry + a rigid-body solver. This module is loaded
  * only while dice are airborne; the rest of Sennet remains Pixi-based. */
 import * as THREE from 'three';
-import {ConvexGeometry} from 'three/addons/geometries/ConvexGeometry.js';
+import {createDie3DModel,dieGeometry,radiusFor,type NumberedFace} from './Dice3DGeometry';
+import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes';
+export {dieGeometry,createDie3DModel} from './Dice3DGeometry';
 import * as CANNON from 'cannon-es';
 
-export interface Dice3DSource {sides:number;quantity:number;x:number;y:number}
+export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;themeId?:DiceThemeId}
+const rand=(max:number)=>{
+  const word=new Uint32Array(1),limit=Math.floor(4294967296/max)*max;
+  do{crypto.getRandomValues(word);}while(word[0]>=limit);
+  return word[0]%max+1;
+};
 export interface Dice3DRect {left:number;top:number;right:number;bottom:number}
 export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion:[number,number,number,number]}
 export interface Dice3DOptions {
@@ -14,153 +21,6 @@ export interface Dice3DOptions {
   done:(results:Dice3DResult[])=>void;
 }
 // Adjacent dice must fit within a 62-unit drawer.
-export const radiusFor=(sides:number)=>sides===2?13.4:sides===100?14:13.7;
-const colorFor=(sides:number)=>({
-  2:0xe1c58f,4:0xe0b780,6:0x79bfaa,8:0x9985c7,
-  10:0x82b9da,12:0xd6a2a2,20:0x9983c5,100:0x8ec5bd
-} as Record<number,number>)[sides]??0xd0bc97;
-const rand=(max:number)=>{
-  const word=new Uint32Array(1),limit=Math.floor(4294967296/max)*max;
-  do{crypto.getRandomValues(word);}while(word[0]>=limit);
-  return word[0]%max+1;
-};
-/** Ten planar kite faces of a pentagonal trapezohedron, not a cone or
- * billboard. Each quadrilateral is triangulated only for GPU/solver use. */
-function tenSidedGeometry(radius:number):THREE.BufferGeometry{
-  const phi=Math.PI/5,cos=Math.cos(phi);
-  const apex=radius,low=radius*(1-cos)/(1+cos);
-  const ring=Array.from({length:10},(_,i)=>{
-    const angle=2*Math.PI*i/10;
-    return new THREE.Vector3(Math.cos(angle)*radius*.94,
-      Math.sin(angle)*radius*.94,(i%2?low:-low));
-  });
-  const top=new THREE.Vector3(0,0,apex),bottom=new THREE.Vector3(0,0,-apex);
-  const coords:number[]=[];
-  const triangle=(a:THREE.Vector3,b:THREE.Vector3,c:THREE.Vector3)=>{
-    const cross=b.clone().sub(a).cross(c.clone().sub(a));
-    const center=a.clone().add(b).add(c);
-    const oriented=cross.dot(center)<0?[a,c,b]:[a,b,c];
-    for(const vertex of oriented)coords.push(vertex.x,vertex.y,vertex.z);
-  };
-  for(let i=0;i<5;i++){
-    const j=2*i,a=ring[j],b=ring[j+1],c=ring[(j+2)%10],d=ring[(j+3)%10];
-    triangle(top,a,b);triangle(top,b,c);
-    triangle(bottom,b,c);triangle(bottom,c,d);
-  }
-  const geom=new THREE.BufferGeometry();
-  geom.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
-  geom.computeVertexNormals();return geom;
-}
-/** 52 evenly spaced vertices create a convex 100-triangle polyhedron
- * (Euler: F=2V-4), much closer to an actual faceted D100 than a sphere. */
-function hundredFacets(r:number):THREE.BufferGeometry{
-  const count=52,goldenAngle=Math.PI*(3-Math.sqrt(5));
-  const points=Array.from({length:count},(_,i)=>{
-    const y=1-2*(i+.5)/count;
-    const ring=Math.sqrt(Math.max(0,1-y*y)),theta=i*goldenAngle;
-    return new THREE.Vector3(Math.cos(theta)*ring*r,y*r,
-      Math.sin(theta)*ring*r);
-  });
-  const hull=new ConvexGeometry(points);
-  return hull.index?hull.toNonIndexed():hull;
-}
-export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
-  switch(sides){
-    case 2:{
-      const g=new THREE.CylinderGeometry(r,r,4,32,1);
-      g.rotateX(Math.PI/2);return g.toNonIndexed();
-    }
-    case 4:return new THREE.TetrahedronGeometry(r,0).toNonIndexed();
-    case 6:return new THREE.BoxGeometry(r*1.67,r*1.67,r*1.67).toNonIndexed();
-    case 8:return new THREE.OctahedronGeometry(r,0).toNonIndexed();
-    case 10:return tenSidedGeometry(r);
-    case 12:return new THREE.DodecahedronGeometry(r,0).toNonIndexed();
-    case 20:return new THREE.IcosahedronGeometry(r,0).toNonIndexed();
-    case 100:return hundredFacets(r);
-    default:return new THREE.IcosahedronGeometry(r,1).toNonIndexed();
-  }
-}
-interface NumberedFace {normal:THREE.Vector3;value:number}
-function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
-  group:THREE.Group):NumberedFace[]{
-  // Include D100 numerals on every small facet. The flip coin gets its
-  // own HEADS/TAILS marking on its two flat surfaces.
-  const attr=geometry.getAttribute('position'),faces=new Map<string,{
-    normal:THREE.Vector3;center:THREE.Vector3;count:number
-  }>();
-  for(let i=0;i+2<attr.count;i+=3){
-    const a=new THREE.Vector3().fromBufferAttribute(attr,i),
-      b=new THREE.Vector3().fromBufferAttribute(attr,i+1),
-      c=new THREE.Vector3().fromBufferAttribute(attr,i+2);
-    const normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize();
-    const centroid=a.clone().add(b).add(c).multiplyScalar(1/3);
-    if(normal.dot(centroid)<0)normal.negate();
-    const key=[normal.x,normal.y,normal.z].map(v=>v.toFixed(2)).join(':');
-    const prev=faces.get(key);
-    if(prev){prev.center.add(centroid);prev.count++;}
-    else faces.set(key,{normal,center:centroid,count:1});
-  }
-  if(sides===2){
-    const faces2=[{normal:new THREE.Vector3(0,0,1),value:1},
-      {normal:new THREE.Vector3(0,0,-1),value:2}];
-    for(const entry of faces2){
-      const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
-      const ctx=canvas.getContext('2d');if(!ctx)continue;
-      ctx.fillStyle='#fff6da';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font='900 84px system-ui,sans-serif';
-      ctx.strokeStyle='#282b2c';ctx.lineWidth=6;
-      ctx.strokeText(entry.value===1?'H':'T',64,66);
-      ctx.fillText(entry.value===1?'H':'T',64,66);
-      const texture=new THREE.CanvasTexture(canvas);
-      const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,
-        depthWrite:false,side:THREE.DoubleSide});
-      const label=new THREE.Mesh(new THREE.PlaneGeometry(17,17),material);
-      label.position.set(0,0,entry.value===1?2.3:-2.3);
-      label.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),entry.normal);
-      label.renderOrder=3;group.add(label);
-    }
-    return faces2;
-  }
-  const result:NumberedFace[]=[];
-  let i=0;
-  for(const face of faces.values()){
-    const value=i%sides+1;i++;
-    result.push({normal:face.normal,value});
-    // Each outward-facing planar facet receives its own numeral.
-    const canvas=document.createElement('canvas');canvas.width=96;canvas.height=96;
-    const ctx=canvas.getContext('2d');
-    if(!ctx)continue;
-    ctx.clearRect(0,0,96,96);
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.font='900 63px system-ui,sans-serif';
-    ctx.strokeStyle='#18282d';ctx.lineWidth=8;
-    ctx.strokeText(String(value),48,50);
-    ctx.fillStyle='#fff5d2';ctx.fillText(String(value),48,50);
-    const tex=new THREE.CanvasTexture(canvas);
-    const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,
-      side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
-    const label=new THREE.Mesh(new THREE.PlaneGeometry(sides===100?3.6:sides===20?6.7:10,
-      sides===100?3.6:sides===20?6.7:10),mat);
-    label.position.copy(face.center.divideScalar(face.count)).addScaledVector(face.normal,.8);
-    label.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),face.normal);
-    label.renderOrder=3;group.add(label);
-  }
-  return result;
-}
-/** The ONE visual model used for storage, flying and landed dice. */
-export function createDie3DModel(sides:number,r=radiusFor(sides)){
-  const geometry=dieGeometry(sides,r);
-  geometry.computeVertexNormals();
-  const group=new THREE.Group();
-  const material=new THREE.MeshStandardMaterial({color:colorFor(sides),
-    roughness:.24,metalness:.31,flatShading:true,side:THREE.DoubleSide});
-  group.add(new THREE.Mesh(geometry,material));
-  const edges=new THREE.LineBasicMaterial({color:0xfff1d7,transparent:true,
-    opacity:sides===100?.13:.3});
-  group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry,23),edges));
-  const faces=faceLabels(geometry,sides,r,group);
-  return {group,geometry,faces};
-}
 export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
   const attr=geom.getAttribute('position');
   const vertices:CANNON.Vec3[]=[],indices=new Map<string,number>(),faces:number[][]=[];
@@ -252,7 +112,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const shadowTex=new THREE.CanvasTexture(shadowCanvas);
   for(let i=0;i<opts.sources.length;i++){
     const source=opts.sources[i],side=source.sides,r=radiusFor(side);
-    const {group:mesh,geometry:geom,faces}=createDie3DModel(side,r);
+    const {group:mesh,geometry:geom,faces}=createDie3DModel(side,r,source.themeId??DEFAULT_DICE_THEME);
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
       material:dieMat,linearDamping:.13,angularDamping:.14,
       allowSleep:true,sleepSpeedLimit:.22,sleepTimeLimit:.7});
