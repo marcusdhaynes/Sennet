@@ -312,3 +312,27 @@ test('rolling and resting polyhedra scale uniformly including flip-coin thicknes
     base.dispose();bigger.dispose();
   }
 });
+
+test('the exact rigid-body resting height survives initial throw, reroll and replay',()=>{
+  const first=createGame('tcg');
+  const thrown=command('height-preserved',[
+    {sides:12,rolls:[7],x:2050,y:2100,rotation:18,
+      altitude:11.7345}
+  ]);
+  let state=applyCommand(first,thrown);
+  const landed=state.objects.find(o=>o.id==='height-preserved-throw-0');
+  assert.ok(landed);
+  assert.equal(landed.throwAltitude,11.7345);
+  assert.deepEqual(state,replay(first,[thrown]));
+  const reroll={
+    id:'height-reroll',actor:'local',type:'REROLL_DIE',
+    payload:{id:landed.id,rolls:[12],x:2055,y:2110,rotation:47,
+      altitude:9.15625}
+  };
+  state=applyCommand(state,reroll);
+  assert.equal(state.objects.find(o=>o.id===landed.id).throwAltitude,9.15625);
+  assert.deepEqual(state,replay(first,[thrown,reroll]));
+  assert.throws(()=>applyCommand(first,command('bad-height',[
+    {sides:6,rolls:[4],x:2100,y:2100,rotation:0,altitude:Infinity}
+  ])),/Invalid die resting height/);
+});
