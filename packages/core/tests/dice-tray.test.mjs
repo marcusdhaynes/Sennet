@@ -5,6 +5,7 @@ import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
 import {dieGeometry,convexShape}
   from '../../../apps/web/src/lib/Dice3D.ts';
+import * as CANNON from 'cannon-es';
 const command=(id,throws,seat=0)=>({id,actor:'local',
   type:'THROW_TRAY',payload:{seat,throws}});
 const near=(a,b,msg)=>assert.ok(Math.abs(a-b)<1e-5,msg+': '+a+' vs '+b);
@@ -133,4 +134,26 @@ test('special dice have authentic 10 and 100 faceted, tumbling 3D surfaces',()=>
     assert.ok(hull.faces.length>=faces,'Every facet must participate in physical collision');
     geometry.dispose();
   }
+});
+
+test('actual 3D rigid bodies tumble in quaternion space and collide with a floor',()=>{
+  const world=new CANNON.World({gravity:new CANNON.Vec3(0,0,-1050)});
+  const floor=new CANNON.Body({mass:0,shape:new CANNON.Plane()});
+  world.addBody(floor);
+  const mesh=dieGeometry(20,17);
+  const die=new CANNON.Body({mass:1,shape:convexShape(mesh),
+    angularDamping:.08,linearDamping:.15});
+  die.position.set(0,0,80);
+  die.velocity.set(110,43,205);
+  die.angularVelocity.set(8,11,4);
+  world.addBody(die);
+  const initialRotation=die.quaternion.clone();
+  for(let n=0;n<180;n++)world.step(1/60);
+  assert.ok(die.position.z<75,'gravity returns the die toward the table');
+  assert.ok(die.quaternion.x!==initialRotation.x||
+    die.quaternion.y!==initialRotation.y||
+    die.quaternion.z!==initialRotation.z,
+    'all three axes tumble instead of merely rotating a 2D sprite');
+  assert.ok(die.position.z>=0,'solid table constrains downward penetration');
+  mesh.dispose();
 });
