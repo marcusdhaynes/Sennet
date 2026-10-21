@@ -242,3 +242,41 @@ test('real quaternion orientation survives a throw and successive reroll',()=>{
     payload:{id:die.id,rolls:[11],x:2100,y:2100,rotation:17,quaternion:second}});
   assert.deepEqual(state.objects.find(o=>o.id===die.id).throwQuaternion,second);
 });
+
+test('3D tabletop dice stay precisely anchored across high-DPI render targets',async()=>{
+  const {diceToCssTransform}=await import('../../../apps/web/src/lib/diceCoordinates.ts');
+  // Pixi stage coordinates remain logical viewport pixels even when the
+  // HTML canvas backing bitmap is 2x or 3x the viewport resolution.
+  for(const dpr of [1,1.25,1.5,2,3]){
+    const css={width:1280,height:720};
+    const backing={width:css.width*dpr,height:css.height*dpr};
+    const stage={width:1280,height:720};
+    const t=diceToCssTransform(css.width,css.height,stage.width,stage.height);
+    assert.deepEqual(t,{x:1,y:1},'DPR '+dpr+' must not displace the die');
+    const center={x:445.5,y:230.25};
+    assert.equal(center.x*t.x,center.x);
+    assert.equal(center.y*t.y,center.y);
+    assert.ok(backing.width>0);
+  }
+  assert.deepEqual(diceToCssTransform(960,540,1280,720),{x:.75,y:.75});
+  assert.deepEqual(diceToCssTransform(1280,720,0,0),{x:1,y:1},
+    'invalid resize must not create infinity-sized dice');
+});
+test('the original 8 dice source models stay in the two-column wooden drawer',async()=>{
+  const {diceRackLocations}=await import('../../../apps/web/src/lib/diceCoordinates.ts');
+  const from=diceRackLocations(-250,-95);
+  assert.equal(from.length,8);
+  assert.deepEqual([...new Set(from.map(p=>p.x))],[-262,-238]);
+  for(let i=0;i<from.length;i++){
+    const p=from[i];
+    assert.equal(p.y,-54+Math.floor(i/2)*62);
+    // The largest rack object has <10 tabletop-unit projected radius:
+    // its model cannot cross the drawer's 62-unit outside boundary.
+    assert.ok(Math.abs(p.x+250)+10<=31);
+    for(let j=i+1;j<from.length;j++){
+      const other=from[j];
+      assert.ok(Math.hypot(p.x-other.x,p.y-other.y)>20,
+        'two source dice must never overlap or swap slots');
+    }
+  }
+});
