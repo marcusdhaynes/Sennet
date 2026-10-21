@@ -132,9 +132,9 @@ export function createStaticDice3D(
         }
         const {group}=createDie3DModel(e.sides,undefined,e.themeId);
         scene.add(group);
-        const shadow=new THREE.Mesh(new THREE.PlaneGeometry(57,57),
+        const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
           new THREE.MeshBasicMaterial({map:shadowTexture,transparent:true,
-            depthWrite:false,opacity:.54}));
+            depthWrite:false,opacity:.44}));
         shadow.position.z=.4;scene.add(shadow);
         const children=e.source?e.piece.children.slice(0,1):e.piece.children;
         const hidden=children.map(piece=>({piece:piece as Container,visible:piece.visible}));
@@ -237,7 +237,7 @@ export function createStaticDice3D(
       });
       visual.shadow.position.set(x,h-y,.4);
       visual.shadow.scale.setScalar(sf);
-      (visual.shadow.material as THREE.MeshBasicMaterial).opacity=.54*opacity;
+      (visual.shadow.material as THREE.MeshBasicMaterial).opacity=.44*opacity;
       visual.shadow.visible=opacity>0;
       if(visual.result){
         visual.result.style.display=opacity>0?'block':'none';
