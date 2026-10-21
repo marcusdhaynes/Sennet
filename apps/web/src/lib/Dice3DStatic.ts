@@ -15,6 +15,7 @@ export interface StaticDiePlacement {
   sides:number;
   themeId?:DiceThemeId;
   quaternion?:[number,number,number,number];
+  altitude?:number;
   quantity?:number;
   result?:string;
   source?:boolean;
@@ -224,7 +225,10 @@ export function createStaticDice3D(
       // so two polyhedra fit comfortably in the original narrow drawer.
       const rackScale=entry.source?.62:1;
       const sf=scale*rackScale;
-      visual.group.position.set(x,h-y,radiusFor(entry.sides)*sf);
+      // A die's resting height is the support point of its actual convex
+      // hull, not its bounding-sphere radius. Keep the height sampled from
+      // the final Cannon frame to prevent the last-frame vertical jump.
+      visual.group.position.set(x,h-y,(entry.altitude??radiusFor(entry.sides))*sf);
       visual.group.scale.setScalar(sf);
       const opacity=entry.source?1:
         looseDieOpacity(Date.now()-(entry.shownAt??Date.now()),entry.fadeAfterMs??0);
