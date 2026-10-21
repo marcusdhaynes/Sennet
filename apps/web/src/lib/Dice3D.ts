@@ -151,7 +151,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const fill=new THREE.DirectionalLight(0x86b5da,.8);
   fill.position.set(w*.8,h*.15,600);scene.add(fill);
   const world=new CANNON.World({gravity:new CANNON.Vec3(0,0,-1050)});
-  world.allowSleep=true;world.solver.iterations=12;
+  world.allowSleep=true;(world.solver as CANNON.GSSolver).iterations=12;
   const dieMat=new CANNON.Material('polyhedral'),wallMat=new CANNON.Material('felt');
   world.addContactMaterial(new CANNON.ContactMaterial(dieMat,wallMat,
     {friction:.43,restitution:.35}));
