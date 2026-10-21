@@ -20,13 +20,14 @@ const coinSector=(index:number)=>{
     x:t.x,y:t.y};
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
+import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number}[])=>void;
-onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number)=>void;readonly?:boolean}
+interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}[])=>void;
+onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number])=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
 let activeBookPointer:number|null=null;
@@ -1061,6 +1062,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const leftTrayMat=useRef<Container|null>(null);
   const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number}|null>(null);
   const diceThrowAnimation=useRef<number|null>(null);
+  const staticDice3D=useRef<StaticDice3DRenderer|null>(null);
+  const staticDiceEntries=useRef<StaticDiePlacement[]>([]);
   const dice3DActive=useRef(false);
   const dice3DStop=useRef<(()=>void)|null>(null);
   const [dice3DError,setDice3DError]=useState<string|null>(null);
@@ -1326,7 +1329,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
               return {sides:result.sides,rolls:result.rolls,
                 x:Math.max(0,Math.min(BOARD_W,point.x)),
                 y:Math.max(0,Math.min(BOARD_W,point.y)),
-                rotation:((result.rotation%360)+360)%360};
+                rotation:((result.rotation%360)+360)%360,
+                quaternion:result.quaternion};
             });
             diceThrowCallback.current(throws);
           }});
@@ -1391,7 +1395,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
             diceRerollCallback.current(id,result.rolls,
               Math.max(0,Math.min(BOARD_W,at.x)),
               Math.max(0,Math.min(BOARD_W,at.y)),
-              ((result.rotation%360)+360)%360);
+              ((result.rotation%360)+360)%360,result.quaternion);
             if(!visual.destroyed)visual.visible=true;
           }});
         dice3DStop.current=stop;
@@ -1503,6 +1507,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       for(const timer of hoverTimers.current)window.clearTimeout(timer);
       hoverTimers.current.clear();
       if(activeFocusAnimation.current!==null)cancelAnimationFrame(activeFocusAnimation.current);
+      staticDice3D.current?.destroy();staticDice3D.current=null;
       dice3DStop.current?.();dice3DStop.current=null;dice3DActive.current=false;
       if(diceThrowAnimation.current!==null)cancelAnimationFrame(diceThrowAnimation.current);
       for(const flying of diceFlying.current)if(!flying.destroyed)flying.destroy({children:true});
@@ -1595,6 +1600,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       selectedSet.current=new Set(still);
       queueMicrotask(()=>setSelectedIds(still));
     }
+    const staticEntries:StaticDiePlacement[]=[];
     const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
     const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean,color='#d8b979')=>{
       const el=coinDomVisual(value,sign,source,coinAppearance,color);
@@ -1636,6 +1642,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         source.addChild(quantity);
         diceBadges.current.set(sides,{body:quantity,count});
         mat.addChild(source);diceSources.current.set(sides,source);
+        staticEntries.push({piece:source,sides,source:true});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
         source.hitArea=new Circle(0,0,19);
@@ -1759,6 +1766,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         const ty=p.y*sy-18*bb-18*dd;
         el.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
       }
+      staticDice3D.current?.sync();
     };
     session.current?.app.ticker.add(syncCardArtwork);
     for(const obj of visible){
@@ -1780,29 +1788,11 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false,obj.color);
       if(obj.throwDice){
-        // A display-only DOM die is drawn over imported card art, exactly
-        // like the coin layer. Pixi still handles picking and movement.
-        const rolls=obj.throwRolls??[],heads=rolls.filter(n=>n===1).length;
-        const display=obj.sides===2?(rolls.length===1?(heads?'H':'T'):
-          heads+'H/'+(rolls.length-heads)+'T'):
-          String(obj.throwTotal??obj.value??1);
-        const overlay=document.createElement('div');
-        overlay.className='sennet-rolled-die-above-card';
-        overlay.dataset.sides=String(obj.sides??6);
-        overlay.title='Tap to reroll · '+(obj.description??obj.name);
-        const face=document.createElement('span');
-        face.className='sennet-rolled-die-center';
-        face.textContent=display;
-        face.style.fontSize=display.length>6?'6px':display.length>4?'7px':
-          display.length>2?'9px':'13px';
-        overlay.appendChild(face);
-        if((obj.throwQuantity??1)>1){
-          const count=document.createElement('small');
-          count.textContent='×'+obj.throwQuantity;
-          overlay.appendChild(count);
-        }
-        mount.current?.appendChild(overlay);
-        coinLayers.push({piece,el:overlay});
+        const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
+        const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
+          heads+'H/'+((obj.throwQuantity??1)-heads)+'T'):String(obj.throwTotal??obj.value??1);
+        staticEntries.push({piece,sides:obj.sides??6,quaternion:obj.throwQuaternion,
+          quantity:obj.throwQuantity,result:display});
       }
       const old=oldLocations.current.get(obj.id);
       if(old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
@@ -1932,13 +1922,37 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
     app.renderer.render(app.stage);
+    staticDiceEntries.current=staticEntries;
+    staticDice3D.current?.setEntries(staticEntries);
     syncCardArtwork();
     return ()=>{
       session.current?.app.ticker.remove(syncCardArtwork);
+      staticDice3D.current?.setEntries([]);
+      staticDiceEntries.current=[];
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
       for(const {el} of coinLayers)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue,coinSources]);
+
+  useEffect(()=>{
+    if(!ready||!session.current||!mount.current)return;
+    let cancelled=false;
+    import('../lib/Dice3DStatic').then(({createStaticDice3D})=>{
+      if(cancelled||!session.current||!mount.current)return;
+      try{
+        const renderer=createStaticDice3D(mount.current,session.current.app.canvas);
+        staticDice3D.current=renderer;
+        renderer.setEntries(staticDiceEntries.current);
+        renderer.sync();
+      }catch(error){
+        setDice3DError('3D tabletop preview unavailable: '+String(error));
+      }
+    }).catch(error=>setDice3DError('3D tabletop preview unavailable: '+String(error)));
+    return()=>{
+      cancelled=true;
+      staticDice3D.current?.destroy();staticDice3D.current=null;
+    };
+  },[ready]);
 
   useEffect(()=>{
     const end=(e:PointerEvent,commit:boolean)=>{
