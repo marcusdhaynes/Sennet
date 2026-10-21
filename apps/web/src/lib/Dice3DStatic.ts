@@ -3,6 +3,7 @@
  * Keeping a single renderer prevents context churn and restores the die's
  * settled quaternion exactly when the throw finishes. */
 import * as THREE from 'three';
+import {installDiceLighting} from './Dice3DLighting.ts';
 import type {Container} from 'pixi.js';
 import {createDie3DModel,radiusFor} from './Dice3DGeometry';
 import {diceToCssTransform} from './diceCoordinates';
@@ -52,11 +53,7 @@ export function createStaticDice3D(
     'pointer-events:none;z-index:9;display:block';
   host.appendChild(renderer.domElement);
   const scene=new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffebd5,1.15));
-  const key=new THREE.DirectionalLight(0xffffff,2.35);
-  key.position.set(-350,500,950);scene.add(key);
-  const bounce=new THREE.DirectionalLight(0x8aaee6,.65);
-  bounce.position.set(600,-350,600);scene.add(bounce);
+  installDiceLighting(scene);
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,.1,1800);
   camera.position.set(0,0,1100);
   const shadowCanvas=document.createElement('canvas');
