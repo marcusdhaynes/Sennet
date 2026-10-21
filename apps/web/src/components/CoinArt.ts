@@ -4,7 +4,7 @@ import {Container,Graphics,Text} from 'pixi.js';
 export type CoinFinish='polished'|'brushed'|'matte'|'enamel';
 export interface CoinAppearance {finish:CoinFinish;shine:number;bevel:number;size:number}
 export const DEFAULT_COIN_APPEARANCE:CoinAppearance={
-  finish:'polished',shine:75,bevel:65,size:1
+  finish:'polished',shine:75,bevel:65,size:.78
 };
 const fillText=(text:string,size:number,color:number)=>{
   const obj=new Text({text,resolution:3,style:{
@@ -22,11 +22,11 @@ export function coinHighlight(g:Graphics,half:1|-1|0,r=16){
     .fill({color:top?0x7dfdd7:0xffa1bb,alpha:.27})
     .stroke({color:top?0x8fffea:0xffbdce,width:1.8,alpha:.95});
 }
-export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-1=1){
+export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-1=1,color='#d8b979'){
   const coin=new Container();
   const finish=style.finish,shine=Math.max(0,Math.min(100,style.shine))/100;
   const bevel=Math.max(0,Math.min(100,style.bevel))/100,r=16;
-  coin.scale.set(Math.max(.7,Math.min(1.3,style.size)));
+  coin.scale.set(Math.max(.55,Math.min(1.3,style.size)));
   const metal=finish==='enamel'?0xbd9855:finish==='matte'?0x8d8172:finish==='brushed'?0xb8ae96:0xe3c38a;
   const rim=new Graphics().circle(1,2,r+1.5).fill({color:0x050d10,alpha:.5})
     .circle(0,0,r+1).fill({color:0x493b2b})
@@ -34,8 +34,16 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
     .circle(0,0,r-2.6).stroke({color:0x32271e,width:1.3+bevel,alpha:.86});
   coin.addChild(rim);
   // Emulate a pressed two-piece enamel / precious-metal medallion.
-  const top=finish==='enamel'?0xc14d50:finish==='matte'?0x7a6660:0xd2a45f;
-  const bottom=finish==='enamel'?0xe5dec6:finish==='matte'?0xc7bea7:0xf0e3c5;
+  const tint=/^#[0-9a-fA-F]{6}$/.test(color)&&color.toLowerCase()!=='#d8b979'?
+    parseInt(color.slice(1),16):null;
+  const shaded=(base:number,factor:number)=>{
+    const r=Math.round(((base>>16)&255)*factor),g=Math.round(((base>>8)&255)*factor),b=Math.round((base&255)*factor);
+    return Math.min(r,255)*65536+Math.min(g,255)*256+Math.min(b,255);
+  };
+  const top=tint===null?(finish==='enamel'?0xc14d50:finish==='matte'?0x7a6660:0xd2a45f):
+    shaded(tint,finish==='matte'?.69:.96);
+  const bottom=tint===null?(finish==='enamel'?0xe5dec6:finish==='matte'?0xc7bea7:0xf0e3c5):
+    shaded(tint,finish==='matte'?.94:1.15);
   coin.addChild(new Graphics()
     .moveTo(-r+2,0).arc(0,0,r-2,Math.PI,Math.PI*2)
     .lineTo(r-2,0).closePath().fill(top)
@@ -73,7 +81,7 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
     .stroke({color:0x71644c,width:.65});
   coin.addChild(disk);
   const str=String(value);
-  const text=fillText(str,str.length>4?4.8:str.length>3?5.5:str.length>2?6.2:7.3,0x28322e);
+  const text=fillText(str,str.length>4?4.8:str.length>3?5.7:str.length>2?6.6:7.7,0x28322e);
   text.position.set(0,-.2);coin.addChild(text);
   coin.eventMode='none';
   return coin;
