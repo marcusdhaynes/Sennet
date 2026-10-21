@@ -1401,3 +1401,79 @@ body>.reader-backdrop{
   box-shadow:inset 0 -6px 9px #ff638555,inset 0 0 0 1px #ffd7e2,
     0 0 7px #ff9caeaa,1px 2px 3px #0009;
 }
+
+/* Physically thrown dice: the display-only overlay stays ABOVE CORS-loaded
+   card images, while the underlying Pixi die retains pointer ownership. */
+.pixi-host>.sennet-rolled-die-above-card{
+  position:absolute;left:0;top:0;width:36px;height:36px;
+  transform-origin:0 0;z-index:7;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  box-sizing:border-box;will-change:transform;
+  filter:drop-shadow(1px 2px 2px #050b0b99);
+  color:#fff1cd;
+  background:linear-gradient(142deg,#e4d9bd 0%,#acaaa1 33%,#666a72 62%,#292d36 100%);
+  border:2px solid #ddd9c7;
+  clip-path:polygon(50% 2%,95% 22%,95% 76%,50% 98%,5% 76%,5% 22%);
+}
+.sennet-rolled-die-above-card[data-sides="2"]{
+  border-radius:50%;clip-path:none;
+  border:3px ridge #f2d9a2;
+  background:radial-gradient(circle at 29% 22%,#ffefc7,#bd914b 60%,#604831);
+}
+.sennet-rolled-die-above-card[data-sides="4"]{
+  clip-path:polygon(50% 3%,98% 93%,2% 93%);
+  background:linear-gradient(155deg,#e5d1a6,#796a52);
+}
+.sennet-rolled-die-above-card[data-sides="6"]{
+  clip-path:polygon(16% 3%,85% 3%,98% 15%,98% 85%,85% 98%,16% 98%,2% 85%,2% 15%);
+  background:linear-gradient(142deg,#d1dfc7,#64796f);
+}
+.sennet-rolled-die-above-card[data-sides="8"]{
+  clip-path:polygon(50% 2%,92% 25%,92% 75%,50% 98%,8% 75%,8% 25%);
+  background:linear-gradient(135deg,#ded5eb,#8278ae);
+}
+.sennet-rolled-die-above-card[data-sides="10"]{
+  clip-path:polygon(50% 0%,96% 37%,80% 95%,20% 95%,4% 37%);
+  background:linear-gradient(135deg,#b9d3d9,#668ba8);
+}
+.sennet-rolled-die-above-card[data-sides="12"]{
+  clip-path:polygon(50% 1%,84% 10%,98% 40%,89% 77%,65% 98%,28% 93%,5% 65%,7% 29%);
+  background:linear-gradient(145deg,#edd9d2,#a77767);
+}
+.sennet-rolled-die-above-card[data-sides="20"]{
+  clip-path:polygon(50% 2%,85% 14%,98% 45%,92% 78%,65% 98%,27% 94%,4% 71%,2% 32%);
+  background:linear-gradient(155deg,#d2c8eb,#71629c);
+}
+.sennet-rolled-die-above-card[data-sides="100"]{
+  clip-path:polygon(50% 0%,77% 7%,97% 30%,100% 62%,79% 92%,51% 99%,20% 93%,0% 63%,2% 29%,24% 7%);
+  background:linear-gradient(155deg,#d5ebe7,#66988d);
+}
+.sennet-rolled-die-center{
+  min-width:17px;min-height:16px;padding:1px 2px;
+  box-sizing:border-box;border-radius:5px;background:#15272bcc;
+  border:1px solid #fbe3a2;display:flex;align-items:center;
+  justify-content:center;text-align:center;
+  color:#f8eaca;line-height:1;font-family:Inter,system-ui,sans-serif;
+  font-weight:900;text-shadow:0 1px #000a;white-space:nowrap;
+}
+.sennet-rolled-die-above-card>small{
+  position:absolute;right:2px;bottom:1px;font:900 6px Inter,sans-serif;
+  color:#fff9d9;background:#182522bb;padding:0 2px;border-radius:5px;
+}
+.sennet-dice-selection{
+  position:absolute;z-index:83;left:13px;bottom:55px;
+  max-width:min(440px,calc(100vw - 35px));
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  background:linear-gradient(125deg,#102e2c,#1d3334);
+  border:1px solid #b7a179;border-radius:14px;
+  box-shadow:0 3px 14px #0009;padding:7px 9px;
+  color:#f1e3c3;font:700 11px Inter,system-ui,sans-serif;
+  pointer-events:auto;
+}
+.sennet-dice-selection strong{font-size:11px;color:#d6fcef}
+.sennet-dice-selection button{
+  border:1px solid #ad9d73;border-radius:9px;
+  background:#334f4a;color:#fff0c9;padding:5px 8px;
+  cursor:pointer;font:700 11px Inter,system-ui,sans-serif;
+}
+.sennet-dice-selection button:hover{background:#52776c}
