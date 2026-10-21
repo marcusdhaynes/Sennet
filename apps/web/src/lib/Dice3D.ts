@@ -1,6 +1,7 @@
 /** Real 3D dice: WebGL geometry + a rigid-body solver. This module is loaded
  * only while dice are airborne; the rest of Sennet remains Pixi-based. */
 import * as THREE from 'three';
+import {ConvexGeometry} from 'three/addons/geometries/ConvexGeometry.js';
 import * as CANNON from 'cannon-es';
 
 export interface Dice3DSource {sides:number;quantity:number;x:number;y:number}
@@ -12,10 +13,11 @@ export interface Dice3DOptions {
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
 }
-const radiusFor=(sides:number)=>sides===2?19:sides===100?21:20;
+// Adjacent dice must fit within a 62-unit drawer.
+export const radiusFor=(sides:number)=>sides===2?13.4:sides===100?14:13.7;
 const colorFor=(sides:number)=>({
-  2:0xd5b87f,4:0xc6af8b,6:0x9cc7ba,8:0xa59dd7,
-  10:0x82b9d4,12:0xcfa090,20:0xb69dd7,100:0x77bbaa
+  2:0xe1c58f,4:0xe0b780,6:0x79bfaa,8:0x9985c7,
+  10:0x82b9da,12:0xd6a2a2,20:0x9983c5,100:0x8ec5bd
 } as Record<number,number>)[sides]??0xd0bc97;
 const rand=(max:number)=>{
   const word=new Uint32Array(1),limit=Math.floor(4294967296/max)*max;
@@ -49,6 +51,19 @@ function tenSidedGeometry(radius:number):THREE.BufferGeometry{
   geom.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
   geom.computeVertexNormals();return geom;
 }
+/** 52 evenly spaced vertices create a convex 100-triangle polyhedron
+ * (Euler: F=2V-4), much closer to an actual faceted D100 than a sphere. */
+function hundredFacets(r:number):THREE.BufferGeometry{
+  const count=52,goldenAngle=Math.PI*(3-Math.sqrt(5));
+  const points=Array.from({length:count},(_,i)=>{
+    const y=1-2*(i+.5)/count;
+    const ring=Math.sqrt(Math.max(0,1-y*y)),theta=i*goldenAngle;
+    return new THREE.Vector3(Math.cos(theta)*ring*r,y*r,
+      Math.sin(theta)*ring*r);
+  });
+  const hull=new ConvexGeometry(points);
+  return hull.index?hull.toNonIndexed():hull;
+}
 export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
   switch(sides){
     case 2:{
@@ -61,7 +76,8 @@ export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
     case 10:return tenSidedGeometry(r);
     case 12:return new THREE.DodecahedronGeometry(r,0).toNonIndexed();
     case 20:return new THREE.IcosahedronGeometry(r,0).toNonIndexed();
-    default:return new THREE.SphereGeometry(r,25,3).toNonIndexed();
+    case 100:return hundredFacets(r);
+    default:return new THREE.IcosahedronGeometry(r,1).toNonIndexed();
   }
 }
 interface NumberedFace {normal:THREE.Vector3;value:number}
@@ -123,8 +139,8 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
     const tex=new THREE.CanvasTexture(canvas);
     const mat=new THREE.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,
       side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:-1});
-    const label=new THREE.Mesh(new THREE.PlaneGeometry(sides===100?4.6:sides===20?7.5:11,
-      sides===100?4.6:sides===20?7.5:11),mat);
+    const label=new THREE.Mesh(new THREE.PlaneGeometry(sides===100?3.6:sides===20?6.7:10,
+      sides===100?3.6:sides===20?6.7:10),mat);
     label.position.copy(face.center.divideScalar(face.count)).addScaledVector(face.normal,.8);
     label.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),face.normal);
     label.renderOrder=3;group.add(label);
@@ -137,9 +153,10 @@ export function createDie3DModel(sides:number,r=radiusFor(sides)){
   geometry.computeVertexNormals();
   const group=new THREE.Group();
   const material=new THREE.MeshStandardMaterial({color:colorFor(sides),
-    roughness:.31,metalness:.28,flatShading:true,side:THREE.DoubleSide});
+    roughness:.24,metalness:.31,flatShading:true,side:THREE.DoubleSide});
   group.add(new THREE.Mesh(geometry,material));
-  const edges=new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.35});
+  const edges=new THREE.LineBasicMaterial({color:0xfff1d7,transparent:true,
+    opacity:sides===100?.13:.3});
   group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry,23),edges));
   const faces=faceLabels(geometry,sides,r,group);
   return {group,geometry,faces};
@@ -313,7 +330,10 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
           1-2*(q.y*q.y+q.z*q.z))*180/Math.PI,
         quaternion:[q.x,q.y,q.z,q.w] as [number,number,number,number]};
     });
-    cleanup();opts.done(result);
+    // Preserve the visible final frame until the static renderer has drawn
+    // the exact recorded quaternion; otherwise a die visibly teleports.
+    opts.done(result);
+    requestAnimationFrame(()=>requestAnimationFrame(cleanup));
   };
   const tick=(now:number)=>{
     if(stopped)return;
