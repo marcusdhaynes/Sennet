@@ -1345,7 +1345,7 @@ body>.reader-backdrop{
 }
 .sennet-coin-above-card-face{
   position:absolute;inset:1px;border-radius:50%;overflow:hidden;
-  box-sizing:border-box;transform:scale(var(--coin-size,1));
+  box-sizing:border-box;transform:scale(calc(var(--coin-size,1) * .82));
   transform-origin:center;
   border:calc(1px + var(--coin-bevel,.65) * 1px) solid #fae6b5;
   box-shadow:inset 0 0 0 1.4px #4a3628,inset 0 1px 3px #fff8,
@@ -1490,7 +1490,7 @@ body>.reader-backdrop{
     color-mix(in srgb,var(--coin-accent,#d8b979) 44%,#fff) 55%,
     color-mix(in srgb,var(--coin-accent,#d8b979) 58%,#f8dfac) 100%);
 }
-.sennet-coin-radial-layer{position:absolute;inset:0;z-index:90;pointer-events:none}
+.sennet-coin-radial-layer{position:absolute;inset:0;z-index:90;pointer-events:auto}
 .sennet-coin-radial{
   position:absolute;width:248px;height:248px;transform:translate(-50%,-50%);
   pointer-events:auto;filter:drop-shadow(0 8px 15px #000c);
