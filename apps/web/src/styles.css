@@ -1320,3 +1320,17 @@ body>.reader-backdrop{
 .unified-tome.tome-arcane{border-color:#ba9148}
 .unified-tome.tome-strapped{border-color:#59402a}
 .unified-book-shortcut{border:1px solid #d6b47a;border-radius:7px;padding:12px 22px;color:#e9d4a2;background:#4e3528}
+
+/* Token generator's in-place Custom value editor follows its Pixi coin. */
+.sennet-coin-editor{
+  position:absolute;z-index:84;transform:translate(-50%,-50%);
+  width:76px;min-height:32px;box-sizing:border-box;
+  border:2px solid #e3c88e;border-radius:20px;
+  color:#fbe7bc;background:#1b2524;
+  box-shadow:0 0 0 3px #12251dcc,0 6px 26px #000a;
+  text-align:center;font:800 13px Inter,system-ui,sans-serif;
+  outline:none;pointer-events:auto;appearance:textfield;
+}
+.sennet-coin-editor:focus{border-color:#b5fff0;box-shadow:0 0 0 3px #274d46,0 0 18px #b5fff066;}
+.sennet-coin-editor::-webkit-inner-spin-button,
+.sennet-coin-editor::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
