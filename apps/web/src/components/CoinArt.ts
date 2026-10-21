@@ -26,7 +26,7 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
   const coin=new Container();
   const finish=style.finish,shine=Math.max(0,Math.min(100,style.shine))/100;
   const bevel=Math.max(0,Math.min(100,style.bevel))/100,r=16;
-  coin.scale.set(.41*Math.max(.55,Math.min(1.3,style.size)));
+  coin.scale.set(1.08*Math.max(.75,Math.min(1.3,style.size)));
   const metal=finish==='enamel'?0xbd9855:finish==='matte'?0x8d8172:finish==='brushed'?0xb8ae96:0xe3c38a;
   const rim=new Graphics().circle(1,2,r+1.5).fill({color:0x050d10,alpha:.5})
     .circle(0,0,r+1).fill({color:0x493b2b})
@@ -67,13 +67,13 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
       .arc(0,0,r-4,Math.PI*.08,Math.PI*.58)
       .stroke({color:0x35271b,alpha:.2,width:1.5}));
   }
-  const disk=new Graphics().circle(0,0,7.1)
+  const disk=new Graphics().circle(0,0,10.3)
     .fill({color:0x27292b}).stroke({color:0xfde5aa,width:1.6})
-    .circle(0,0,5.75).fill({color:finish==='enamel'?0xfff1d3:0xe5d6b4})
+    .circle(0,0,9.1).fill({color:finish==='enamel'?0xfff1d3:0xe5d6b4})
     .stroke({color:0x71644c,width:.65});
   coin.addChild(disk);
   const str=String(value);
-  const text=fillText(str,str.length>4?4.8:str.length>3?5.7:str.length>2?6.6:7.7,0x28322e);
+  const text=fillText(str,str.length>4?5.6:str.length>3?7.1:str.length>2?8.0:8.8,0x28322e);
   text.position.set(0,-.2);coin.addChild(text);
   coin.eventMode='none';
   return coin;
