@@ -153,61 +153,70 @@ export function createDrawerBody(
   sprite.eventMode='none';
   return sprite;
 }
+/** Subtle, bridge-shaped cabinet pull modeled after two round mounting feet
+ * joined by a raised bar. No backing plaque or giant tab: this is the ONLY
+ * element exposed when the drawer retracts. */
 export function createDrawerHandle(side:-1|1,closed:boolean,finish:string):Container{
-  const palette=drawerPalette(finish),key=['drawer-pull',finish,side,closed].join(':');
+  const palette=drawerPalette(finish);
+  const key=['slim-bridge-pull',finish].join(':');
   let texture=textureCache.get(key);
-  const W=38,H=76;
+  const W=36,H=24;
   if(!texture){
     const canvas=canvasOf(W,H,ctx=>{
-      const cx=W/2;
-      ctx.shadowColor='#060809ad';ctx.shadowBlur=6;ctx.shadowOffsetX=2;
-      ctx.shadowOffsetY=3;
-      const back=ctx.createLinearGradient(5,0,33,0);
-      back.addColorStop(0,'#201a16');
-      back.addColorStop(.17,palette.hardwareDark);
-      back.addColorStop(.35,palette.hardware);
-      back.addColorStop(.55,'#ffe6ad');
-      back.addColorStop(.78,palette.hardwareDark);
-      back.addColorStop(1,'#151414');
-      fillRound(ctx,7,5,24,66,9,back);
-      ctx.shadowColor='transparent';ctx.shadowBlur=0;
-      ctx.shadowOffsetX=ctx.shadowOffsetY=0;
-      path(ctx,7.6,5.6,22.8,64.8,8);
-      ctx.strokeStyle='#f9dfa16e';ctx.lineWidth=1.2;ctx.stroke();
-      const recess=ctx.createLinearGradient(10,0,27,0);
-      recess.addColorStop(0,'#1b1613');
-      recess.addColorStop(.45,palette.hardwareDark);
-      recess.addColorStop(1,'#100d0b');
-      fillRound(ctx,11,14,16,49,6,recess);
-      // A sculpted raised loop handle, cast-shadow then reflective metal,
-      // with a readable central void like actual machined drawer hardware.
-      ctx.beginPath();ctx.ellipse(cx+1,38,8.4,18.2,0,0,Math.PI*2);
-      ctx.strokeStyle='#050807a9';ctx.lineWidth=6.5;ctx.stroke();
-      const metal=ctx.createLinearGradient(10,25,27,53);
-      metal.addColorStop(0,palette.hardwareDark);
-      metal.addColorStop(.18,palette.hardware);
-      metal.addColorStop(.32,'#fff1ce');
-      metal.addColorStop(.61,palette.hardware);
-      metal.addColorStop(.85,palette.hardwareDark);
-      metal.addColorStop(1,'#24201b');
-      ctx.beginPath();ctx.ellipse(cx,36,7.8,17.5,0,0,Math.PI*2);
-      ctx.strokeStyle=metal;ctx.lineWidth=4.2;ctx.stroke();
-      ctx.beginPath();ctx.ellipse(cx-1,35,6.7,15.9,0,2.6,5.9);
-      ctx.strokeStyle='#fff6d2a8';ctx.lineWidth=.85;ctx.stroke();
-      for(const y of [11,65])ringFastener(ctx,cx,y,palette.hardware,palette.hardwareDark,2);
-      // Tiny engraved inward/outward chevron inside the loop.
-      const direction=closed?-side:side;
-      ctx.beginPath();ctx.moveTo(cx-direction*3,35);
-      ctx.lineTo(cx+direction*1.5,39);
-      ctx.lineTo(cx-direction*3,43);
-      ctx.strokeStyle='#ffedc7b8';ctx.lineWidth=1.5;ctx.stroke();
+      const footY=18.2,xL=6.6,xR=W-6.6;
+      const dark=palette.deep,metal=palette.hardwareDark;
+      // Small cast shadow underneath the raised horizontal bar.
+      ctx.shadowColor='#00000091';
+      ctx.shadowBlur=2.6;ctx.shadowOffsetY=2.1;
+      ctx.beginPath();ctx.moveTo(xL,footY-1.5);
+      ctx.lineTo(xL,8.2);ctx.quadraticCurveTo(xL,5.1,xL+3.5,5.1);
+      ctx.lineTo(xR-3.5,5.1);ctx.quadraticCurveTo(xR,5.1,xR,8.2);
+      ctx.lineTo(xR,footY-1.5);
+      ctx.strokeStyle=dark;ctx.lineWidth=6;ctx.stroke();
+      ctx.shadowColor='transparent';ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+      // Rounded posts and arch with warm/cool reflections of the box finish.
+      const arch=ctx.createLinearGradient(0,3,0,20);
+      arch.addColorStop(0,palette.highlight);
+      arch.addColorStop(.31,palette.hardware);
+      arch.addColorStop(.62,palette.base);
+      arch.addColorStop(1,metal);
+      ctx.strokeStyle=arch;ctx.lineWidth=4.6;
+      ctx.lineCap='round';ctx.lineJoin='round';ctx.stroke();
+      ctx.beginPath();ctx.moveTo(xL-1.0,footY-2.8);
+      ctx.lineTo(xL-1.0,8.6);
+      ctx.quadraticCurveTo(xL-1,3.8,xL+4.1,3.8);
+      ctx.lineTo(xR-4.1,3.8);
+      ctx.quadraticCurveTo(xR+1,3.8,xR+1,8.6);
+      ctx.lineTo(xR+1,footY-2.8);
+      ctx.strokeStyle='#f9e4ae8c';ctx.lineWidth=.75;ctx.stroke();
+      // Tiny ring details on the grip, based on the provided image.
+      for(const x of [13.2,16.5,19.8]){
+        ctx.beginPath();ctx.ellipse(x,5.0,1.3,2.7,-.18,0,Math.PI*2);
+        ctx.strokeStyle=metal;ctx.lineWidth=1.25;ctx.stroke();
+        line(ctx,x-1.1,3.2,x-.7,6.1,'#ffefc46a',.45);
+      }
+      // Two separate domed mounting feet, not a full-height plate.
+      for(const x of [xL,xR]){
+        const base=ctx.createRadialGradient(x-1,footY-1,.3,x+1.1,footY+2,5.2);
+        base.addColorStop(0,palette.highlight);
+        base.addColorStop(.35,palette.base);
+        base.addColorStop(.78,metal);
+        base.addColorStop(1,dark);
+        ctx.beginPath();ctx.ellipse(x,footY+1.3,5.2,2.4,0,0,Math.PI*2);
+        ctx.fillStyle='#080909aa';ctx.fill();
+        ctx.beginPath();ctx.ellipse(x,footY,4.5,2.45,0,0,Math.PI*2);
+        ctx.fillStyle=base;ctx.fill();
+        ctx.beginPath();ctx.ellipse(x-.8,footY-.65,2.25,.55,0,0,Math.PI*2);
+        ctx.fillStyle='#ffecd28a';ctx.fill();
+      }
     });
-    texture=Texture.from(canvas);
-    textureCache.set(key,texture);
+    texture=Texture.from(canvas);textureCache.set(key,texture);
   }
   const handle=new Container();
-  handle.addChild(new Sprite(texture));
-  handle.children[0].position.set(-W/2,-H/2);
-  handle.children[0].eventMode='none';
+  const sprite=new Sprite(texture);
+  sprite.position.set(-W/2,-H/2);
+  sprite.eventMode='none';
+  handle.addChild(sprite);
+  handle.eventMode='none';
   return handle;
 }
