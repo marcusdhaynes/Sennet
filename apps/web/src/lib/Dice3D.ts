@@ -13,7 +13,7 @@ const rand=(max:number)=>{
   return word[0]%max+1;
 };
 export interface Dice3DRect {left:number;top:number;right:number;bottom:number}
-export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion:[number,number,number,number]}
+export interface Dice3DResult {sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion:[number,number,number,number];altitude:number}
 export interface Dice3DOptions {
   host:HTMLElement;width:number;height:number;
   sources:Dice3DSource[];aimX:number;aimY:number;durationMs:number;
@@ -106,7 +106,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     aimLength/Math.max(.15,Math.min(.8,opts.durationMs/1000))*.95,210,950);
   const vx=aimLength>5?opts.aimX/aimLength:1,
     vy=aimLength>5?-opts.aimY/aimLength:.19;
-  const objects:{sides:number;quantity:number;mesh:THREE.Group;
+  const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
     body:CANNON.Body;faces:NumberedFace[];shadow:THREE.Mesh}[]=[];
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=64;shadowCanvas.height=64;
   const ctx=shadowCanvas.getContext('2d');
@@ -157,7 +157,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
       new THREE.MeshBasicMaterial({map:shadowTex,transparent:true,opacity:.44,depthWrite:false}));
     shadow.position.z=.4;scene.add(shadow);
-    objects.push({sides:side,quantity:source.quantity,mesh,body,faces,shadow});
+    objects.push({sides:side,quantity:source.quantity,scale:source.scale??1,mesh,body,faces,shadow});
   }
   let stopped=false,frame=0,started=performance.now(),previous=started;
   const cleanup=()=>{
@@ -193,7 +193,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
         y:THREE.MathUtils.clamp(h-obj.body.position.y,0,h),
         rotation:Math.atan2(2*(q.w*q.z+q.x*q.y),
           1-2*(q.y*q.y+q.z*q.z))*180/Math.PI,
-        quaternion:[q.x,q.y,q.z,q.w] as [number,number,number,number]};
+        quaternion:[q.x,q.y,q.z,q.w] as [number,number,number,number],
+        altitude:Math.max(0,obj.body.position.z/Math.max(.08,obj.scale))};
     });
     // Preserve the visible final frame until the static renderer has drawn
     // the exact recorded quaternion; otherwise a die visibly teleports.
