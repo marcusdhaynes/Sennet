@@ -881,7 +881,7 @@ function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearanc
   const center=document.createElement('span');
   center.className='sennet-coin-above-card-number';
   center.textContent=String(value);
-  center.style.fontSize=String(value>=10000?5:value>=1000?5.5:value>=100?6.2:7.3)+'px';
+  center.style.fontSize=String(String(value).length>=4?12:String(value).length===3?13.5:15.5)+'px';
   face.append(center);root.appendChild(face);
   return root;
 }
