@@ -246,8 +246,9 @@ function drawTcgMats(
         mat.addChild(mask);
         drawerGroup.mask=mask;
         const bodyOuterX=cx+side*(trayW+24)/2;
-        const wall=new Graphics().rect(bodyOuterX-7,
-          cy-trayH/2-8,14,trayH+16).fill({color:0xffffff,alpha:.001});
+        const wallX=side===1?bodyOuterX-12:bodyOuterX;
+        const wall=new Graphics().rect(wallX,
+          cy-trayH/2-8,12,trayH+16).fill({color:0xffffff,alpha:.001});
         // This is the EXISTING outer wall: clicking it opens/closes the
         // drawer, while its wood grain remains the only visible artwork.
         wall.eventMode='static';
@@ -1795,6 +1796,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         diceBadges.current.set(sides,{body:quantity,count});
         mat.addChild(source);diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
+          drawerClosed:boxClosed.left,
           quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
@@ -1941,7 +1943,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         if(piece.destroyed||!el.isConnected)continue;
         let visible=true,ancestor:Container|null=piece;
         while(ancestor){
-          if(!ancestor.visible){visible=false;break;}
+          if(!ancestor.visible||
+            ancestor===drawerGroups.current.get(-1)&&boxClosed.left||
+            ancestor===drawerGroups.current.get(1)&&boxClosed.right){
+            visible=false;break;
+          }
           ancestor=ancestor.parent;
         }
         if(!visible){el.style.display='none';continue;}
