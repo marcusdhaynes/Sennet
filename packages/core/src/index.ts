@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; coinText?: string; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -987,6 +987,17 @@ export function validThrowQuaternion(value:unknown):value is [number,number,numb
   return Array.isArray(value)&&value.length===4&&value.every(n=>typeof n==='number'&&Number.isFinite(n))&&
     Math.abs(value.reduce((sum,n)=>sum+n*n,0)-1)<.035;
 }
+/** Literal coin faces are display text, not an evaluated expression.
+ * The editable coin accepts digit strings, commas and +/- signs only. */
+export function validCoinText(value:unknown): value is string {
+  return typeof value==='string'&&value.length<=20&&/^[0-9,+-]*$/.test(value);
+}
+export function coinNumericValue(text:string):{value:number;sign:1|-1} {
+  const normalized=text.replaceAll(',','');
+  const parsed=/^[+-]?\d+$/.test(normalized)?Number(normalized):0;
+  return {value:Math.max(0,Math.min(9999,Math.abs(parsed)||0)),
+    sign:parsed<0||text.trim().startsWith('-')?-1:1};
+}
 export function sanitizeObject(input: Record<string,unknown>): TableObject {
   const kinds: ObjectKind[] = ['card','deck','deck-box','token','miniature','die','tile','board','marker'];
   const kind = kinds.includes(input.kind as ObjectKind) ? input.kind as ObjectKind : 'token';
@@ -1001,7 +1012,8 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
     ...(typeof input.carrierId==='string'&&input.carrierId!==input.id ? {carrierId:textValue(input.carrierId,80)} : {}),
-    ...(kind==='token'&&input.tokenCoin===true?{tokenCoin:true,tokenSign:input.tokenSign===-1?-1 as const:1 as const,value:clamp(finite(input.value,1),0,9999)}:{}),
+    ...(kind==='token'&&input.tokenCoin===true?{tokenCoin:true,tokenSign:input.tokenSign===-1?-1 as const:1 as const,value:clamp(finite(input.value,1),0,9999),
+      ...(validCoinText(input.coinText)?{coinText:input.coinText}:{})}:{}),
     ...(input.scale!==undefined ? {scale:clamp(Math.round(finite(input.scale,1)*2)/2,0.5,7)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
@@ -1138,8 +1150,10 @@ export function validateCommand(state: GameState, command: Command): string | nu
   if(command.type==='COIN_MODIFY'){
     if(!target?.tokenCoin)return 'Only physical coins can be modified';
     const delta=command.payload.delta;
-    const color=command.payload.color;
-    if(delta===undefined&&color===undefined)return 'No coin adjustment supplied';
+    const color=command.payload.color,coinText=command.payload.coinText;
+    if(delta===undefined&&color===undefined&&coinText===undefined)return 'No coin adjustment supplied';
+    if(coinText!==undefined&&(!validCoinText(coinText)||target.coinText===undefined))
+      return 'Only editable coins accept digits, commas, + and -';
     if(delta!==undefined&&![1,10,100,1000,-1,-10,-100,-1000].includes(Number(delta)))
       return 'Invalid coin increment';
     if(color!==undefined&&(typeof color!=='string'||!/^#[0-9a-fA-F]{6}$/.test(color)))
@@ -1186,6 +1200,8 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
       return 'You can only use coins on your own mat';
     if(command.type==='TOKEN_PLACE'){
+      if(command.payload.coinText!==undefined&&!validCoinText(command.payload.coinText))
+        return 'Invalid editable coin text';
       if(state.objects.length>=1000)return 'Maximum objects reached';
       const x=Number(command.payload.x),y=Number(command.payload.y);
       if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>BOARD_W||y<0||y>BOARD_H)
@@ -1548,7 +1564,12 @@ export function applyCommand(state: GameState, command: Command): GameState {
     case 'COIN_MODIFY':if(obj){
       if(p.delta!==undefined)obj.value=clamp((obj.value??0)+Number(p.delta),0,9999);
       if(typeof p.color==='string')obj.color=p.color;
-      obj.name=String(obj.value);
+      if(validCoinText(p.coinText)&&obj.coinText!==undefined){
+        obj.coinText=p.coinText;
+        const numeric=coinNumericValue(p.coinText);
+        obj.value=numeric.value;obj.tokenSign=numeric.sign;
+      }
+      obj.name=obj.coinText??String(obj.value);
       message='Coin '+obj.id+' · '+obj.value+(p.color?' · color updated':'');
     }break;
     case 'TOKEN_PLACE':{
@@ -1558,8 +1579,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const carrier=cardAtPoint(objects,x,y,Number(p.seat),undefined,
         typeof p.carrierId==='string'?p.carrierId:undefined);
       objects.push(sanitizeObject({
-        id:command.id+'-coin',kind:'token',tokenCoin:true,tokenSign:sign,value,
-        name:String(value),x,y,rotation:0,zone:'TABLE',order:objects.length,
+        id:command.id+'-coin',kind:'token',tokenCoin:true,
+        tokenSign:validCoinText(p.coinText)?coinNumericValue(p.coinText).sign:sign,value,
+        ...(validCoinText(p.coinText)?{coinText:p.coinText}:{}),
+        name:validCoinText(p.coinText)?p.coinText:String(value),x,y,rotation:0,zone:'TABLE',order:objects.length,
         color:typeof p.color==='string'&&/^#[0-9a-fA-F]{6}$/.test(p.color)?p.color:'#d8b979',...(carrier?{carrierId:carrier.id,matSeat:carrier.matSeat??Number(p.seat)}:{matSeat:Number(p.seat)})
       }));
       message=(sign===1?'+':'−')+value+' coin placed'+(carrier?' on '+carrier.name:'');
