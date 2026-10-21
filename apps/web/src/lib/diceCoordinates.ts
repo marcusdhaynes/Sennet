@@ -20,3 +20,11 @@ export function diceRackLocations(
     y:top+25+Math.floor(i/2)*39
   }));
 }
+
+/** Loose dice stay visible until their requested lifetime expires, then
+ * dissolve over 850ms. Zero disables automatic fading. */
+export function looseDieOpacity(elapsedMs:number,fadeAfterMs:number):number {
+  if(fadeAfterMs<=0)return 1;
+  if(elapsedMs<=fadeAfterMs)return 1;
+  return Math.max(0,Math.min(1,1-(elapsedMs-fadeAfterMs)/850));
+}
