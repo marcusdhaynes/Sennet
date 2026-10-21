@@ -25,7 +25,8 @@ import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition} from '@sennet/core';
-interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number}[])=>void;readonly?:boolean}
+interface Props{bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number}[])=>void;
+onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number)=>void;readonly?:boolean}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
 let activeBookPointer:number|null=null;
@@ -1042,7 +1043,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const diceQuantitiesRef=useRef<Record<number,number>>({});
@@ -1057,6 +1058,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const diceFlying=useRef<Container[]>([]);
   const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const diceThrowCallback=useRef(onDiceThrow);diceThrowCallback.current=onDiceThrow;
+  const diceRerollCallback=useRef(onDiceReroll);diceRerollCallback.current=onDiceReroll;
+  const rerollPointer=useRef<{pointerId:number;id:string;x:number;y:number}|null>(null);
+  const rerollDieNow=useRef<(id:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
@@ -1316,6 +1320,71 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     });
     void origin;
   };
+  rerollDieNow.current=id=>{
+    if(dice3DActive.current)return;
+    const current=session.current,host=mount.current;
+    const die=currentState.current.objects.find(o=>o.id===id);
+    const visual=visuals.current.get(id);
+    if(!current||!host||!die?.throwDice||!visual||die.locked)return;
+    const {app,board}=current,rect=app.canvas.getBoundingClientRect();
+    if(rect.width<=0||rect.height<=0)return;
+    const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
+    const pos=visual.toGlobal(new Point(0,0));
+    const start={x:pos.x*sx,y:pos.y*sy};
+    const origin=tcgMatOrigin(seatRef.current);
+    const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+    const distance=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+    const toScreen=(p:Point)=>({x:p.x*sx,y:p.y*sy});
+    const mat=new Container();
+    mat.position.set(origin.x,origin.y);mat.rotation=origin.angle;
+    // Source tray geometry must use the same transformed seat mat.
+    const cameraMat=leftTrayMat.current;
+    const trays=[-1,1].map(side=>{
+      const x=side*distance,w=TCG_MAT.cardWidth/2+4;
+      const corners=[new Point(x-w,trayTop-5),new Point(x+w,trayTop-5),
+        new Point(x+w,TCG_MAT_HEIGHT/2+5),new Point(x-w,TCG_MAT_HEIGHT/2+5)]
+        .map(p=>toScreen((cameraMat??board).toGlobal(p)));
+      return {left:Math.min(...corners.map(p=>p.x)),
+        right:Math.max(...corners.map(p=>p.x)),
+        top:Math.min(...corners.map(p=>p.y)),bottom:Math.max(...corners.map(p=>p.y))};
+    });
+    const obstacles=[...visuals.current.entries()].filter(([otherId])=>{
+      const other=currentState.current.objects.find(o=>o.id===otherId);
+      return otherId!==id&&!!other&&(other.tokenCoin||other.throwDice||other.kind==='die');
+    }).slice(-70).map(([,piece])=>toScreen(piece.toGlobal(new Point(0,0))));
+    const parent=visual.parent??board;
+    dice3DActive.current=true;setDice3DError(null);
+    visual.visible=false;
+    import('../lib/Dice3D').then(({roll3DDice})=>{
+      if(session.current?.app!==app){dice3DActive.current=false;return;}
+      try{
+        const stop=roll3DDice({host,width:rect.width,height:rect.height,
+          sources:[{sides:die.sides??6,quantity:die.throwQuantity??1,...start}],
+          aimX:Math.abs(rect.width/2-start.x)>25?(rect.width/2-start.x)*.8:145,
+          aimY:(rect.height/2-start.y)*.6-25,durationMs:220,trays,obstacles,
+          done:results=>{
+            dice3DActive.current=false;dice3DStop.current=null;
+            if(session.current?.app!==app)return;
+            const result=results[0];
+            const at=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
+            diceRerollCallback.current(id,result.rolls,
+              Math.max(0,Math.min(BOARD_W,at.x)),
+              Math.max(0,Math.min(BOARD_W,at.y)),
+              ((result.rotation%360)+360)%360);
+            if(!visual.destroyed)visual.visible=true;
+          }});
+        dice3DStop.current=stop;
+      }catch(error){
+        dice3DActive.current=false;dice3DStop.current=null;visual.visible=true;
+        setDice3DError('3D reroll unavailable: '+String(error));
+      }
+    }).catch(error=>{
+      dice3DActive.current=false;dice3DStop.current=null;
+      if(!visual.destroyed)visual.visible=true;
+      setDice3DError('3D reroll unavailable: '+String(error));
+    });
+  };
+
   const addDiceCount=(sides:number)=>{
     if(diceThrowAnimation.current!==null||dice3DActive.current)return;
     const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
@@ -1752,6 +1821,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           if(e.button!==0)return;
           e.stopPropagation();
           cancelActiveDrag.current();
+          if(obj.throwDice)rerollPointer.current={pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY};
           const local=piece.toLocal(e.global);
           const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size*.41;
           if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
@@ -1860,6 +1930,23 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       window.removeEventListener('pointerup',up);
       window.removeEventListener('pointercancel',cancel);
     };
+  },[]);
+
+  useEffect(()=>{
+    const release=(e:PointerEvent)=>{
+      const tap=rerollPointer.current;
+      if(!tap||tap.pointerId!==e.pointerId)return;
+      rerollPointer.current=null;
+      if(e.type!=='pointerup'||Math.hypot(tap.x-e.clientX,tap.y-e.clientY)>9)return;
+      // A tap is a deliberate reroll. Never trigger a card-wheel drag,
+      // clone a die, or reroll its former value without animation.
+      cancelActiveDrag.current();
+      rerollDieNow.current(tap.id);
+    };
+    window.addEventListener('pointerup',release);
+    window.addEventListener('pointercancel',release);
+    return()=>{window.removeEventListener('pointerup',release);
+      window.removeEventListener('pointercancel',release);};
   },[]);
 
   // A source is immutable: only a transient ghost travels with the pointer.
