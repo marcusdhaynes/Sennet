@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY' | 'REROLL_DIE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -1043,7 +1043,7 @@ const isLooseAccessory=(object:TableObject)=>
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY','COIN_MODIFY'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY','COIN_MODIFY','REROLL_DIE'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -1091,6 +1091,19 @@ export function validateCommand(state: GameState, command: Command): string | nu
     }
     if(action==='shuffle'&&selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
       return 'Only card stacks can be shuffled';
+  }
+  if(command.type==='REROLL_DIE'){
+    if(!target?.throwDice||target.kind!=='die')return 'Only thrown dice can be rerolled';
+    if(target.locked)return 'Die is locked';
+    if(target.owner&&target.owner!==command.actor)return 'Die belongs to another player';
+    const rolls=command.payload.rolls;
+    if(!Array.isArray(rolls)||rolls.length!==(target.throwQuantity??1)||
+       rolls.some(n=>!Number.isInteger(n)||n<1||n>(target.sides??6)))
+      return 'Reroll must preserve the selected dice quantity and range';
+    if(!Number.isFinite(command.payload.x)||!Number.isFinite(command.payload.y)||
+       Number(command.payload.x)<0||Number(command.payload.x)>BOARD_W||
+       Number(command.payload.y)<0||Number(command.payload.y)>BOARD_H||
+       !Number.isFinite(command.payload.rotation))return 'Invalid reroll landing';
   }
   if(command.type==='COIN_MODIFY'){
     if(!target?.tokenCoin)return 'Only physical coins can be modified';
@@ -1475,6 +1488,22 @@ export function applyCommand(state: GameState, command: Command): GameState {
         summaries.push(label+' ×'+toss.rolls.length+' = '+face);
       }
       message='Dice throw · '+summaries.join(' · ');
+    }break;
+    case 'REROLL_DIE':if(obj){
+      const rolls=(p.rolls as number[]).slice();
+      const heads=rolls.filter(v=>v===1).length;
+      const total=obj.sides===2?heads:rolls.reduce((a,b)=>a+b,0);
+      obj.throwRolls=rolls;obj.throwQuantity=rolls.length;obj.throwTotal=total;
+      obj.value=obj.sides===2?(heads?1:2):Math.min(100,total);
+      obj.x=Number(p.x);obj.y=Number(p.y);
+      obj.rotation=((Number(p.rotation)%360)+360)%360;
+      const face=obj.sides===2?(rolls.length===1?(heads?'HEADS':'TAILS'):
+        heads+'H / '+(rolls.length-heads)+'T'):String(total);
+      obj.description=obj.name+' × '+rolls.length+': '+rolls.join(', ')+' → '+face;
+      const carrier=cardAtPoint(objects,obj.x,obj.y,obj.matSeat??0,obj.id);
+      if(carrier){obj.carrierId=carrier.id;obj.matSeat=carrier.matSeat??obj.matSeat;}
+      else delete obj.carrierId;
+      message='Rerolled '+obj.name+' ×'+rolls.length+' = '+face;
     }break;
     case 'COIN_MODIFY':if(obj){
       if(p.delta!==undefined)obj.value=clamp((obj.value??0)+Number(p.delta),0,9999);
