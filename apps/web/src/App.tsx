@@ -407,6 +407,7 @@ export default function App(){
         coinAppearance={coinAppearance} customCoinValue={customCoinValue} onCustomCoinValue={setCustomCoinValue}
         onTokenPlace={(value,sign,x,y,carrierId)=>takeAction('TOKEN_PLACE',{value,sign,x,y,seat,...(carrierId?{carrierId}:{})})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
+        onDiceThrow={throws=>takeAction('THROW_TRAY',{seat,throws})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
