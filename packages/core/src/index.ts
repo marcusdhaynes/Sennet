@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -986,6 +986,13 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
     ...(Number.isInteger(input.matSeat)&&Number(input.matSeat)>=0&&Number(input.matSeat)<SEATS ? {matSeat:Number(input.matSeat)} : {}),
     ...(kind==='die'?{sides:clamp(Math.floor(finite(input.sides,6)),2,100),value:clamp(Math.floor(finite(input.value,1)),1,100)}:{}),
+    ...(kind==='die'&&input.throwDice===true?{
+      throwDice:true,
+      throwRolls:Array.isArray(input.throwRolls)?
+        input.throwRolls.slice(0,20).map(v=>Math.floor(finite(v,1))):[],
+      throwQuantity:clamp(Math.floor(finite(input.throwQuantity,1)),1,20),
+      throwTotal:clamp(Math.floor(finite(input.throwTotal,1)),0,2000)
+    }:{}),
     ...(frameUrls?.length?{frameUrls}:{}),
     ...(safeUrl(input.faceUrl)?{faceUrl:safeUrl(input.faceUrl)}:{}),
     ...(safeUrl(input.backUrl)?{backUrl:safeUrl(input.backUrl)}:{}),
@@ -1036,7 +1043,7 @@ const isLooseAccessory=(object:TableObject)=>
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -1084,6 +1091,33 @@ export function validateCommand(state: GameState, command: Command): string | nu
     }
     if(action==='shuffle'&&selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
       return 'Only card stacks can be shuffled';
+  }
+  if(command.type==='THROW_TRAY'){
+    if(state.kind!=='tcg')return 'Dice tray is available for TCG tables';
+    const seat=command.payload.seat;
+    if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS)return 'Invalid dice seat';
+    if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
+      return 'You can only throw dice from your own tray';
+    const throws=command.payload.throws;
+    if(!Array.isArray(throws)||throws.length<1||throws.length>8)return 'Select 1–8 dice types';
+    const seen=new Set<number>();
+    for(const entry of throws){
+      if(!entry||typeof entry!=='object'||Array.isArray(entry))return 'Invalid dice throw';
+      const t=entry as Record<string,unknown>,sides=t.sides;
+      if(typeof sides!=='number'||![2,4,6,8,10,12,20,100].includes(sides)||seen.has(sides))
+        return 'Invalid or duplicate die';
+      seen.add(sides);
+      const rolls=t.rolls;
+      if(!Array.isArray(rolls)||rolls.length<1||rolls.length>20||
+         rolls.some(v=>!Number.isInteger(v)||Number(v)<1||Number(v)>sides))
+        return 'Invalid dice result';
+      if(typeof t.x!=='number'||typeof t.y!=='number'||
+         !Number.isFinite(t.x)||!Number.isFinite(t.y)||
+         t.x<0||t.y<0||t.x>BOARD_W||t.y>BOARD_H)
+        return 'Invalid dice landing position';
+      if(typeof t.rotation!=='number'||!Number.isFinite(t.rotation))return 'Invalid die rotation';
+    }
+    if(state.objects.length+throws.length>1000)return 'Maximum objects reached';
   }
   if(command.type==='TOKEN_PLACE'||command.type==='TOKEN_ADJUST'){
     if(state.kind!=='tcg')return 'Coins are available on TCG tables';
@@ -1404,6 +1438,31 @@ export function applyCommand(state: GameState, command: Command): GameState {
         }
       }
       message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
+    }break;
+    case 'THROW_TRAY':{
+      const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number}>;
+      const summaries:string[]=[];
+      for(let i=0;i<thrown.length;i++){
+        const toss=thrown[i],isCoin=toss.sides===2;
+        const heads=toss.rolls.filter(n=>n===1).length;
+        const sum=toss.rolls.reduce((acc,n)=>acc+n,0);
+        const total=isCoin?heads:sum;
+        const label=isCoin?'Flip Coin':'D'+String(toss.sides).padStart(2,'0');
+        const face=isCoin?
+          toss.rolls.length===1?(heads?'HEADS':'TAILS'):
+            heads+'H / '+(toss.rolls.length-heads)+'T':String(total);
+        objects.push(sanitizeObject({
+          id:command.id+'-throw-'+i,kind:'die',throwDice:true,
+          throwRolls:toss.rolls,throwQuantity:toss.rolls.length,throwTotal:total,
+          sides:toss.sides,value:isCoin?(heads?1:2):Math.min(100,total),
+          name:label,x:toss.x,y:toss.y,rotation:toss.rotation,
+          zone:'TABLE',order:objects.length+100,faceUp:true,
+          color:isCoin?'#d5b87f':'#b9c6b9',matSeat:Number(p.seat),
+          description:label+' × '+toss.rolls.length+': '+toss.rolls.join(', ')+' → '+face
+        }));
+        summaries.push(label+' ×'+toss.rolls.length+' = '+face);
+      }
+      message='Dice throw · '+summaries.join(' · ');
     }break;
     case 'TOKEN_PLACE':{
       const x=Number(p.x),y=Number(p.y),value=Number(p.value),sign=p.sign as 1|-1;
