@@ -21,6 +21,8 @@ export interface Dice3DOptions {
   reroll?:boolean;
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
+  /** True only once the replacement 3D renderer has painted the outcome. */
+  canHandoff?:()=>boolean;
 }
 // Adjacent dice must fit within a 62-unit drawer.
 export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
@@ -196,7 +198,18 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     // Preserve the visible final frame until the static renderer has drawn
     // the exact recorded quaternion; otherwise a die visibly teleports.
     opts.done(result);
-    requestAnimationFrame(()=>requestAnimationFrame(cleanup));
+    // Never remove the animated mesh before the STATIC THREE renderer has
+    // actually painted the exact final quaternion. The old fixed two-frame
+    // delay could reveal a flat placeholder (or a blank frame) on slow GPUs.
+    const handoffStarted=performance.now();
+    const transfer=()=>{
+      if(stopped)return;
+      if(opts.canHandoff?.()||performance.now()-handoffStarted>1800){
+        cleanup();return;
+      }
+      frame=requestAnimationFrame(transfer);
+    };
+    frame=requestAnimationFrame(transfer);
   };
   const tick=(now:number)=>{
     if(stopped)return;
