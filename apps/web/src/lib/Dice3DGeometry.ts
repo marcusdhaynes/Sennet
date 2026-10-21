@@ -48,7 +48,7 @@ function hundredFacets(r:number):THREE.BufferGeometry{
 export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
   switch(sides){
     case 2:{
-      const g=new THREE.CylinderGeometry(r,r,4,32,1);
+      const g=new THREE.CylinderGeometry(r,r,4*r/radiusFor(2),32,1);
       g.rotateX(Math.PI/2);return g.toNonIndexed();
     }
     case 4:return new THREE.TetrahedronGeometry(r,0).toNonIndexed();
@@ -65,6 +65,7 @@ export function dieGeometry(sides:number,r:number):THREE.BufferGeometry{
  * die still uses a single draw call for all 100 labels. */
 function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
   group:THREE.Group,themeId:DiceThemeId):NumberedFace[]{
+  const relative=r/radiusFor(sides);
   const attrs=geometry.getAttribute('position');
   const records=new Map<string,{normal:THREE.Vector3;center:THREE.Vector3;count:number}>();
   for(let i=0;i+2<attrs.count;i+=3){
@@ -86,11 +87,11 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
     normal:face.normal,value:i%sides+1
   }));
   const entries=sides===2?[
-    {normal:faces[0].normal,center:new THREE.Vector3(0,0,2.25),value:'H'},
-    {normal:faces[1].normal,center:new THREE.Vector3(0,0,-2.25),value:'T'}
+    {normal:faces[0].normal,center:new THREE.Vector3(0,0,2.25*relative),value:'H'},
+    {normal:faces[1].normal,center:new THREE.Vector3(0,0,-2.25*relative),value:'T'}
   ]:Array.from(records.values()).map((face,i)=>({
     normal:face.normal,center:face.center.clone().divideScalar(face.count)
-      .addScaledVector(face.normal,.47),value:String(i%sides+1)
+      .addScaledVector(face.normal,.47*relative),value:String(i%sides+1)
   }));
   const cell=72,cols=Math.min(10,entries.length),rows=Math.ceil(entries.length/cols);
   const canvas=document.createElement('canvas');
@@ -109,8 +110,9 @@ function faceLabels(geometry:THREE.BufferGeometry,sides:number,r:number,
     ctx.fillStyle=theme.ink;ctx.fillText(entry.value,
       col*cell+cell/2,row*cell+cell/2+2);
     const half=sides===2?8.3:sides===100?3.1:sides>=20?4.3:sides>=12?5.2:6.2;
+    const halfScaled=half*relative;
     const rotation=new THREE.Quaternion().setFromUnitVectors(up,entry.normal);
-    const corners=[[-half,-half],[half,-half],[half,half],[-half,half]]
+    const corners=[[-halfScaled,-halfScaled],[halfScaled,-halfScaled],[halfScaled,halfScaled],[-halfScaled,halfScaled]]
       .map(([x,y])=>new THREE.Vector3(x,y,0)
         .applyQuaternion(rotation).add(entry.center));
     const u0=(col*cell+4)/canvas.width,u1=((col+1)*cell-4)/canvas.width;
