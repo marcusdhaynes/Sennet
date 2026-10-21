@@ -287,3 +287,18 @@ test('LCD left edge meets playmat; right edge touches wheel across zoom and pan'
   assert.equal(noRoom.visible,false);
   assert.equal(noRoom.width,0);
 });
+
+test('action display rests flush against playmat with no camera-dependent gap',async()=>{
+  const {ACTION_LCD_HEIGHT,actionScreenContactCenter}=await import(
+    '../../../apps/web/src/lib/actionScreenFit.ts');
+  for(const matHeight of [294,390,488]){
+    const localCenter=actionScreenContactCenter(matHeight);
+    assert.equal(localCenter-ACTION_LCD_HEIGHT/2,matHeight/2);
+    for(const zoom of [.25,.5,1,1.6,3]){
+      const screenTop=(localCenter-ACTION_LCD_HEIGHT/2)*zoom+230;
+      const matBottom=matHeight/2*zoom+230;
+      assert.ok(Math.abs(screenTop-matBottom)<1e-7,
+        'screen should touch mat at zoom '+zoom);
+    }
+  }
+});
