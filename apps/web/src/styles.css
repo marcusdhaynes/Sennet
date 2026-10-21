@@ -1541,9 +1541,9 @@ body>.reader-backdrop{
 
 /* Compact coin radial: 10 true controls, just large enough to contain
    +/-1000 labels. Unlike SVG groups, these buttons receive native clicks. */
-.sennet-coin-radial{width:184px;height:184px;
+.sennet-coin-radial{width:160px;height:160px;
   filter:drop-shadow(0 5px 10px #0009)}
-.sennet-coin-radial .sennet-coin-ring{width:184px;height:184px;
+.sennet-coin-radial .sennet-coin-ring{width:160px;height:160px;
   position:absolute;inset:0;pointer-events:none}
 .sennet-coin-radial .sennet-coin-ring path{pointer-events:none}
 .sennet-coin-radial .sennet-coin-sector{
@@ -1553,7 +1553,7 @@ body>.reader-backdrop{
 .sennet-coin-radial .sennet-coin-radial-center{
   fill:#d8b979;stroke:#453c33;stroke-width:2}
 .sennet-coin-action-button{position:absolute;transform:translate(-50%,-50%);
-  height:28px;min-width:31px;padding:0 2px;border:0;border-radius:7px;
+  height:24px;min-width:29px;padding:0 2px;border:0;border-radius:7px;
   color:#f9e6c5;background:transparent;
   font:800 10px/1 Inter,system-ui,sans-serif;text-align:center;
   white-space:nowrap;cursor:pointer;touch-action:manipulation;z-index:2}
@@ -1566,7 +1566,7 @@ body>.reader-backdrop{
   pointer-events:none;text-align:center;z-index:2}
 .sennet-coin-radial>.sennet-coin-close{
   top:-2px;right:-2px;z-index:6;width:20px;height:20px;font-size:13px}
-.sennet-coin-radial>.sennet-coin-palette{top:187px;z-index:8}
+.sennet-coin-radial>.sennet-coin-palette{top:163px;z-index:8}
 .sennet-coin-radial-layer{isolation:isolate}
 .sennet-coin-above-card-top,.sennet-coin-above-card-bottom{display:none!important}
 .sennet-coin-above-card-number{font-size:8px}
