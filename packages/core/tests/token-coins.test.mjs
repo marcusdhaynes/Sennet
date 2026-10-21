@@ -285,3 +285,53 @@ test('coins dropped from a side drawer appear at exact tabletop world coordinate
     assert.equal(coin.color,'#83c4c7');
   }
 });
+
+test('editable coin keeps exact +, -, commas and digits through edits, clones and replay',async()=>{
+  const {validCoinText,coinNumericValue}=await import('../src/index.ts');
+  for(const raw of ['1','-','+','1,000','+20','-4,205','12,34','',',,,']){
+    assert.equal(validCoinText(raw),true,'literal text accepted: '+raw);
+  }
+  for(const raw of ['letters','2.5','1/2','<script>','a'.repeat(21)]){
+    assert.equal(validCoinText(raw),false,'reject unsafe or unsupported characters');
+  }
+  assert.deepEqual(coinNumericValue('-1,234'),{value:1234,sign:-1});
+  assert.deepEqual(coinNumericValue('+7'),{value:7,sign:1});
+  assert.deepEqual(coinNumericValue('-'),{value:0,sign:-1});
+  const initial=createGame('tcg');
+  const card=initial.objects.find(o=>o.id==='hero-a');
+  const start={id:'literal-place',actor:'local',type:'TOKEN_PLACE',
+    payload:{seat:0,x:card.x+8,y:card.y-9,value:1,sign:1,coinText:'-1,234',carrierId:card.id}};
+  const edit={id:'literal-edit',actor:'local',type:'COIN_MODIFY',
+    payload:{id:'literal-place-coin',coinText:'+'}};
+  const copy={id:'literal-clone',actor:'local',type:'CLONE',
+    payload:{id:'literal-place-coin',newId:'literal-copy'}};
+  const commands=[start,edit,copy];
+  const state=commands.reduce((p,c)=>applyCommand(p,c),initial);
+  const coin=state.objects.find(o=>o.id==='literal-place-coin');
+  const clone=state.objects.find(o=>o.id==='literal-copy');
+  assert.ok(coin&&clone);
+  assert.equal(coin.coinText,'+');
+  assert.equal(clone.coinText,'+');
+  assert.equal(coin.value,0);
+  assert.equal(clone.value,0);
+  assert.equal(coin.carrierId,card.id);
+  assert.deepEqual(state,replay(initial,commands));
+  assert.throws(()=>action(state,'COIN_MODIFY',{id:coin.id,coinText:'abc'},'bad-coin'),
+    /Only editable coins/);
+  assert.throws(()=>action(initial,'TOKEN_PLACE',{seat:0,x:card.x+8,y:card.y-9,
+    value:2,sign:1,coinText:'<fake>'},'bad-create'),/Invalid editable coin text/);
+});
+test('normal 10-value radial coin stays numeric, cannot be silently converted to literal',()=>{
+  const start=createGame('tcg'),card=start.objects.find(o=>o.id==='hero-a');
+  const placed=action(start,'TOKEN_PLACE',{
+    seat:0,x:card.x+4,y:card.y+5,value:10,sign:1
+  },'radial-10');
+  const coin=placed.objects.find(o=>o.id==='radial-10-coin');
+  assert.ok(coin);
+  assert.equal(coin.coinText,undefined);
+  assert.throws(()=>action(placed,'COIN_MODIFY',{
+    id:coin.id,coinText:'-'
+  },'convert-bad'),/Only editable coins/);
+  const next=action(placed,'COIN_MODIFY',{id:coin.id,delta:100},'plus-100');
+  assert.equal(next.objects.find(o=>o.id===coin.id).value,110);
+});
