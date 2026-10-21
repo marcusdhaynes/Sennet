@@ -1007,6 +1007,32 @@ export function cardStackMembers(state:GameState,id:string):TableObject[] {
   );
 }
 
+
+/** A card carries a loose accessory if and only if the accessory CENTER is
+ * inside the card's rotated, scaled rectangle. The coin's size is irrelevant.
+ * Seats use the exact same baseline orientation as the Pixi card renderer. */
+export function cardContainsPoint(card:TableObject,x:number,y:number,fallbackSeat=0):boolean {
+  if((card.kind!=='card'&&card.kind!=='deck')||card.zone!=='TABLE')return false;
+  const angle=playerSeatRotation(card.matSeat??fallbackSeat)+card.rotation*Math.PI/180;
+  const dx=x-card.x,dy=y-card.y;
+  const lx=dx*Math.cos(angle)+dy*Math.sin(angle);
+  const ly=-dx*Math.sin(angle)+dy*Math.cos(angle);
+  const scale=card.scale??1;
+  return Math.abs(lx)<=31*scale+1e-8&&Math.abs(ly)<=44*scale+1e-8;
+}
+export function cardAtPoint(objects:readonly TableObject[],x:number,y:number,
+  fallbackSeat=0,excludingId?:string,preferredId?:string):TableObject|undefined {
+  const eligible=(o:TableObject)=>o.id!==excludingId&&
+    cardContainsPoint(o,x,y,fallbackSeat);
+  const preferred=objects.find(o=>o.id===preferredId);
+  if(preferred&&eligible(preferred))return preferred;
+  // The last card in a physical pile is drawn on top; use it as carrier.
+  return [...objects].reverse().find(eligible);
+}
+const isLooseAccessory=(object:TableObject)=>
+  object.kind==='token'||object.kind==='marker'||
+  object.kind==='die'||object.kind==='miniature';
+
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
@@ -1076,7 +1102,9 @@ export function validateCommand(state: GameState, command: Command): string | nu
       if(command.payload.carrierId!==undefined){
         const card=state.objects.find(o=>o.id===command.payload.carrierId);
         if(!card||!['card','deck'].includes(card.kind)||card.zone!=='TABLE'||card.locked||
-           (card.owner&&card.owner!==command.actor))return 'Cannot attach to that card';
+           (card.owner&&card.owner!==command.actor)||
+           !cardContainsPoint(card,x,y,seat))
+          return 'Coin center must be inside an available card';
       }
     }else{
       const ids=command.payload.ids;
@@ -1216,7 +1244,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
       // A physical deck box is a freely movable tabletop accessory, not
       // a card: do not snap it into card slots or modify deck contents.
-      const snapEligible=state.kind==='tcg'&&obj.kind!=='board'&&obj.kind!=='deck-box'&&!obj.tokenCoin;
+      // Small tabletop accessories have pixel-accurate free placement.
+      // Only cards/decks/tiles use the playmat slot-magnet system.
+      const snapEligible=state.kind==='tcg'&&
+        (obj.kind==='card'||obj.kind==='deck'||obj.kind==='tile');
       const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
           ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
@@ -1272,9 +1303,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
         // a group drift apart. Atomic event = one undo/replay step.
         const anchor=picked.find(card=>card.id===p.anchorId)!;
         const tx=clamp(Number(p.x),0,BOARD_W),ty=clamp(Number(p.y),0,BOARD_H);
-        const snapped=tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
+        const snapped=(anchor.kind==='card'||anchor.kind==='deck'||anchor.kind==='tile')
+          ?tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
           Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-            ?Number(p.snapMergedSeat):undefined,anchor.scale??1);
+            ?Number(p.snapMergedSeat):undefined,anchor.scale??1):null;
         // Clamp the shared translation against the whole selection's
         // bounding box, not each card individually. Otherwise a card
         // hitting a table edge could pull the group out of formation.
@@ -1365,7 +1397,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
     }break;
     case 'TOKEN_PLACE':{
       const x=Number(p.x),y=Number(p.y),value=Number(p.value),sign=p.sign as 1|-1;
-      const carrier=objects.find(o=>o.id===p.carrierId);
+      // Trust the physical coin center, never a nearby slot or a requested
+      // carrier ID on its own. Keep the exact drop coordinates.
+      const carrier=cardAtPoint(objects,x,y,Number(p.seat),undefined,
+        typeof p.carrierId==='string'?p.carrierId:undefined);
       objects.push(sanitizeObject({
         id:command.id+'-coin',kind:'token',tokenCoin:true,tokenSign:sign,value,
         name:String(value),x,y,rotation:0,zone:'TABLE',order:objects.length,
@@ -1494,31 +1529,40 @@ export function applyCommand(state: GameState, command: Command): GameState {
       if(!movingIds.has(child.id))continue;
       const old=beforeById.get(child.id);
       if(!old||!positionChanged(old,child))continue;
-      // Non-table destinations should never remain physically attached.
+      // Carry relationships start/end at the precise DROP CENTER, never at
+      // a magnetic card slot or when only the object's edges overlap a card.
       if(child.zone!=='TABLE'){delete child.carrierId;continue;}
-      const size=sizeOf(child);
-      const candidates=carrying.filter(parent=>{
-        if(parent.id===child.id||parent.zone!=='TABLE'||movingIds.has(parent.id))return false;
-        if((parent.matSeat??null)!==(child.matSeat??null))return false;
-        const larger=sizeOf(parent);
-        if(larger.w<=size.w+1||larger.h<=size.h+1)return false;
-        // Resolve positions in the carrier's rotated local coordinate system.
-        const theta=parent.rotation*Math.PI/180;
-        const dx=child.x-parent.x,dy=child.y-parent.y;
-        const lx=dx*Math.cos(theta)+dy*Math.sin(theta);
-        const ly=-dx*Math.sin(theta)+dy*Math.cos(theta);
-        return Math.abs(lx)<=larger.w/2-size.w/4 &&
-          Math.abs(ly)<=larger.h/2-size.h/4;
-      }).sort((a,b)=>sizeOf(a).w*sizeOf(a).h-sizeOf(b).w*sizeOf(b).h);
-      const parent=candidates[0];
-      // An object cannot attach to its own descendant.
-      let current:TableObject|undefined=parent,cyclic=false;
-      while(current){
-        if(current.id===child.id){cyclic=true;break;}
-        current=objects.find(o=>o.id===current!.carrierId);
+      let parent:TableObject|undefined;
+      if(isLooseAccessory(child)){
+        parent=cardAtPoint(carrying,child.x,child.y,
+          child.matSeat??Number(p.snapMergedSeat??p.seat??0),child.id);
+      }else{
+        const size=sizeOf(child);
+        const candidates=carrying.filter(card=>{
+          if(card.id===child.id||card.zone!=='TABLE'||movingIds.has(card.id))return false;
+          const larger=sizeOf(card);
+          if(larger.w<=size.w+1||larger.h<=size.h+1)return false;
+          const angle=playerSeatRotation(card.matSeat??0)+card.rotation*Math.PI/180;
+          const dx=child.x-card.x,dy=child.y-card.y;
+          const lx=dx*Math.cos(angle)+dy*Math.sin(angle);
+          const ly=-dx*Math.sin(angle)+dy*Math.cos(angle);
+          return Math.abs(lx)<=larger.w/2-size.w/4 &&
+            Math.abs(ly)<=larger.h/2-size.h/4;
+        }).sort((a,b)=>sizeOf(a).w*sizeOf(a).h-sizeOf(b).w*sizeOf(b).h);
+        parent=candidates[0];
       }
-      if(parent&&!cyclic)child.carrierId=parent.id;
-      else delete child.carrierId;
+      // An object can never attach to its own descendant.
+      let ancestor=parent,cyclic=false;
+      while(ancestor){
+        if(ancestor.id===child.id){cyclic=true;break;}
+        ancestor=objects.find(o=>o.id===ancestor!.carrierId);
+      }
+      if(parent&&!cyclic){
+        child.carrierId=parent.id;
+        // Child and carrier must share the same physical seat for rendering,
+        // even when an accessory is dragged from one seat onto another.
+        if(parent.matSeat!==undefined)child.matSeat=parent.matSeat;
+      }else delete child.carrierId;
     }
   }
   // Compose transforms in topological order to support nested carriers.
@@ -1533,19 +1577,24 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const oldParent=beforeById.get(parent.id);
       const oldChild=beforeById.get(child.id);
       if(oldParent&&oldChild&&!movingIds.has(child.id)){
+        // The point on the card scales and rotates about the carrier center,
+        // while the accessory retains its own un-snapped local position.
         const delta=(parent.rotation-oldParent.rotation)*Math.PI/180;
-        const dx=oldChild.x-oldParent.x,dy=oldChild.y-oldParent.y;
+        const ratio=(parent.scale??1)/(oldParent.scale??1);
+        const dx=(oldChild.x-oldParent.x)*ratio,dy=(oldChild.y-oldParent.y)*ratio;
         child.x=clamp(parent.x+dx*Math.cos(delta)-dy*Math.sin(delta),0,BOARD_W);
         child.y=clamp(parent.y+dx*Math.sin(delta)+dy*Math.cos(delta),0,BOARD_H);
         child.rotation=((oldChild.rotation+parent.rotation-oldParent.rotation)%360+360)%360;
+        if(parent.matSeat!==undefined)child.matSeat=parent.matSeat;
       }
     }
     updating.delete(child.id);visited.add(child.id);
   };
   for(const piece of objects)propagate(piece);
-  // Deleted/removed carrier relationships are no longer valid.
+  // Attachments survive card movements and zone changes until explicitly
+  // removed, or the carrier is deleted. Never silently discard their link.
   for(const piece of objects)
-    if(piece.carrierId&&!objects.some(parent=>parent.id===piece.carrierId&&parent.zone==='TABLE'))
+    if(piece.carrierId&&!objects.some(parent=>parent.id===piece.carrierId))
       delete piece.carrierId;
   return {...state,objects,turnSeat,round,mode,centerMerges,seq:state.seq+1,message};
 }
