@@ -20,6 +20,8 @@ export interface StaticDiePlacement {
   quantity?:number;
   result?:string;
   source?:boolean;
+  /** Sources live behind the playmat when their drawer is retracted. */
+  drawerClosed?:boolean;
   shownAt?:number;
   fadeAfterMs?:number;
 }
@@ -207,7 +209,7 @@ export function createStaticDice3D(
         if(!ancestor.visible){visible=false;break;}
         ancestor=ancestor.parent;
       }
-      if(!entry||!visible){
+      if(!entry||!visible||entry.drawerClosed){
         visual.group.visible=false;visual.shadow.visible=false;
         if(visual.result)visual.result.style.display='none';
         continue;
