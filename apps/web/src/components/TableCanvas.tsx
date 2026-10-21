@@ -21,6 +21,7 @@ const coinSector=(index:number)=>{
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
+import {formatDiceSelection} from '../lib/actionDisplay';
 import {diceRackLocations} from '../lib/diceCoordinates';
 import {fitActionScreenToWheel} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
@@ -1084,6 +1085,7 @@ const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
+  const selectionReadout=formatDiceSelection(diceQuantities);
   const diceQuantitiesRef=useRef<Record<number,number>>({});
   const [boxClosed,setBoxClosed]=useState<{left:boolean;right:boolean}>(()=>{
     try{
@@ -3011,26 +3013,15 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           onClick={onUndo} disabled={!canUndo}
           aria-label="Undo last action" title="Undo">↶</button>
         <div className="sennet-action-lcd-display" role="status"
-          aria-live="polite" title={latestAction}>
-          <span>{latestAction}</span>
+          aria-live="polite" title={selectionReadout||latestAction}>
+          <span>{selectionReadout||latestAction}</span>
         </div>
+        {selectionReadout&&<button type="button" className="sennet-action-lcd-roll" title="Throw selected dice"
+          onClick={()=>{const die=DICE_TYPES.find(s=>diceQuantities[s]);
+            if(die!==undefined)throwDiceNow.current(die,0,0,240);}}>ROLL</button>}
         <button type="button" className="sennet-action-lcd-button"
           onClick={onRedo} disabled={!canRedo}
           aria-label="Redo last undone action" title="Redo">↷</button>
-      </div>}
-    {state.kind==='tcg'&&!readonly&&Object.values(diceQuantities).some(n=>n>0)&&
-      <div className="sennet-dice-selection" onPointerDown={e=>e.stopPropagation()}>
-        <strong>{DICE_TYPES.filter(s=>diceQuantities[s]).map(s=>diceLabel(s)+' ×'+diceQuantities[s]).join(' · ')}</strong>
-        <button type="button" onClick={()=>{
-          const chosen=DICE_TYPES.find(s=>diceQuantities[s]);
-          if(chosen!==undefined)throwDiceNow.current(chosen,0,0,240);
-        }}>Throw selected</button>
-        <button type="button" aria-label="Clear dice selection" onClick={()=>{
-          diceQuantitiesRef.current={};setDiceQuantities({});
-          for(const {body,count} of diceBadges.current.values()){
-            body.children[0].visible=false;count.text='';
-          }
-        }}>×</button>
       </div>}
 
     {dice3DError&&<div className="sennet-dice-engine-error" role="alert">
