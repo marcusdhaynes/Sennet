@@ -1451,13 +1451,15 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const face=isCoin?
           toss.rolls.length===1?(heads?'HEADS':'TAILS'):
             heads+'H / '+(toss.rolls.length-heads)+'T':String(total);
+        const carrier=cardAtPoint(objects,toss.x,toss.y,Number(p.seat));
         objects.push(sanitizeObject({
           id:command.id+'-throw-'+i,kind:'die',throwDice:true,
           throwRolls:toss.rolls,throwQuantity:toss.rolls.length,throwTotal:total,
           sides:toss.sides,value:isCoin?(heads?1:2):Math.min(100,total),
           name:label,x:toss.x,y:toss.y,rotation:toss.rotation,
           zone:'TABLE',order:objects.length+100,faceUp:true,
-          color:isCoin?'#d5b87f':'#b9c6b9',matSeat:Number(p.seat),
+          color:isCoin?'#d5b87f':'#b9c6b9',matSeat:carrier?.matSeat??Number(p.seat),
+          ...(carrier?{carrierId:carrier.id}:{}),
           description:label+' × '+toss.rolls.length+': '+toss.rolls.join(', ')+' → '+face
         }));
         summaries.push(label+' ×'+toss.rolls.length+' = '+face);
