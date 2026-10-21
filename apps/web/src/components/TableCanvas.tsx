@@ -1389,6 +1389,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
     }).slice(-60).map(([,visual])=>convert(visual.toGlobal(new Point(0,0))));
     diceQuantitiesRef.current={};setDiceQuantities({});
+    for(const sides of DICE_TYPES)staticDice3D.current?.setSourceQuantity(sides,0);
     for(const {body,count} of diceBadges.current.values()){
       body.children[0].visible=false;count.text='';
     }
@@ -1505,6 +1506,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
     diceQuantitiesRef.current={...diceQuantitiesRef.current,[sides]:next};
     setDiceQuantities({...diceQuantitiesRef.current});
+    staticDice3D.current?.setSourceQuantity(sides,next);
     const badge=diceBadges.current.get(sides);
     if(badge){
       badge.body.children[0].visible=true;badge.count.text='×'+next;
@@ -1764,13 +1766,15 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           .stroke({color:0xcfece5,alpha:.85,width:1.1});
         backing.visible=badge>0;
         quantity.addChild(backing);quantity.addChild(count);
-        quantity.position.set(12,-17);
+        quantity.position.set(0,0);
+        // The visible count is rendered by the 3D overlay above the mesh.
+        quantity.visible=false;
         quantity.eventMode='none';
         source.addChild(quantity);
         diceBadges.current.set(sides,{body:quantity,count});
         mat.addChild(source);diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
-          themeId:resolveDiceTheme(diceAppearance,sides)});
+          quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
         source.hitArea=new Circle(0,0,11);
@@ -2130,6 +2134,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     app.renderer.render(app.stage);
     staticDiceEntries.current=staticEntries;
     staticDice3D.current?.setEntries(staticEntries);
+    staticDice3D.current?.sync(true);
     syncCardArtwork();
     return ()=>{
       session.current?.app.ticker.remove(syncCardArtwork);
