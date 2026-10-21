@@ -860,13 +860,14 @@ function deckBoxArt(o:TableObject):Container{
  * perfectly z-sorted Pixi coin disappears behind the card's image.
  * This overlay is display-only: Pixi keeps all hit tests and drag gestures.
  */
-function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearance):HTMLDivElement{
+function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearance,color='#d8b979'):HTMLDivElement{
   const root=document.createElement('div');
   root.className='sennet-coin-above-card';
   root.dataset.finish=style.finish;
   root.style.setProperty('--coin-size',String(style.size));
   root.style.setProperty('--coin-shine',String(style.shine/100));
   root.style.setProperty('--coin-bevel',String(style.bevel/100));
+  root.style.setProperty('--coin-accent',color);
   const face=document.createElement('div');
   face.className='sennet-coin-above-card-face';
   const upper=document.createElement('span');
@@ -887,7 +888,7 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   const shadow=new Graphics().ellipse(4,o.tokenCoin?7:13,o.tokenCoin?15:33,o.tokenCoin?6:12).fill({color:0x050c0b,alpha:.32});box.addChild(shadow);
   if(o.tokenCoin){
     box.hitArea=new Circle(0,0,17*coinStyle.size);
-    box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1));
+    box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1,o.color));
     if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size).stroke({color:0x9effee,width:2.2}));
   }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
@@ -1215,7 +1216,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   };
   const drag=useRef<ActiveDrag|null>(null);
   const visuals=useRef(new Map<string,Container>());
-  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container;ghostEl:HTMLDivElement}|null>(null);
+  const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;startX:number;startY:number;mat:Container;ghost:Container;ghostEl:HTMLDivElement;color:string}|null>(null);
   const commitCoinEdit=()=>{
     const n=Number(coinDraft);
     if(Number.isInteger(n)&&n>=1&&n<=9999)onCustomCoinValue(n);
@@ -1548,8 +1549,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       queueMicrotask(()=>setSelectedIds(still));
     }
     const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
-    const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean)=>{
-      const el=coinDomVisual(value,sign,source,coinAppearance);
+    const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean,color='#d8b979')=>{
+      const el=coinDomVisual(value,sign,source,coinAppearance,color);
       mount.current?.appendChild(el);
       coinLayers.push({piece,el});
       return el;
@@ -1611,24 +1612,26 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       mat.position.set(origin.x,origin.y);
       mat.rotation=origin.angle;
       (seatGroups?.get(seat)??board).addChild(mat);
-      const values=[customCoinValue,10,20,30,50,100];
+      const defaults=[customCoinValue,10,20,30,50,100];
+      const values=defaults.map((v,i)=>i===0?customCoinValue:coinSources.values[i]??v);
       const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       values.forEach((value,index)=>{
         const source=new Container();
         source.position.set(boxX+(index%2===0?-8:8),top+22+index*34);
-        source.addChild(makeCoin(value,coinAppearance,true));
+        const color=coinSources.colors[index]??'#d8b979';
+        source.addChild(makeCoin(value,coinAppearance,true,1,color));
         const highlight=new Graphics();
         highlight.scale.set(coinAppearance.size);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
-        const coinOverlay=showCoinAboveArtwork(source,value,1,true);
+        const coinOverlay=showCoinAboveArtwork(source,value,1,true,color);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
         source.hitArea=new Circle(0,0,17.5*coinAppearance.size);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=7.5*coinAppearance.size)return 0;
+          if(Math.hypot(here.x,here.y)<=8*coinAppearance.size)return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -1648,21 +1651,13 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            if(index===0){
-              const projected=source.toGlobal(new Point(0,0));
-              const canvasRect=app.canvas.getBoundingClientRect();
-              setCoinDraft(String(customCoinValue));
-              setCoinEditing({
-                x:projected.x*canvasRect.width/app.renderer.width,
-                y:projected.y*canvasRect.height/app.renderer.height
-              });
-            }
+            startCoinHold(source,e.pointerId,'source',undefined,index);
             return;
           }
-          const ghost=makeCoin(value,coinAppearance,false,sign);
+          const ghost=makeCoin(value,coinAppearance,false,sign,color);
           ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
-          const ghostEl=showCoinAboveArtwork(ghost,value,sign,false);
-          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl};
+          const ghostEl=showCoinAboveArtwork(ghost,value,sign,false,color);
+          tokenDrag.current={pointerId:e.pointerId,value,sign,startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl,color};
         });
       });
     }
@@ -1724,7 +1719,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
-      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false);
+      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false,obj.color);
       if(obj.throwDice){
         // A display-only DOM die is drawn over imported card art, exactly
         // like the coin layer. Pixi still handles picking and movement.
@@ -1800,6 +1795,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           if(e.button!==0)return;
           e.stopPropagation();
           cancelActiveDrag.current();
+          const local=piece.toLocal(e.global);
+          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size;
+          if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id);
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
           const physicalStack=cardStackMembers(state,obj.id).filter(card=>
@@ -1880,7 +1878,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       for(const layer of artLayers){layer.img.onload=null;layer.img.onerror=null;layer.img.remove();}
       for(const {el} of coinLayers)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue,coinSources]);
 
   useEffect(()=>{
     const end=(e:PointerEvent,commit:boolean)=>{
@@ -1957,7 +1955,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       if(!parent)return;
       const spot=parent.toLocal(at,current.app.stage);
       callbacks.current.onTokenPlace(d.value,d.sign,
-        spot.x,spot.y,target?.id);
+        spot.x,spot.y,target?.id,d.color);
     };
     const move=(event:PointerEvent)=>{
       const d=tokenDrag.current,at=coordinates(event);
@@ -1978,6 +1976,24 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     };
   },[actorId]);
 
+  useEffect(()=>{
+    const release=(e:PointerEvent)=>{
+      if(coinHold.current?.pointerId!==e.pointerId)return;
+      window.clearTimeout(coinHold.current.timer);coinHold.current=null;
+    };
+    const move=(e:PointerEvent)=>{
+      // A pointer moving into a drag must never accidentally activate the radial.
+      const h=coinHold.current,d=drag.current;
+      if(h&&d?.pointerId===e.pointerId&&d.moved){
+        window.clearTimeout(h.timer);coinHold.current=null;
+      }
+    };
+    window.addEventListener('pointerup',release);window.addEventListener('pointercancel',release);
+    window.addEventListener('pointermove',move);
+    return()=>{window.removeEventListener('pointerup',release);
+      window.removeEventListener('pointercancel',release);
+      window.removeEventListener('pointermove',move);};
+  },[]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
