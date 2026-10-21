@@ -122,3 +122,15 @@ test('all physical dice produce distinct real 3D geometry and stable collision h
     geometry.dispose();
   }
 });
+
+test('special dice have authentic 10 and 100 faceted, tumbling 3D surfaces',()=>{
+  for(const [sides,faces] of [[10,20],[100,100]]){
+    const geometry=dieGeometry(sides,20);
+    const triangleCount=geometry.getAttribute('position').count/3;
+    assert.equal(triangleCount,faces,
+      'D'+sides+' should have geometry for its full physical faces');
+    const hull=convexShape(geometry);
+    assert.ok(hull.faces.length>=faces,'Every facet must participate in physical collision');
+    geometry.dispose();
+  }
+});
