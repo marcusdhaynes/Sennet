@@ -6,11 +6,17 @@ const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
   '#9e8dd2','#f2c27c','#f1a6cb','#dde4ea','#657da2','#44464a'];
+// Ten real, independently clickable buttons sit over a compact scalloped
+// ring; the empty middle is reserved for the miniature physical coin.
+const COIN_RADIAL_SIZE=184;
 const coinSector=(index:number)=>{
-  const coord=(angle:number,r:number)=>({x:124+r*Math.cos(angle*Math.PI/180),
-    y:124-r*Math.sin(angle*Math.PI/180)});
-  const a=180-index*36,p=coord(a+18,116),q=coord(a-18,116),t=coord(a,83);
-  return {d:'M124 124 L'+p.x+' '+p.y+' A116 116 0 0 1 '+q.x+' '+q.y+' Z',
+  const center=COIN_RADIAL_SIZE/2;
+  const coord=(angle:number,r:number)=>({x:center+r*Math.cos(angle*Math.PI/180),
+    y:center-r*Math.sin(angle*Math.PI/180)});
+  const a=180-index*36,p=coord(a+17.8,88),q=coord(a-17.8,88);
+  const innerStart=coord(a+17.8,13),innerEnd=coord(a-17.8,13);
+  const t=coord(a,63);
+  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A88 88 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A13 13 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
     x:t.x,y:t.y};
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
@@ -1122,8 +1128,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     if(!app)return;
     const p=piece.toGlobal(new Point(0,0)),rect=app.canvas.getBoundingClientRect();
     const px=p.x*rect.width/app.renderer.width,py=p.y*rect.height/app.renderer.height;
-    const clampRadial=(n:number,edge:number)=>edge<248?edge/2:
-      Math.max(124,Math.min(edge-124,n));
+    const clampRadial=(n:number,edge:number)=>edge<COIN_RADIAL_SIZE?edge/2:
+      Math.max(COIN_RADIAL_SIZE/2,Math.min(edge-COIN_RADIAL_SIZE/2,n));
     const x=clampRadial(px,rect.width),y=clampRadial(py,rect.height);
     const timer=window.setTimeout(()=>{
       if(coinHold.current?.pointerId!==pointerId)return;
@@ -2395,7 +2401,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       }
     };
     const onCardMenu=(target:EventTarget|null)=>target instanceof Element&&
-      !!target.closest('.tcg-card-action-menu');
+      !!target.closest('.tcg-card-action-menu, .sennet-coin-radial-layer, .sennet-dice-selection, .sennet-dice-engine-error');
     const selectOpponent=(event:PointerEvent)=>{
       if(onCardMenu(event.target)||viewRef.current.kind!=='targeting'||event.button!==0)return;
       const current=session.current;
@@ -2632,26 +2638,29 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       e.stopPropagation();
     }}>
       <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
-        <svg viewBox="0 0 248 248" role="group" aria-label="Coin action radial">
-          {COIN_ACTIONS.map((action,i)=>{
-            const sector=coinSector(i);
-            const content=i===0?'⧉':i===5?'◉':action.replace('1000','1k');
-            return <g key={i} role="button" tabIndex={0} aria-label={'Position '+(i+1)+': '+action}
-              onClick={()=>applyCoinAction(i)}
-              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();applyCoinAction(i);}}}>
-              <path className="sennet-coin-sector" d={sector.d}/>
-              <text x={sector.x} y={sector.y} textAnchor="middle" dominantBaseline="middle"
-                className="sennet-coin-sector-label">{content}</text>
-            </g>;
-          })}
-          <line x1="124" x2="124" y1="10" y2="238" className="sennet-coin-divider"/>
-          <circle cx="124" cy="124" r="29" className="sennet-coin-radial-center"/>
-          <text x="124" y="125" textAnchor="middle" dominantBaseline="middle"
-            className="sennet-coin-radial-number">{coinMenu.type==='copy'?
-              state.objects.find(o=>o.id===coinMenu.id)?.value??0:
-              coinMenu.index===0?customCoinValue:
-              coinSources.values[coinMenu.index??0]??[customCoinValue,10,20,30,50,100][coinMenu.index??0]}</text>
+        <svg viewBox="0 0 184 184" aria-hidden="true" focusable="false" className="sennet-coin-ring">
+          {COIN_ACTIONS.map((_,i)=><path key={i} d={coinSector(i).d}
+            className="sennet-coin-sector"/>)}
+          <line x1="92" x2="92" y1="4" y2="180" className="sennet-coin-divider"/>
+          <circle cx="92" cy="92" r="11" className="sennet-coin-radial-center"/>
         </svg>
+        {COIN_ACTIONS.map((action,i)=>{
+          const p=coinSector(i);
+          const shown=i===0?'⧉':i===5?'◉':action;
+          return <button type="button" key={i}
+            className="sennet-coin-action-button"
+            aria-label={'Position '+(i+1)+': '+action}
+            title={action}
+            style={{left:p.x,top:p.y}}
+            onPointerDown={e=>{e.stopPropagation();}}
+            onClick={e=>{e.preventDefault();e.stopPropagation();applyCoinAction(i);}}>
+            {shown}
+          </button>;
+        })}
+        <span className="sennet-coin-radial-number" aria-live="polite">{coinMenu.type==='copy'?
+          state.objects.find(o=>o.id===coinMenu.id)?.value??0:
+          coinMenu.index===0?customCoinValue:
+          coinSources.values[coinMenu.index??0]??[customCoinValue,10,20,30,50,100][coinMenu.index??0]}</span>
         {coinColorsOpen&&<div className="sennet-coin-palette">
           <strong>Coin color</strong>
           <div className="sennet-coin-palette-swatches">
