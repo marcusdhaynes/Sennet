@@ -1117,10 +1117,16 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   };
   const startCoinHold=(piece:Container,pointerId:number,type:'source'|'copy',id?:string,index?:number)=>{
     if(coinHold.current)window.clearTimeout(coinHold.current.timer);
+    // Capture screen coordinates NOW; selecting a coin rerenders Pixi and
+    // destroys its old visual before the 250ms timer fires.
+    const app=session.current?.app;
+    if(!app)return;
+    const p=piece.toGlobal(new Point(0,0)),rect=app.canvas.getBoundingClientRect();
+    const x=p.x*rect.width/app.renderer.width,y=p.y*rect.height/app.renderer.height;
     const timer=window.setTimeout(()=>{
       if(coinHold.current?.pointerId!==pointerId)return;
       coinHold.current=null;cancelActiveDrag.current();
-      openCoinMenu(piece,type,id,index);
+      setCoinMenu({type,id,index,x,y});setCoinColorsOpen(false);
     },250);
     coinHold.current={pointerId,timer};
   };
@@ -2664,6 +2670,46 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         }}>×</button>
       </div>}
 
+    {coinMenu&&<div className="sennet-coin-radial-layer" onPointerDown={e=>e.stopPropagation()}>
+      <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
+        <svg viewBox="0 0 248 248" role="group" aria-label="Coin action radial">
+          {COIN_ACTIONS.map((action,i)=>{
+            const sector=coinSector(i);
+            const content=i===0?'⧉':i===5?'◉':action.replace('1000','1k');
+            return <g key={i} role="button" tabIndex={0} aria-label={'Position '+(i+1)+': '+action}
+              onClick={()=>applyCoinAction(i)}
+              onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();applyCoinAction(i);}}}>
+              <path className="sennet-coin-sector" d={sector.d}/>
+              <text x={sector.x} y={sector.y} textAnchor="middle" dominantBaseline="middle"
+                className="sennet-coin-sector-label">{content}</text>
+            </g>;
+          })}
+          <line x1="124" x2="124" y1="10" y2="238" className="sennet-coin-divider"/>
+          <circle cx="124" cy="124" r="29" className="sennet-coin-radial-center"/>
+          <text x="124" y="125" textAnchor="middle" dominantBaseline="middle"
+            className="sennet-coin-radial-number">{coinMenu.type==='copy'?
+              state.objects.find(o=>o.id===coinMenu.id)?.value??0:
+              coinMenu.index===0?customCoinValue:
+              coinSources.values[coinMenu.index??0]??[customCoinValue,10,20,30,50,100][coinMenu.index??0]}</text>
+        </svg>
+        {coinColorsOpen&&<div className="sennet-coin-palette">
+          <strong>Coin color</strong>
+          <div className="sennet-coin-palette-swatches">
+            {COIN_PALETTE.map(color=><button key={color} type="button"
+              aria-label={'Choose '+color} style={{background:color}}
+              onClick={()=>applyCoinColor(color)}/>)}
+          </div>
+          <label>Custom <input aria-label="Custom coin color" type="color"
+            defaultValue={coinMenu.type==='copy'?
+              state.objects.find(o=>o.id===coinMenu.id)?.color??'#d8b979':
+              coinSources.colors[coinMenu.index??0]??'#d8b979'}
+            onChange={e=>applyCoinColor(e.target.value)}/></label>
+        </div>}
+        <button type="button" className="sennet-coin-close"
+          onClick={()=>{setCoinMenu(null);setCoinColorsOpen(false);}}
+          aria-label="Close coin radial">×</button>
+      </div>
+    </div>}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <CardRadialWheel
