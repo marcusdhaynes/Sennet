@@ -1345,7 +1345,7 @@ body>.reader-backdrop{
 }
 .sennet-coin-above-card-face{
   position:absolute;inset:1px;border-radius:50%;overflow:hidden;
-  box-sizing:border-box;transform:scale(calc(var(--coin-size,1) * .82));
+  box-sizing:border-box;transform:scale(calc(var(--coin-size,1) * .41));
   transform-origin:center;
   border:calc(1px + var(--coin-bevel,.65) * 1px) solid #fae6b5;
   box-shadow:inset 0 0 0 1.4px #4a3628,inset 0 1px 3px #fff8,
@@ -1538,3 +1538,45 @@ body>.reader-backdrop{
   box-shadow:inset 0 1px 4px #fff9,0 2px 4px #0008}
 .sennet-coin-palette label{display:flex;align-items:center;justify-content:space-between}
 .sennet-coin-palette input{height:25px;width:48px;cursor:pointer}
+
+/* Compact coin radial: 10 true controls, just large enough to contain
+   +/-1000 labels. Unlike SVG groups, these buttons receive native clicks. */
+.sennet-coin-radial{width:184px;height:184px;
+  filter:drop-shadow(0 5px 10px #0009)}
+.sennet-coin-radial .sennet-coin-ring{width:184px;height:184px;
+  position:absolute;inset:0;pointer-events:none}
+.sennet-coin-radial .sennet-coin-ring path{pointer-events:none}
+.sennet-coin-radial .sennet-coin-sector{
+  fill:#233d39ed;stroke:#d3b17e;stroke-width:1.2}
+.sennet-coin-radial .sennet-coin-ring path:nth-child(even){fill:#304a45f5}
+.sennet-coin-radial .sennet-coin-divider{stroke-width:1.5;stroke:#c9a16c}
+.sennet-coin-radial .sennet-coin-radial-center{
+  fill:#d8b979;stroke:#453c33;stroke-width:2}
+.sennet-coin-action-button{position:absolute;transform:translate(-50%,-50%);
+  height:28px;min-width:31px;padding:0 2px;border:0;border-radius:7px;
+  color:#f9e6c5;background:transparent;
+  font:800 10px/1 Inter,system-ui,sans-serif;text-align:center;
+  white-space:nowrap;cursor:pointer;touch-action:manipulation;z-index:2}
+.sennet-coin-action-button:hover,.sennet-coin-action-button:focus-visible{
+  outline:1px solid #ffe2a7;color:#192925;background:#d6bc84}
+.sennet-coin-radial>.sennet-coin-radial-number{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:25px;display:block;overflow:visible;white-space:nowrap;
+  font:900 9px Inter,system-ui,sans-serif;color:#263331;
+  pointer-events:none;text-align:center;z-index:2}
+.sennet-coin-radial>.sennet-coin-close{
+  top:-2px;right:-2px;z-index:6;width:20px;height:20px;font-size:13px}
+.sennet-coin-radial>.sennet-coin-palette{top:187px;z-index:8}
+.sennet-coin-radial-layer{isolation:isolate}
+.sennet-coin-above-card-top,.sennet-coin-above-card-bottom{display:none!important}
+.sennet-coin-above-card-number{font-size:8px}
+.sennet-rolled-die-above-card .sennet-rolled-die-center{
+  border:0;background:none;box-shadow:none;min-width:0;min-height:0;
+  padding:0;text-shadow:0 1px 2px #000e,0 0 3px #000c;
+  color:#fff6d9;font-weight:900}
+.sennet-rolled-die-above-card::before,
+.sennet-rolled-die-above-card::after{background:none}
+.sennet-dice-engine-error{position:absolute;z-index:85;left:50%;top:16px;
+  transform:translateX(-50%);background:#322222f0;border:1px solid #e2a28b;
+  border-radius:9px;padding:9px;color:#ffe4d4}
+.sennet-dice-engine-error button{margin-left:9px}
