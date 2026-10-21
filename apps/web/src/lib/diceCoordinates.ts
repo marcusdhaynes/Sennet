@@ -14,9 +14,9 @@ export function diceRackLocations(
   boxX:number,top:number
 ):{x:number;y:number}[]{
   // The narrow side drawer is 62 units wide. Keep centers 24 units
-  // apart; the shared real-3D rack meshes have a 0.62 footprint.
+  // apart; four closely spaced rows keep the entire rack near its top.
   return Array.from({length:8},(_,i)=>({
     x:boxX+(i%2===0?-12:12),
-    y:top+41+Math.floor(i/2)*62
+    y:top+25+Math.floor(i/2)*39
   }));
 }
