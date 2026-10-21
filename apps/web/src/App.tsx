@@ -411,6 +411,7 @@ export default function App(){
         onCoinDuplicate={id=>takeAction('CLONE',{id,newId:createId()})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
         onDiceThrow={throws=>takeAction('THROW_TRAY',{seat,throws})}
+        onDiceReroll={(id,rolls,x,y,rotation)=>takeAction('REROLL_DIE',{id,rolls,x,y,rotation})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
