@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,applyCommand,replay} from '../src/index.ts';
+import {createGame,applyCommand,replay,isTcgSideBoxDrop,tcgMatWorld,validThrowQuaternion} from '../src/index.ts';
 import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
 import {dieGeometry,convexShape}
@@ -214,4 +214,31 @@ test('Cannon 3D dice collide with each other and exchange x momentum',()=>{
   assert.ok(b.velocity.x>0,'second die must rebound after impact');
   assert.ok(b.position.x>a.position.x,'dice must stay physically separated');
   geom.dispose();
+});
+
+test('left and right retractable storage boxes accept die deletion by exact center',()=>{
+  const top=-(4*94+3*4)/2+94+4;
+  for(const seat of [0,3,6,9]){
+    for(const side of [-1,1]){
+      const x=side*( (7*62+6*2+2*62+2*4)/2+62/2+3);
+      const center=tcgMatWorld(x,top+55,seat);
+      assert.equal(isTcgSideBoxDrop(center.x,center.y,seat),true,
+        'box '+side+' should accept a die at seat '+seat);
+    }
+    const outside=tcgMatWorld(0,0,seat);
+    assert.equal(isTcgSideBoxDrop(outside.x,outside.y,seat),false);
+  }
+});
+test('real quaternion orientation survives a throw and successive reroll',()=>{
+  const q=[0.14,-0.21,0.30,Math.sqrt(1-.14**2-.21**2-.30**2)];
+  assert.ok(validThrowQuaternion(q));
+  let state=applyCommand(createGame('tcg'),command('actual-3d',[
+    {sides:12,rolls:[8],x:2100,y:2100,rotation:33,quaternion:q}
+  ]));
+  const die=state.objects.find(o=>o.id==='actual-3d-throw-0');
+  assert.deepEqual(die.throwQuaternion,q,'landed die retains its real 3D orientation');
+  const second=[0.2,0.3,0.4,Math.sqrt(1-.2**2-.3**2-.4**2)];
+  state=applyCommand(state,{id:'actual-reroll',type:'REROLL_DIE',actor:'local',
+    payload:{id:die.id,rolls:[11],x:2100,y:2100,rotation:17,quaternion:second}});
+  assert.deepEqual(state.objects.find(o=>o.id===die.id).throwQuaternion,second);
 });
