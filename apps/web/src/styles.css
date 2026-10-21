@@ -1334,3 +1334,70 @@ body>.reader-backdrop{
 .sennet-coin-editor:focus{border-color:#b5fff0;box-shadow:0 0 0 3px #274d46,0 0 18px #b5fff066;}
 .sennet-coin-editor::-webkit-inner-spin-button,
 .sennet-coin-editor::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+
+/* Physical token coins always appear above imported card imagery.
+   Their Pixi counterparts still own pointer input, physics and hit tests. */
+.pixi-host>.sennet-coin-above-card{
+  position:absolute;left:0;top:0;width:36px;height:36px;
+  transform-origin:0 0;z-index:6;
+  pointer-events:none;user-select:none;box-sizing:border-box;
+  will-change:transform;contain:layout style;
+}
+.sennet-coin-above-card-face{
+  position:absolute;inset:1px;border-radius:50%;overflow:hidden;
+  box-sizing:border-box;transform:scale(var(--coin-size,1));
+  transform-origin:center;
+  border:calc(1px + var(--coin-bevel,.65) * 1px) solid #fae6b5;
+  box-shadow:inset 0 0 0 1.4px #4a3628,inset 0 1px 3px #fff8,
+    inset 0 -2px 3px #14100d99,1px 2px 3px #0009;
+  background:linear-gradient(to bottom,
+    #d2a45f 0%,#ca925d 45%,#4a3228 47%,#402b24 52%,
+    #f0e3c5 54%,#e9d9b6 100%);
+}
+.sennet-coin-above-card-face::before{
+  content:'';position:absolute;inset:2px;border-radius:50%;
+  border:1px solid #fff8;
+  background:linear-gradient(140deg,#fff9 0%,transparent 33%,transparent 72%,#22181155 100%);
+  opacity:calc(.2 + var(--coin-shine,.75) * .65);
+}
+.sennet-coin-above-card[data-finish="enamel"] .sennet-coin-above-card-face{
+  background:linear-gradient(to bottom,#d45f5e 0%,#a84047 45%,#4b2c26 48%,#34231f 52%,#f7f1df 54%,#ddd3bd 100%);
+}
+.sennet-coin-above-card[data-finish="matte"] .sennet-coin-above-card-face{
+  background:linear-gradient(to bottom,#90756a 0%,#78645d 45%,#322b29 47%,#332c28 52%,#cfc4aa 54%,#ac9f8c 100%);
+  box-shadow:inset 0 0 0 1.4px #514238,1px 2px 2px #0009;
+}
+.sennet-coin-above-card[data-finish="brushed"] .sennet-coin-above-card-face{
+  background:repeating-linear-gradient(176deg,#ffffff13 0 1px,transparent 1px 3px),
+    linear-gradient(to bottom,#baae93 0%,#a99673 45%,#44362c 48%,#322a22 52%,#e6d9bb 54%,#bfb096 100%);
+}
+.sennet-coin-above-card-top,.sennet-coin-above-card-bottom{
+  display:flex;align-items:center;justify-content:center;position:absolute;left:0;right:0;
+  height:10px;font:900 9px Inter,system-ui,sans-serif;line-height:10px;
+  pointer-events:none;
+}
+.sennet-coin-above-card-top{top:1px;color:#fff1d4;text-shadow:0 1px 1px #5f2a2a;}
+.sennet-coin-above-card-bottom{bottom:0;color:#302c2c;text-shadow:0 1px #fffb;}
+.sennet-coin-above-card-number{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  min-width:12px;height:12px;padding:0 1px;border-radius:50%;
+  background:radial-gradient(circle at 30% 25%,#f6eacb,#d0bd99 85%);
+  box-shadow:0 0 0 1.6px #252829,0 0 0 2.7px #f4dca7;
+  display:flex;align-items:center;justify-content:center;
+  color:#27322f;font-family:Inter,system-ui,sans-serif;font-weight:900;
+  white-space:nowrap;line-height:1;
+}
+.sennet-coin-above-card[data-hover="1"] .sennet-coin-above-card-top{
+  color:#a8ffe3;text-shadow:0 0 6px #a8ffe3,0 1px 2px #05352a;
+}
+.sennet-coin-above-card[data-hover="-1"] .sennet-coin-above-card-bottom{
+  color:#ff6c9c;text-shadow:0 0 6px #ff94bc,0 1px 2px #57192a;
+}
+.sennet-coin-above-card[data-hover="1"] .sennet-coin-above-card-face{
+  box-shadow:inset 0 6px 9px #74ffb655,inset 0 0 0 1px #c0ffe9,
+    0 0 7px #a4ffddaa,1px 2px 3px #0009;
+}
+.sennet-coin-above-card[data-hover="-1"] .sennet-coin-above-card-face{
+  box-shadow:inset 0 -6px 9px #ff638555,inset 0 0 0 1px #ffd7e2,
+    0 0 7px #ff9caeaa,1px 2px 3px #0009;
+}
