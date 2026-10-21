@@ -8,15 +8,15 @@ const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
   '#9e8dd2','#f2c27c','#f1a6cb','#dde4ea','#657da2','#44464a'];
 // Ten real, independently clickable buttons sit over a compact scalloped
 // ring; the empty middle is reserved for the miniature physical coin.
-const COIN_RADIAL_SIZE=184;
+const COIN_RADIAL_SIZE=160;
 const coinSector=(index:number)=>{
   const center=COIN_RADIAL_SIZE/2;
   const coord=(angle:number,r:number)=>({x:center+r*Math.cos(angle*Math.PI/180),
     y:center-r*Math.sin(angle*Math.PI/180)});
-  const a=180-index*36,p=coord(a+17.8,88),q=coord(a-17.8,88);
-  const innerStart=coord(a+17.8,13),innerEnd=coord(a-17.8,13);
-  const t=coord(a,63);
-  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A88 88 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A13 13 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
+  const a=180-index*36,p=coord(a+17.8,76),q=coord(a-17.8,76);
+  const innerStart=coord(a+17.8,11),innerEnd=coord(a-17.8,11);
+  const t=coord(a,56);
+  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A76 76 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A11 11 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
     x:t.x,y:t.y};
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
@@ -2736,11 +2736,11 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       e.stopPropagation();
     }}>
       <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
-        <svg viewBox="0 0 184 184" aria-hidden="true" focusable="false" className="sennet-coin-ring">
+        <svg viewBox="0 0 160 160" aria-hidden="true" focusable="false" className="sennet-coin-ring">
           {COIN_ACTIONS.map((_,i)=><path key={i} d={coinSector(i).d}
             className="sennet-coin-sector"/>)}
-          <line x1="92" x2="92" y1="4" y2="180" className="sennet-coin-divider"/>
-          <circle cx="92" cy="92" r="11" className="sennet-coin-radial-center"/>
+          <line x1="80" x2="80" y1="4" y2="156" className="sennet-coin-divider"/>
+          <circle cx="80" cy="80" r="10" className="sennet-coin-radial-center"/>
         </svg>
         {COIN_ACTIONS.map((action,i)=>{
           const p=coinSector(i);
