@@ -1826,7 +1826,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         }).catch(()=>{/* Keep vector fallback for unavailable artwork. */});
       }
       if(!readonly){
-        piece.eventMode='static';piece.cursor=obj.locked?'pointer':'grab';
+        piece.eventMode='static';piece.cursor=obj.throwDice?'pointer':obj.locked?'pointer':'grab';
         piece.on('pointerdown',(e)=>{
           if(e.button!==0)return;
           e.stopPropagation();
