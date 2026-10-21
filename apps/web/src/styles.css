@@ -1636,3 +1636,30 @@ body>.reader-backdrop{
 .sennet-action-lcd-button:focus-visible{
   outline:2px solid #a7fbd8;outline-offset:2px
 }
+
+/* Result floats above the true 3D die but never intercepts rerolls. */
+.sennet-dice-result-bubble{
+  position:absolute;z-index:16;pointer-events:none;max-width:220px;
+  transform:translate(-50%,-100%);padding:7px 13px;
+  border-radius:16px;border:1px solid #f8e6b4;
+  background:linear-gradient(155deg,#31473ced,#142926f5);
+  color:#fff2d0;font:800 13px/1.1 'DM Sans',system-ui,sans-serif;
+  text-align:center;white-space:nowrap;
+  box-shadow:0 5px 18px #001711ba,inset 0 1px 2px #efffcd66;
+  text-shadow:0 1px 2px #031715;
+  animation:sennet-roll-bubble 2.8s cubic-bezier(.16,.8,.3,1) both;
+}
+.sennet-dice-result-bubble::after{
+  content:'';position:absolute;left:50%;bottom:-6px;
+  transform:translateX(-50%) rotate(45deg);
+  width:10px;height:10px;background:#192f2bf5;
+  border-right:1px solid #f8e6b4;border-bottom:1px solid #f8e6b4;
+}
+@keyframes sennet-roll-bubble{
+  0%{opacity:0;transform:translate(-50%,-70%) scale(.75)}
+  10%{opacity:1;transform:translate(-50%,-100%) scale(1.07)}
+  18%,67%{opacity:1;transform:translate(-50%,-100%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-135%) scale(.96)}
+}
+/* The LCD is a TABLETOP object, not a floating screen-width overlay. */
+.sennet-action-lcd{min-width:0;max-width:none;width:240px;transform-origin:center center}
