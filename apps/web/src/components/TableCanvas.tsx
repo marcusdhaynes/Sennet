@@ -1111,14 +1111,15 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   useEffect(()=>{try{localStorage.setItem('sennet.coin.sources.v1',JSON.stringify(coinSources));}catch{}},[coinSources]);
   const [coinMenu,setCoinMenu]=useState<{type:'source'|'copy';index?:number;id?:string;x:number;y:number}|null>(null);
   const [coinColorsOpen,setCoinColorsOpen]=useState(false);
-  const coinHold=useRef<{pointerId:number;timer:number}|null>(null);
+  const coinHold=useRef<{pointerId:number;timer:number;kind:'source'|'copy';
+    index?:number;x:number;y:number;startX:number;startY:number}|null>(null);
   const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
     const current=session.current;if(!current)return;
     const p=piece.toGlobal(new Point(0,0)),rect=current.app.canvas.getBoundingClientRect();
     setCoinMenu({type,id,index,x:p.x*rect.width/current.app.renderer.width,
       y:p.y*rect.height/current.app.renderer.height});setCoinColorsOpen(false);
   };
-  const startCoinHold=(piece:Container,pointerId:number,type:'source'|'copy',id?:string,index?:number)=>{
+  const startCoinHold=(piece:Container,pointerId:number,type:'source'|'copy',id?:string,index?:number,startX=0,startY=0)=>{
     if(coinHold.current)window.clearTimeout(coinHold.current.timer);
     // Capture screen coordinates NOW; selecting a coin rerenders Pixi and
     // destroys its old visual before the 250ms timer fires.
@@ -1131,7 +1132,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       coinHold.current=null;cancelActiveDrag.current();
       setCoinMenu({type,id,index,x,y});setCoinColorsOpen(false);
     },250);
-    coinHold.current={pointerId,timer};
+    coinHold.current={pointerId,timer,kind:type,index,x,y,startX,startY};
   };
   const applyCoinAction=(index:number)=>{
     const m=coinMenu;if(!m)return;
@@ -1603,7 +1604,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            startCoinHold(source,e.pointerId,'source',undefined,index);
+            startCoinHold(source,e.pointerId,'source',undefined,index,e.clientX,e.clientY);
             return;
           }
           const ghost=makeCoin(value,coinAppearance,false,sign,color);
@@ -1749,7 +1750,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           cancelActiveDrag.current();
           const local=piece.toLocal(e.global);
           const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size*.82;
-          if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id);
+          if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
           const physicalStack=cardStackMembers(state,obj.id).filter(card=>
@@ -1930,8 +1931,15 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
 
   useEffect(()=>{
     const release=(e:PointerEvent)=>{
-      if(coinHold.current?.pointerId!==e.pointerId)return;
-      window.clearTimeout(coinHold.current.timer);coinHold.current=null;
+      const hold=coinHold.current;
+      if(!hold||hold.pointerId!==e.pointerId)return;
+      window.clearTimeout(hold.timer);coinHold.current=null;
+      // Keep the original Custom generator's quick-edit gesture.
+      if(e.type==='pointerup'&&hold.kind==='source'&&hold.index===0&&
+        Math.hypot(e.clientX-hold.startX,e.clientY-hold.startY)<8){
+        setCoinDraft(String(customCoinValue));
+        setCoinEditing({x:hold.x,y:hold.y});
+      }
     };
     const move=(e:PointerEvent)=>{
       // A pointer moving into a drag must never accidentally activate the radial.
@@ -1945,7 +1953,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     return()=>{window.removeEventListener('pointerup',release);
       window.removeEventListener('pointercancel',release);
       window.removeEventListener('pointermove',move);};
-  },[]);
+  },[customCoinValue]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
