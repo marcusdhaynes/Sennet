@@ -7,6 +7,7 @@ import type {Container} from 'pixi.js';
 import {createDie3DModel,radiusFor} from './Dice3DGeometry';
 import {diceToCssTransform} from './diceCoordinates';
 import type {DiceThemeId} from './diceThemes';
+import {looseDieOpacity} from './diceCoordinates';
 
 export interface StaticDiePlacement {
   id:string;
@@ -17,6 +18,8 @@ export interface StaticDiePlacement {
   quantity?:number;
   result?:string;
   source?:boolean;
+  shownAt?:number;
+  fadeAfterMs?:number;
 }
 interface DieVisual {
   id:string;
@@ -211,12 +214,28 @@ export function createStaticDice3D(
       const sf=scale*rackScale;
       visual.group.position.set(x,h-y,radiusFor(entry.sides)*sf);
       visual.group.scale.setScalar(sf);
-      visual.group.visible=true;
+      const opacity=entry.source?1:
+        looseDieOpacity(Date.now()-(entry.shownAt??Date.now()),entry.fadeAfterMs??0);
+      visual.group.visible=opacity>0;
+      // Unlike hiding the whole canvas, material alpha fades only the
+      // actual free die and preserves other dice and wooden drawer contents.
+      if(opacity>0)visual.group.traverse(object=>{
+        if(object instanceof THREE.Mesh||object instanceof THREE.LineSegments){
+          const materials=Array.isArray(object.material)?object.material:[object.material];
+          for(const material of materials){
+            material.transparent=opacity<.999;
+            material.opacity=opacity;
+            material.depthWrite=opacity>=.999;
+          }
+        }
+      });
       visual.shadow.position.set(x,h-y,.4);
       visual.shadow.scale.setScalar(sf);
-      visual.shadow.visible=true;
+      (visual.shadow.material as THREE.MeshBasicMaterial).opacity=.54*opacity;
+      visual.shadow.visible=opacity>0;
       if(visual.result){
-        visual.result.style.display='block';
+        visual.result.style.display=opacity>0?'block':'none';
+        visual.result.style.opacity=String(opacity);
         visual.result.style.left=x+'px';
         visual.result.style.top=(y+20*sf)+'px';
       }
