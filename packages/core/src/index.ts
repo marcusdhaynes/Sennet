@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -16,7 +16,7 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION';
+export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -980,6 +980,7 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
     order:clamp(Math.floor(finite(input.order)),0,1000000),
     ...(input.locked===true ? {locked:true} : {}),
     ...(typeof input.carrierId==='string'&&input.carrierId!==input.id ? {carrierId:textValue(input.carrierId,80)} : {}),
+    ...(kind==='token'&&input.tokenCoin===true?{tokenCoin:true,tokenSign:input.tokenSign===-1?-1 as const:1 as const,value:clamp(finite(input.value,1),.01,9999)}:{}),
     ...(input.scale!==undefined ? {scale:clamp(Math.round(finite(input.scale,1)*2)/2,0.5,7)} : {}),
     ...(input.counters!==undefined ? {counters:clamp(Math.floor(finite(input.counters,0)),0,999)} : {}),
     ...(typeof input.owner === 'string' ? {owner:textValue(input.owner,80)} : {}),
@@ -1009,7 +1010,7 @@ export function cardStackMembers(state:GameState,id:string):TableObject[] {
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION'];
+  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
@@ -1058,6 +1059,40 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(action==='shuffle'&&selected.some(o=>o!.kind!=='card'&&o!.kind!=='deck'))
       return 'Only card stacks can be shuffled';
   }
+  if(command.type==='TOKEN_PLACE'||command.type==='TOKEN_ADJUST'){
+    if(state.kind!=='tcg')return 'Coins are available on TCG tables';
+    const value=Number(command.payload.value);
+    if(!Number.isInteger(value)||value<1||value>9999)return 'Coin value must be 1–9999';
+    const seat=Number(command.payload.seat);
+    if(!Number.isInteger(seat)||seat<0||seat>=SEATS)return 'Invalid token seat';
+    if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
+      return 'You can only use coins on your own mat';
+    if(command.type==='TOKEN_PLACE'){
+      if(state.objects.length>=1000)return 'Maximum objects reached';
+      const x=Number(command.payload.x),y=Number(command.payload.y);
+      if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>BOARD_W||y<0||y>BOARD_H)
+        return 'Invalid token placement';
+      if(command.payload.sign!==1&&command.payload.sign!==-1)return 'Invalid token side';
+      if(command.payload.carrierId!==undefined){
+        const card=state.objects.find(o=>o.id===command.payload.carrierId);
+        if(!card||!['card','deck'].includes(card.kind)||card.zone!=='TABLE'||card.locked||
+           (card.owner&&card.owner!==command.actor))return 'Cannot attach to that card';
+      }
+    }else{
+      const ids=command.payload.ids;
+      if(!Array.isArray(ids)||!ids.length||ids.length>100||
+         ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length)
+        return 'Select cards before applying coins';
+      if(command.payload.sign!==1&&command.payload.sign!==-1)return 'Invalid coin adjustment';
+      for(const id of ids){
+        const card=state.objects.find(o=>o.id===id);
+        if(!card||!['card','deck'].includes(card.kind)||card.locked||
+           (card.owner&&card.owner!==command.actor))return 'Selection contains an unavailable card';
+      }
+      const custom=Number(command.payload.custom);
+      if(!Number.isInteger(custom)||custom<1||custom>9999)return 'Invalid custom coin value';
+    }
+  }
   if(command.type==='ADJUST_COUNTER'){
     if(!Number.isInteger(command.payload.delta)||Math.abs(Number(command.payload.delta))>999)
       return 'Invalid counter adjustment';
@@ -1105,6 +1140,26 @@ export function validateCommand(state: GameState, command: Command): string | nu
   if (command.type==='SET_MODE' && !['sandbox','turn-based','asynchronous'].includes(String(command.payload.mode))) return 'Invalid play mode';
   if (command.type==='DRAW' && !state.objects.some(o=>o.zone==='DECK')) return 'Deck is empty';
   return null;
+}
+/** Exact, fewest-coin positive change, including the user's Custom denomination.
+ * Stable tie-breaking prefers higher denominations. A missing exact solution
+ * preserves the signed total using an explicitly valued Custom remainder. */
+export function minimalCoinChange(amount:number,custom:number):number[]{
+  if(!Number.isInteger(amount)||amount<0||amount>20000)throw new Error('Coin total must be 0–20,000');
+  const choices=[...new Set([100,50,30,20,10,custom].filter(n=>Number.isInteger(n)&&n>0))].sort((a,b)=>b-a);
+  if(!amount)return [];
+  const count=new Int32Array(amount+1).fill(1000000),last=new Int32Array(amount+1);
+  count[0]=0;
+  for(let n=1;n<=amount;n++)for(const coin of choices){
+    if(coin>n||count[n-coin]>=1000000)continue;
+    if(count[n-coin]+1<count[n]){
+      count[n]=count[n-coin]+1;last[n]=coin;
+    }
+  }
+  if(count[amount]===1000000)return [amount];
+  const result:number[]=[];
+  for(let remainder=amount;remainder>0;remainder-=last[remainder])result.push(last[remainder]);
+  return result;
 }
 function prng(seed:number) { let x=seed|0||1;return ()=>{x^=x<<13;x^=x>>>17;x^=x<<5;return (x>>>0)/4294967296;}; }
 export function applyCommand(state: GameState, command: Command): GameState {
@@ -1161,7 +1216,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const y=clamp(finite(p.y,obj.y),0,BOARD_H);
       // A physical deck box is a freely movable tabletop accessory, not
       // a card: do not snap it into card slots or modify deck contents.
-      const snapEligible=state.kind==='tcg'&&obj.kind!=='board'&&obj.kind!=='deck-box';
+      const snapEligible=state.kind==='tcg'&&obj.kind!=='board'&&obj.kind!=='deck-box'&&!obj.tokenCoin;
       const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
           ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
@@ -1308,6 +1363,45 @@ export function applyCommand(state: GameState, command: Command): GameState {
       }
       message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
     }break;
+    case 'TOKEN_PLACE':{
+      const x=Number(p.x),y=Number(p.y),value=Number(p.value),sign=p.sign as 1|-1;
+      const carrier=objects.find(o=>o.id===p.carrierId);
+      objects.push(sanitizeObject({
+        id:command.id+'-coin',kind:'token',tokenCoin:true,tokenSign:sign,value,
+        name:String(value),x,y,rotation:0,zone:'TABLE',order:objects.length,
+        color:'#d8b979',...(carrier?{carrierId:carrier.id,matSeat:carrier.matSeat??Number(p.seat)}:{matSeat:Number(p.seat)})
+      }));
+      message=(sign===1?'+':'−')+value+' coin placed'+(carrier?' on '+carrier.name:'');
+    }break;
+    case 'TOKEN_ADJUST':{
+      const ids=p.ids as string[],value=Number(p.value),sign=p.sign as 1|-1,custom=Number(p.custom);
+      for(const id of ids){
+        const card=objects.find(o=>o.id===id)!;
+        const attached=objects.filter(o=>o.tokenCoin&&o.carrierId===id);
+        const existing=attached.reduce((sum,o)=>sum+(o.tokenSign??1)*(o.value??0),0);
+        const newTotal=existing+sign*value;
+        if(Math.abs(newTotal)>20000)throw new Error('Coin total exceeds 20,000');
+        const change=minimalCoinChange(Math.abs(newTotal),custom);
+        // Check capacity before committing any replacement; one command
+        // produces one deterministic replayable state for all selected cards.
+        if(objects.length-attached.length+change.length>1000)
+          throw new Error('Maximum objects reached');
+        const removed=new Set(attached.map(o=>o.id));
+        objects=objects.filter(o=>!removed.has(o.id));
+        change.forEach((denomination,index)=>{
+          const col=index%3,row=Math.floor(index/3);
+          objects.push(sanitizeObject({
+            id:command.id+'-'+id+'-'+index,kind:'token',tokenCoin:true,
+            tokenSign:newTotal<0?-1:1,value:denomination,name:String(denomination),
+            x:clamp(card.x-19+col*19,0,BOARD_W),
+            y:clamp(card.y-24+row*19,0,BOARD_H),
+            rotation:card.rotation,zone:'TABLE',order:objects.length,
+            matSeat:card.matSeat??Number(p.seat),carrierId:id,color:'#d8b979'
+          }));
+        });
+      }
+      message=ids.length+' card(s) · '+(sign===1?'+':'−')+value+' in minimal coins';
+    }break;
     case 'ADJUST_COUNTER':if(obj){
       obj.counters=clamp((obj.counters??0)+Number(p.delta),0,999);
       message=obj.name+' · '+obj.counters+' counters';
@@ -1392,8 +1486,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
     Math.hypot(a.x-b.x,a.y-b.y)>0.00001;
   const carrying=objects.filter(o=>o.kind==='card'||o.kind==='deck');
   const sizeOf=(o:TableObject)=>({
-    w:(o.kind==='card'||o.kind==='deck'?62:o.kind==='board'?310:52)*(o.scale??1),
-    h:(o.kind==='card'||o.kind==='deck'?88:o.kind==='board'?206:52)*(o.scale??1)
+    w:(o.kind==='card'||o.kind==='deck'?62:o.kind==='board'?310:o.tokenCoin?26:52)*(o.scale??1),
+    h:(o.kind==='card'||o.kind==='deck'?88:o.kind==='board'?206:o.tokenCoin?26:52)*(o.scale??1)
   });
   if(movingIds.size){
     for(const child of objects){
