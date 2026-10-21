@@ -1050,6 +1050,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const leftTrayMat=useRef<Container|null>(null);
   const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number}|null>(null);
   const diceThrowAnimation=useRef<number|null>(null);
+  const dice3DActive=useRef(false);
+  const dice3DStop=useRef<(()=>void)|null>(null);
+  const [dice3DError,setDice3DError]=useState<string|null>(null);
   const diceFlying=useRef<Container[]>([]);
   const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const diceThrowCallback=useRef(onDiceThrow);diceThrowCallback.current=onDiceThrow;
@@ -1240,134 +1243,76 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
    * per type. Extra copies are sampled fairly but represented by one die.
    * Game results are committed only after the bodies physically settle. */
   throwDiceNow.current=(pressed,dx,dy,elapsed)=>{
-    const current=session.current;
-    if(!current||currentState.current.kind!=='tcg'||diceThrowAnimation.current!==null)return;
+    const current=session.current,host=mount.current;
+    if(!current||!host||currentState.current.kind!=='tcg'||dice3DActive.current)return;
     const selected={...diceQuantitiesRef.current};
     if(!selected[pressed])selected[pressed]=1;
     const types=DICE_TYPES.filter(sides=>(selected[sides]??0)>0);
-    if(!types.length)return;
-    const {app,board}=current;
     const mat=leftTrayMat.current;
-    if(!mat)return;
-    diceQuantitiesRef.current={};
-    setDiceQuantities({});
+    if(!mat||!types.length)return;
+    const {app,board}=current;
+    const rect=app.canvas.getBoundingClientRect();
+    const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
+    if(rect.width<=0||rect.height<=0)return;
+    const convert=(point:Point)=>({x:point.x*sx,y:point.y*sy});
+    const origin=tcgMatOrigin(seatRef.current);
+    const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+    const distance=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+    const trays=[-1,1].map(side=>{
+      const x=side*distance,w=TCG_MAT.cardWidth/2+4;
+      const corners=[new Point(x-w,top-5),new Point(x+w,top-5),
+        new Point(x+w,TCG_MAT_HEIGHT/2+5),new Point(x-w,TCG_MAT_HEIGHT/2+5)]
+        .map(p=>convert(mat.toGlobal(p)));
+      return {left:Math.min(...corners.map(p=>p.x)),top:Math.min(...corners.map(p=>p.y)),
+        right:Math.max(...corners.map(p=>p.x)),bottom:Math.max(...corners.map(p=>p.y))};
+    });
+    const sources=types.map(sides=>{
+      const p=diceSources.current.get(sides)?.toGlobal(new Point(0,0))??
+        mat.toGlobal(new Point(-distance,top+40));
+      return {sides,quantity:selected[sides],...convert(p)};
+    });
+    const obstacles=[...visuals.current.entries()].filter(([id])=>{
+      const obj=currentState.current.objects.find(o=>o.id===id);
+      return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
+    }).slice(-60).map(([,visual])=>convert(visual.toGlobal(new Point(0,0))));
+    diceQuantitiesRef.current={};setDiceQuantities({});
     for(const {body,count} of diceBadges.current.values()){
       body.children[0].visible=false;count.text='';
     }
-    const randomFace=(faces:number)=>{
-      // Rejection sampling removes modulo bias for D100 as well as D04.
-      const limit=Math.floor(4294967296/faces)*faces;
-      const word=new Uint32Array(1);
-      do{crypto.getRandomValues(word);}while(word[0]>=limit);
-      return word[0]%faces+1;
-    };
-    const rollsByType=types.map(sides=>({
-      sides,rolls:Array.from({length:selected[sides]},()=>randomFace(sides))
-    }));
-    const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
-    const centerX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
-    const project=(x:number,y:number)=>mat.toGlobal(new Point(x,y));
-    const trayRects:CollisionRect[]=[-1,1].map(side=>{
-      const x=side*centerX,w=TCG_MAT.cardWidth/2+4;
-      const corners=[project(x-w,top-5),project(x+w,top-5),
-        project(x+w,TCG_MAT_HEIGHT/2+5),project(x-w,TCG_MAT_HEIGHT/2+5)];
-      return {left:Math.min(...corners.map(p=>p.x)),
-        right:Math.max(...corners.map(p=>p.x)),
-        top:Math.min(...corners.map(p=>p.y)),
-        bottom:Math.max(...corners.map(p=>p.y))};
-    });
-    const pressedSource=diceSources.current.get(pressed);
-    const start=pressedSource?.toGlobal(new Point(0,0))??project(-centerX,top+39);
-    const inward=project(-TCG_MAT_WIDTH/2+115,top+25);
-    const motion=Math.hypot(dx,dy)>=11?{x:dx,y:dy}:
-      {x:inward.x-start.x,y:inward.y-start.y};
-    const v=throwVelocity(motion.x,motion.y,elapsed);
-    const bodies:DiceBody[]=[];
-    const sprites:Container[]=[];
-    types.forEach((sides,index)=>{
-      const source=diceSources.current.get(sides);
-      const p=source?.toGlobal(new Point(0,0))??start;
-      const scatter=(index-(types.length-1)/2)*.24;
-      const speed=v.speed*(.88+Math.random()*.28);
-      const angle=Math.atan2(v.y,v.x)+scatter;
-      const ball:DiceBody={
-        x:p.x,y:p.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
-        z:9+index*4,vz:250+speed*.29+index*15,
-        angle:0,spin:(index%2?-1:1)*(7+speed*.012),
-        radius:16,mass:.8+sides/110,leftTrayExited:false
-      };
-      bodies.push(ball);
-      const die=makeDie(sides);
-      die.scale.set(1.07);
-      die.position.set(p.x,p.y);
-      die.eventMode='none';
-      app.stage.addChild(die);
-      sprites.push(die);
-    });
-    diceFlying.current=sprites;
-    // Previously landed dice and coins are real, immovable obstacles for
-    // the current throw. Source generators remain permanently in their trays.
-    const settled=Array.from(visuals.current.entries())
-      .filter(([id])=>{
-        const obj=currentState.current.objects.find(o=>o.id===id);
-        return !!obj&&(obj.throwDice||obj.tokenCoin||obj.kind==='die');
-      }).slice(-40).map(([,piece])=>{
-        const p=piece.toGlobal(new Point(0,0));
-        return {x:p.x,y:p.y};
-      });
-    const fixedBodies:DiceBody[]=settled.map(p=>({
-      x:p.x,y:p.y,vx:0,vy:0,z:0,vz:0,angle:0,spin:0,
-      radius:15,mass:1e9,leftTrayExited:true,fixed:true
-    }));
-    let elapsedTime=0,previous=performance.now(),accumulator=0;
-    const finish=()=>{
-      diceThrowAnimation.current=null;
-      sprites.forEach(die=>{if(!die.destroyed)die.destroy({children:true});});
-      diceFlying.current=[];
-      if(!session.current||session.current.app!==app)return;
-      const parent=duelLayers.current?.get(seatRef.current)??board;
-      const entries=rollsByType.map((item,index)=>{
-        const p=parent.toLocal(new Point(bodies[index].x,bodies[index].y),app.stage);
-        return {...item,x:Math.max(0,Math.min(BOARD_W,p.x)),
-          y:Math.max(0,Math.min(BOARD_W,p.y)),
-          rotation:((bodies[index].angle*180/Math.PI)%360+360)%360};
-      });
-      diceThrowCallback.current(entries);
-    };
-    const tick=(now:number)=>{
-      if(!session.current||session.current.app!==app){
-        diceThrowAnimation.current=null;
-        sprites.forEach(d=>{if(!d.destroyed)d.destroy({children:true});});
-        diceFlying.current=[];return;
+    setDice3DError(null);dice3DActive.current=true;
+    // Independent 3D viewport: no WebGL physics/rendering overhead while
+    // playing cards or editing Sennet's 2D tabletop.
+    import('../lib/Dice3D').then(({roll3DDice})=>{
+      if(session.current?.app!==app){dice3DActive.current=false;return;}
+      try{
+        const d=roll3DDice({host,width:rect.width,height:rect.height,
+          sources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
+          done:results=>{
+            dice3DActive.current=false;dice3DStop.current=null;
+            if(session.current?.app!==app)return;
+            const parent=duelLayers.current?.get(seatRef.current)??board;
+            const throws=results.map(result=>{
+              const point=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
+              return {sides:result.sides,rolls:result.rolls,
+                x:Math.max(0,Math.min(BOARD_W,point.x)),
+                y:Math.max(0,Math.min(BOARD_W,point.y)),
+                rotation:((result.rotation%360)+360)%360};
+            });
+            diceThrowCallback.current(throws);
+          }});
+        dice3DStop.current=d;
+      }catch(err){
+        dice3DActive.current=false;dice3DStop.current=null;
+        setDice3DError('3D dice need WebGL support. '+String(err));
       }
-      const dt=Math.min(.09,Math.max(0,(now-previous)/1000));
-      previous=now;elapsedTime+=dt;accumulator+=dt;
-      let cycles=0;
-      while(accumulator>=1/60&&cycles++<6){
-        stepDicePhysics([...bodies,...fixedBodies],1/60,
-          app.renderer.width,app.renderer.height,trayRects);
-        accumulator-=1/60;
-      }
-      bodies.forEach((b,index)=>{
-        const sprite=sprites[index];
-        if(sprite.destroyed)return;
-        sprite.position.set(b.x,b.y-b.z*.43);
-        sprite.rotation=b.angle;
-        const bounce=1+Math.min(.45,b.z/220);
-        sprite.scale.set(bounce*(b.mass<1?.96:1),bounce);
-        if(types[index]===2){
-          sprite.scale.x*=Math.max(.17,Math.abs(Math.cos(b.angle*1.4)));
-        }
-      });
-      const allSettled=bodies.every(b=>b.z<.35&&
-        Math.hypot(b.vx,b.vy)<23&&Math.abs(b.vz)<2&&Math.abs(b.spin)<.6);
-      if((elapsedTime>1.1&&allSettled)||elapsedTime>5.3){finish();return;}
-      diceThrowAnimation.current=requestAnimationFrame(tick);
-    };
-    diceThrowAnimation.current=requestAnimationFrame(tick);
+    }).catch(err=>{
+      dice3DActive.current=false;dice3DStop.current=null;
+      setDice3DError('Could not load the 3D dice engine: '+String(err));
+    });
+    void origin;
   };
   const addDiceCount=(sides:number)=>{
-    if(diceThrowAnimation.current!==null)return;
+    if(diceThrowAnimation.current!==null||dice3DActive.current)return;
     const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
     diceQuantitiesRef.current={...diceQuantitiesRef.current,[sides]:next};
     setDiceQuantities({...diceQuantitiesRef.current});
@@ -1463,6 +1408,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       for(const timer of hoverTimers.current)window.clearTimeout(timer);
       hoverTimers.current.clear();
       if(activeFocusAnimation.current!==null)cancelAnimationFrame(activeFocusAnimation.current);
+      dice3DStop.current?.();dice3DStop.current=null;dice3DActive.current=false;
       if(diceThrowAnimation.current!==null)cancelAnimationFrame(diceThrowAnimation.current);
       for(const flying of diceFlying.current)if(!flying.destroyed)flying.destroy({children:true});
       diceFlying.current=[];dicePointer.current=null;
@@ -2670,6 +2616,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         }}>×</button>
       </div>}
 
+    {dice3DError&&<div className="sennet-dice-engine-error" role="alert">
+      {dice3DError}<button onClick={()=>setDice3DError(null)}>Dismiss</button>
+    </div>}
     {coinMenu&&<div className="sennet-coin-radial-layer" onPointerDown={e=>e.stopPropagation()}>
       <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
         <svg viewBox="0 0 248 248" role="group" aria-label="Coin action radial">
