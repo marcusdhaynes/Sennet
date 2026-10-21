@@ -1338,6 +1338,20 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     node.textContent=line;node.setAttribute('role','status');
     node.setAttribute('aria-label','Die result: '+line);
     host.appendChild(node);
+    // Position the popup BEFORE its first animation frame. Previously it
+    // began at 0,0 until the next Pixi ticker, so it often flashed outside
+    // the die or appeared invisible during the render handoff.
+    const piece=visuals.current.get(id),app=session.current?.app;
+    if(piece&&!piece.destroyed&&app){
+      const pos=piece.toGlobal(new Point(0,0));
+      const rect=app.canvas.getBoundingClientRect();
+      const x=pos.x*rect.width/app.renderer.width;
+      const y=pos.y*rect.height/app.renderer.height;
+      const edge=piece.toGlobal(new Point(1,0));
+      const sc=Math.hypot(edge.x-pos.x,edge.y-pos.y);
+      node.style.left=x+'px';
+      node.style.top=(y-27*Math.max(.6,Math.min(1.5,sc)))+'px';
+    }
     const timer=window.setTimeout(()=>{
       node.remove();
       if(rollBubbles.current.get(id)?.node===node)rollBubbles.current.delete(id);
