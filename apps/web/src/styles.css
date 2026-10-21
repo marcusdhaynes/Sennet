@@ -1747,3 +1747,37 @@ body>.reader-backdrop{
 .sennet-action-lcd-button:focus-visible{
   outline:2px solid #b9f8e1;outline-offset:2px;
 }
+
+/* Coin geometry must NEVER stretch when a long signed/comma-formatted value
+   is entered. Both the metal disk and inset dial have hard square bounds;
+   only glyph size changes to fit the inscription. */
+.pixi-host>.sennet-coin-above-card{
+  width:36px;height:36px;aspect-ratio:1 / 1;
+}
+.sennet-coin-above-card-face{
+  inset:1px;width:34px;height:34px;aspect-ratio:1 / 1;
+  border-radius:50%;overflow:hidden;
+}
+.sennet-coin-above-card-number{
+  box-sizing:border-box;width:20px;height:20px;min-width:20px;
+  max-width:20px;min-height:20px;max-height:20px;
+  aspect-ratio:1 / 1;flex:none;padding:0;
+  border-radius:50%;overflow:hidden;
+  white-space:nowrap;text-overflow:clip;
+  letter-spacing:-.2px;
+}
+.sennet-coin-above-card[data-variant="editable"] .sennet-coin-above-card-face{
+  background:radial-gradient(circle at 31% 26%,#f2ffff 0%,#b7d0d0 31%,
+    #6c878f 69%,#2f4b52 94%);
+  border-color:#effdff;
+  box-shadow:inset 0 0 0 1.3px #334e59,inset 0 1px 2px #fff9,
+    inset 0 -2px 3px #0a283080,0 2px 4px #000a;
+}
+.sennet-coin-above-card[data-variant="editable"] .sennet-coin-above-card-face::before{
+  background:radial-gradient(circle at 25% 19%,#ffffffb0,transparent 52%);
+}
+.sennet-coin-above-card[data-variant="editable"] .sennet-coin-above-card-number{
+  color:#143440;border-color:#e2f5f2;
+  background:radial-gradient(circle at 35% 22%,#effefd,#b0cbcc 78%);
+  box-shadow:0 0 0 1.5px #203e4b,0 0 0 2.8px #d9eced;
+}
