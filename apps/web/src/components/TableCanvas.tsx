@@ -14,9 +14,9 @@ const coinSector=(index:number)=>{
   const coord=(angle:number,r:number)=>({x:center+r*Math.cos(angle*Math.PI/180),
     y:center-r*Math.sin(angle*Math.PI/180)});
   const a=180-index*36,p=coord(a+17.8,76),q=coord(a-17.8,76);
-  const innerStart=coord(a+17.8,11),innerEnd=coord(a-17.8,11);
+  const innerStart=coord(a+17.8,23),innerEnd=coord(a-17.8,23);
   const t=coord(a,56);
-  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A76 76 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A11 11 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
+  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A76 76 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A23 23 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
     x:t.x,y:t.y};
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
@@ -881,7 +881,7 @@ function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearanc
   const center=document.createElement('span');
   center.className='sennet-coin-above-card-number';
   center.textContent=String(value);
-  center.style.fontSize=String(String(value).length>=4?12:String(value).length===3?13.5:15.5)+'px';
+  center.style.fontSize=String(String(value).length>=4?11.5:String(value).length===3?13:String(value).length===2?15:16)+'px';
   face.append(center);root.appendChild(face);
   return root;
 }
@@ -898,9 +898,9 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   }
   shadow.eventMode='none';box.addChild(shadow);
   if(o.tokenCoin){
-    box.hitArea=new Circle(0,0,17*coinStyle.size*.41);
+    box.hitArea=new Circle(0,0,17*coinStyle.size*1.08);
     box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1,o.color));
-    if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size*.41).stroke({color:0x9effee,width:2.2}));
+    if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size*1.08).stroke({color:0x9effee,width:2.2}));
   }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
     // underneath or alongside remain selectable.
@@ -1125,6 +1125,13 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   useEffect(()=>{try{localStorage.setItem('sennet.coin.sources.v1',JSON.stringify(coinSources));}catch{}},[coinSources]);
   const [coinMenu,setCoinMenu]=useState<{type:'source'|'copy';index?:number;id?:string;x:number;y:number}|null>(null);
   const [coinColorsOpen,setCoinColorsOpen]=useState(false);
+  const radialCenterHold=useRef<number|null>(null);
+  const clearRadialCenterHold=()=>{
+    if(radialCenterHold.current!==null){
+      window.clearTimeout(radialCenterHold.current);
+      radialCenterHold.current=null;
+    }
+  };
   const coinHold=useRef<{pointerId:number;timer:number;kind:'source'|'copy';
     index?:number;x:number;y:number;startX:number;startY:number}|null>(null);
   const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
@@ -1141,14 +1148,19 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     if(!app)return;
     const p=piece.toGlobal(new Point(0,0)),rect=app.canvas.getBoundingClientRect();
     const px=p.x*rect.width/app.renderer.width,py=p.y*rect.height/app.renderer.height;
-    const clampRadial=(n:number,edge:number)=>edge<COIN_RADIAL_SIZE?edge/2:
-      Math.max(COIN_RADIAL_SIZE/2,Math.min(edge-COIN_RADIAL_SIZE/2,n));
-    const x=clampRadial(px,rect.width),y=clampRadial(py,rect.height);
+    // Anchor the radial exactly on the physical coin. The wedge ring
+    // begins beyond the coin rim; never shift the radial off the coin.
+    const x=px,y=py;
     const timer=window.setTimeout(()=>{
       if(coinHold.current?.pointerId!==pointerId)return;
       coinHold.current=null;cancelActiveDrag.current();
       controlPointer.current=null;
-      setCoinMenu({type,id,index,x,y});setCoinColorsOpen(false);
+      setCoinMenu(previous=>{
+        const same=previous?.type===type&&
+          (type==='source'?previous.index===index:previous.id===id);
+        return same?null:{type,id,index,x,y};
+      });
+      setCoinColorsOpen(false);
     },250);
     coinHold.current={pointerId,timer,kind:type,index,x,y,startX,startY};
   };
@@ -1658,16 +1670,16 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         const color=coinSources.colors[index]??'#d8b979';
         source.addChild(makeCoin(value,coinAppearance,true,1,color));
         const highlight=new Graphics();
-        highlight.scale.set(coinAppearance.size*.41);
+        highlight.scale.set(coinAppearance.size*1.08);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
         const coinOverlay=showCoinAboveArtwork(source,value,1,true,color);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
-        source.hitArea=new Circle(0,0,17.5*coinAppearance.size*.41);
+        source.hitArea=new Circle(0,0,17.5*coinAppearance.size*1.08);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=Math.max(4.3,8*coinAppearance.size*.41))return 0;
+          if(Math.hypot(here.x,here.y)<=Math.max(4.3,8*coinAppearance.size*1.08))return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -1833,7 +1845,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           cancelActiveDrag.current();
           if(obj.throwDice)rerollPointer.current={pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY};
           const local=piece.toLocal(e.global);
-          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*.41);
+          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*1.08);
           if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
@@ -2740,7 +2752,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           {COIN_ACTIONS.map((_,i)=><path key={i} d={coinSector(i).d}
             className="sennet-coin-sector"/>)}
           <line x1="80" x2="80" y1="4" y2="156" className="sennet-coin-divider"/>
-          <circle cx="80" cy="80" r="10" className="sennet-coin-radial-center"/>
+
         </svg>
         {COIN_ACTIONS.map((action,i)=>{
           const p=coinSector(i);
@@ -2755,10 +2767,20 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
             {shown}
           </button>;
         })}
-        <span className="sennet-coin-radial-number" aria-live="polite">{coinMenu.type==='copy'?
-          state.objects.find(o=>o.id===coinMenu.id)?.value??0:
-          coinMenu.index===0?customCoinValue:
-          coinSources.values[coinMenu.index??0]??[customCoinValue,10,20,30,50,100][coinMenu.index??0]}</span>
+        <button type="button" className="sennet-coin-radial-center-hold"
+          title="Hold for 0.25 seconds to close"
+          aria-label="Hold coin center to close radial"
+          onPointerDown={e=>{
+            e.stopPropagation();
+            clearRadialCenterHold();
+            radialCenterHold.current=window.setTimeout(()=>{
+              radialCenterHold.current=null;
+              setCoinMenu(null);setCoinColorsOpen(false);
+            },250);
+          }}
+          onPointerUp={e=>{e.stopPropagation();clearRadialCenterHold();}}
+          onPointerCancel={e=>{e.stopPropagation();clearRadialCenterHold();}}
+          onPointerLeave={e=>{e.stopPropagation();clearRadialCenterHold();}}/>
         {coinColorsOpen&&<div className="sennet-coin-palette">
           <strong>Coin color</strong>
           <div className="sennet-coin-palette-swatches">
@@ -2772,9 +2794,6 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
               coinSources.colors[coinMenu.index??0]??'#d8b979'}
             onChange={e=>applyCoinColor(e.target.value)}/></label>
         </div>}
-        <button type="button" className="sennet-coin-close"
-          onClick={()=>{setCoinMenu(null);setCoinColorsOpen(false);}}
-          aria-label="Close coin radial">×</button>
       </div>
     </div>}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
