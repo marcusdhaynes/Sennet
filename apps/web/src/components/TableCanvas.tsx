@@ -1399,7 +1399,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     import('../lib/Dice3D').then(({roll3DDice})=>{
       if(session.current?.app!==app){dice3DActive.current=false;return;}
       try{
+        const beforePaint=staticDice3D.current?.getRenderedRevision()??0;
         const d=roll3DDice({host,width:rect.width,height:rect.height,
+          canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
           sources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
           done:results=>{
             dice3DActive.current=false;dice3DStop.current=null;
@@ -1469,7 +1471,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(session.current?.app!==app){dice3DActive.current=false;return;}
       try{
         visual.visible=false;
+        const beforePaint=staticDice3D.current?.getRenderedRevision()??0;
         const stop=roll3DDice({host,width:rect.width,height:rect.height,
+          canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
           sources:[{sides:die.sides??6,quantity:die.throwQuantity??1,
             themeId:resolveDiceTheme(diceAppearance,die.sides??6),scale,...start}],
           aimX:dx,aimY:dy,durationMs:elapsed,
