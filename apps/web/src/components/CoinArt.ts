@@ -26,7 +26,7 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
   const coin=new Container();
   const finish=style.finish,shine=Math.max(0,Math.min(100,style.shine))/100;
   const bevel=Math.max(0,Math.min(100,style.bevel))/100,r=16;
-  coin.scale.set(.82*Math.max(.55,Math.min(1.3,style.size)));
+  coin.scale.set(.41*Math.max(.55,Math.min(1.3,style.size)));
   const metal=finish==='enamel'?0xbd9855:finish==='matte'?0x8d8172:finish==='brushed'?0xb8ae96:0xe3c38a;
   const rim=new Graphics().circle(1,2,r+1.5).fill({color:0x050d10,alpha:.5})
     .circle(0,0,r+1).fill({color:0x493b2b})
@@ -66,14 +66,6 @@ export function makeCoin(value:number,style:CoinAppearance,source=false,sign:1|-
       .stroke({color:0xffffff,alpha:.12+.48*shine,width:1.3+shine})
       .arc(0,0,r-4,Math.PI*.08,Math.PI*.58)
       .stroke({color:0x35271b,alpha:.2,width:1.5}));
-  }
-  if(source||sign===1){
-    const plus=fillText('+',9,source?0xfbf4d9:0xddffde);
-    plus.position.set(0,-10.2);coin.addChild(plus);
-  }
-  if(source||sign===-1){
-    const minus=fillText('−',9,source?0x362d2d:0x982d4e);
-    minus.position.set(0,10);coin.addChild(minus);
   }
   const disk=new Graphics().circle(0,0,7.1)
     .fill({color:0x27292b}).stroke({color:0xfde5aa,width:1.6})
