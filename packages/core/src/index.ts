@@ -1424,12 +1424,21 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const removed=new Set(attached.map(o=>o.id));
         objects=objects.filter(o=>!removed.has(o.id));
         change.forEach((denomination,index)=>{
-          const col=index%3,row=Math.floor(index/3);
+          // Automatically issued change is deliberately placed *on* the
+          // card in its own rotated frame, rather than snap-pulled to the
+          // middle of a playmat slot. Manual placements are never changed.
+          const col=index%3,row=Math.floor(index/3)%4;
+          const layer=Math.floor(index/12)%3;
+          const lx=(-19+col*19+layer*2)*(card.scale??1);
+          const ly=(-23+row*15+layer*2)*(card.scale??1);
+          const angle=playerSeatRotation(card.matSeat??Number(p.seat))+
+            card.rotation*Math.PI/180;
+          const x=card.x+lx*Math.cos(angle)-ly*Math.sin(angle);
+          const y=card.y+lx*Math.sin(angle)+ly*Math.cos(angle);
           objects.push(sanitizeObject({
             id:command.id+'-'+id+'-'+index,kind:'token',tokenCoin:true,
             tokenSign:newTotal<0?-1:1,value:denomination,name:String(denomination),
-            x:clamp(card.x-19+col*19,0,BOARD_W),
-            y:clamp(card.y-24+row*19,0,BOARD_H),
+            x:clamp(x,0,BOARD_W),y:clamp(y,0,BOARD_H),
             rotation:card.rotation,zone:'TABLE',order:objects.length,
             matSeat:card.matSeat??Number(p.seat),carrierId:id,color:'#d8b979'
           }));
