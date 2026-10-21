@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {createGame,applyCommand,replay} from '../src/index.ts';
 import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
+import {dieGeometry,convexShape}
+  from '../../../apps/web/src/lib/Dice3D.ts';
 const command=(id,throws,seat=0)=>({id,actor:'local',
   type:'THROW_TRAY',payload:{seat,throws}});
 const near=(a,b,msg)=>assert.ok(Math.abs(a-b)<1e-5,msg+': '+a+' vs '+b);
@@ -101,4 +103,22 @@ test('moving dice rebound from settled dice while settled pieces stay fixed',()=
   assert.equal(fixed.x,128,'settled die remains stationary');
   assert.equal(fixed.vx,0);
   assert.ok(fixed.fixed);
+});
+
+test('all physical dice produce distinct real 3D geometry and stable collision hulls',()=>{
+  for(const sides of [2,4,6,8,10,12,20,100]){
+    const geometry=dieGeometry(sides,20);
+    const coordinates=geometry.getAttribute('position');
+    assert.ok(coordinates.count>=12,'D'+sides+' is a real mesh');
+    const zValues=new Set();
+    for(let i=0;i<coordinates.count;i++)
+      zValues.add(coordinates.getZ(i).toFixed(2));
+    assert.ok(zValues.size>=2,'D'+sides+' has physical depth');
+    if(sides!==2&&sides!==100){
+      const hull=convexShape(geometry);
+      assert.ok(hull.vertices.length>=4,'D'+sides+' has a convex rigid-body shape');
+      assert.ok(hull.faces.length>=4,'D'+sides+' has independently collidable faces');
+    }
+    geometry.dispose();
+  }
 });
