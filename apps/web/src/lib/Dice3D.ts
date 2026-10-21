@@ -1,6 +1,7 @@
 /** Real 3D dice: WebGL geometry + a rigid-body solver. This module is loaded
  * only while dice are airborne; the rest of Sennet remains Pixi-based. */
 import * as THREE from 'three';
+import {installDiceLighting} from './Dice3DLighting.ts';
 import {createDie3DModel,dieGeometry,radiusFor,type NumberedFace} from './Dice3DGeometry.ts';
 import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
 export {dieGeometry,createDie3DModel} from './Dice3DGeometry.ts';
@@ -56,7 +57,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const {host,width:w,height:h}=opts;
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,
     premultipliedAlpha:false,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.8));
   renderer.setSize(w,h,false);
   renderer.setClearColor(0x000000,0);
   const canvas=renderer.domElement;
@@ -67,11 +68,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const scene=new THREE.Scene();
   const camera=new THREE.OrthographicCamera(-w/2,w/2,h/2,-h/2,.1,1600);
   camera.position.set(w/2,h/2,1100);camera.lookAt(w/2,h/2,0);
-  scene.add(new THREE.AmbientLight(0xfff4e6,1.1));
-  const key=new THREE.DirectionalLight(0xffffff,2.4);
-  key.position.set(w*.22,h*.79,850);scene.add(key);
-  const fill=new THREE.DirectionalLight(0x86b5da,.8);
-  fill.position.set(w*.8,h*.15,600);scene.add(fill);
+  installDiceLighting(scene);
   const world=new CANNON.World({gravity:new CANNON.Vec3(0,0,-1050)});
   world.allowSleep=true;(world.solver as CANNON.GSSolver).iterations=12;
   const dieMat=new CANNON.Material('polyhedral'),wallMat=new CANNON.Material('felt');
