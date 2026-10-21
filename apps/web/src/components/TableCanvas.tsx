@@ -1147,6 +1147,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
     const timer=window.setTimeout(()=>{
       if(coinHold.current?.pointerId!==pointerId)return;
       coinHold.current=null;cancelActiveDrag.current();
+      controlPointer.current=null;
       setCoinMenu({type,id,index,x,y});setCoinColorsOpen(false);
     },250);
     coinHold.current={pointerId,timer,kind:type,index,x,y,startX,startY};
@@ -1163,8 +1164,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const value=i===0?customCoinValue:(coinSources.values[i]??defaults[i]);
       const color=coinSources.colors[i]??'#d8b979';
       if(index===0){
-        const point=tcgMatWorld(TCG_MAT_WIDTH/2+100,
-          -TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap+25+i*31,seat);
+        const point=tcgMatWorld(0,
+          -TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap+35+i*20,seat);
         onTokenPlace(value,1,point.x,point.y,undefined,color);
       }else{
         const next=Math.max(0,Math.min(9999,value+increments[index]));
@@ -1666,7 +1667,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         source.hitArea=new Circle(0,0,17.5*coinAppearance.size*.41);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=8*coinAppearance.size*.41)return 0;
+          if(Math.hypot(here.x,here.y)<=Math.max(4.3,8*coinAppearance.size*.41))return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -1832,7 +1833,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           cancelActiveDrag.current();
           if(obj.throwDice)rerollPointer.current={pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY};
           const local=piece.toLocal(e.global);
-          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=8*coinAppearance.size*.41;
+          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*.41);
           if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
@@ -2034,6 +2035,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const hold=coinHold.current;
       if(!hold||hold.pointerId!==e.pointerId)return;
       window.clearTimeout(hold.timer);coinHold.current=null;
+      if(controlPointer.current===e.pointerId)controlPointer.current=null;
       // Keep the original Custom generator's quick-edit gesture.
       if(e.type==='pointerup'&&hold.kind==='source'&&hold.index===0&&
         Math.hypot(e.clientX-hold.startX,e.clientY-hold.startY)<8){
