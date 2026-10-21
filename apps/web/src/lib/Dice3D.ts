@@ -1,9 +1,9 @@
 /** Real 3D dice: WebGL geometry + a rigid-body solver. This module is loaded
  * only while dice are airborne; the rest of Sennet remains Pixi-based. */
 import * as THREE from 'three';
-import {createDie3DModel,dieGeometry,radiusFor,type NumberedFace} from './Dice3DGeometry';
-import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes';
-export {dieGeometry,createDie3DModel} from './Dice3DGeometry';
+import {createDie3DModel,dieGeometry,radiusFor,type NumberedFace} from './Dice3DGeometry.ts';
+import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
+export {dieGeometry,createDie3DModel} from './Dice3DGeometry.ts';
 import * as CANNON from 'cannon-es';
 
 export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;themeId?:DiceThemeId}
