@@ -1161,6 +1161,140 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
   const playmatRef=useRef(playmat);playmatRef.current=playmat;
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
+
+  /** Roll all selected denominations simultaneously using one visible body
+   * per type. Extra copies are sampled fairly but represented by one die.
+   * Game results are committed only after the bodies physically settle. */
+  throwDiceNow.current=(pressed,dx,dy,elapsed)=>{
+    const current=session.current;
+    if(!current||currentState.current.kind!=='tcg'||diceThrowAnimation.current!==null)return;
+    const selected={...diceQuantitiesRef.current};
+    if(!selected[pressed])selected[pressed]=1;
+    const types=DICE_TYPES.filter(sides=>(selected[sides]??0)>0);
+    if(!types.length)return;
+    const {app,board}=current;
+    const mat=leftTrayMat.current;
+    if(!mat)return;
+    diceQuantitiesRef.current={};
+    setDiceQuantities({});
+    for(const {body,count} of diceBadges.current.values()){
+      body.children[0].visible=false;count.text='';
+    }
+    const randomFace=(faces:number)=>{
+      // Rejection sampling removes modulo bias for D100 as well as D04.
+      const limit=Math.floor(4294967296/faces)*faces;
+      const word=new Uint32Array(1);
+      do{crypto.getRandomValues(word);}while(word[0]>=limit);
+      return word[0]%faces+1;
+    };
+    const rollsByType=types.map(sides=>({
+      sides,rolls:Array.from({length:selected[sides]},()=>randomFace(sides))
+    }));
+    const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+    const centerX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+    const project=(x:number,y:number)=>mat.toGlobal(new Point(x,y));
+    const trayRects:CollisionRect[]=[-1,1].map(side=>{
+      const x=side*centerX,w=TCG_MAT.cardWidth/2+4;
+      const corners=[project(x-w,top-5),project(x+w,top-5),
+        project(x+w,TCG_MAT_HEIGHT/2+5),project(x-w,TCG_MAT_HEIGHT/2+5)];
+      return {left:Math.min(...corners.map(p=>p.x)),
+        right:Math.max(...corners.map(p=>p.x)),
+        top:Math.min(...corners.map(p=>p.y)),
+        bottom:Math.max(...corners.map(p=>p.y))};
+    });
+    const pressedSource=diceSources.current.get(pressed);
+    const start=pressedSource?.toGlobal(new Point(0,0))??project(-centerX,top+39);
+    const inward=project(-TCG_MAT_WIDTH/2+115,top+25);
+    const motion=Math.hypot(dx,dy)>=11?{x:dx,y:dy}:
+      {x:inward.x-start.x,y:inward.y-start.y};
+    const v=throwVelocity(motion.x,motion.y,elapsed);
+    const bodies:DiceBody[]=[];
+    const sprites:Container[]=[];
+    types.forEach((sides,index)=>{
+      const source=diceSources.current.get(sides);
+      const p=source?.toGlobal(new Point(0,0))??start;
+      const scatter=(index-(types.length-1)/2)*.24;
+      const speed=v.speed*(.88+Math.random()*.28);
+      const angle=Math.atan2(v.y,v.x)+scatter;
+      const ball:DiceBody={
+        x:p.x,y:p.y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed,
+        z:9+index*4,vz:250+speed*.29+index*15,
+        angle:0,spin:(index%2?-1:1)*(7+speed*.012),
+        radius:16,mass:.8+sides/110,leftTrayExited:false
+      };
+      bodies.push(ball);
+      const die=makeDie(sides);
+      die.scale.set(1.07);
+      die.position.set(p.x,p.y);
+      die.eventMode='none';
+      app.stage.addChild(die);
+      sprites.push(die);
+    });
+    diceFlying.current=sprites;
+    let elapsedTime=0,previous=performance.now(),accumulator=0;
+    const finish=()=>{
+      diceThrowAnimation.current=null;
+      sprites.forEach(die=>{if(!die.destroyed)die.destroy({children:true});});
+      diceFlying.current=[];
+      if(!session.current||session.current.app!==app)return;
+      const parent=duelLayers.current?.get(seatRef.current)??board;
+      const entries=rollsByType.map((item,index)=>{
+        const p=parent.toLocal(new Point(bodies[index].x,bodies[index].y),app.stage);
+        return {...item,x:Math.max(0,Math.min(BOARD_W,p.x)),
+          y:Math.max(0,Math.min(BOARD_W,p.y)),
+          rotation:((bodies[index].angle*180/Math.PI)%360+360)%360};
+      });
+      diceThrowCallback.current(entries);
+    };
+    const tick=(now:number)=>{
+      if(!session.current||session.current.app!==app){
+        diceThrowAnimation.current=null;
+        sprites.forEach(d=>{if(!d.destroyed)d.destroy({children:true});});
+        diceFlying.current=[];return;
+      }
+      const dt=Math.min(.09,Math.max(0,(now-previous)/1000));
+      previous=now;elapsedTime+=dt;accumulator+=dt;
+      let cycles=0;
+      while(accumulator>=1/60&&cycles++<6){
+        stepDicePhysics(bodies,1/60,app.renderer.width,app.renderer.height,trayRects);
+        accumulator-=1/60;
+      }
+      bodies.forEach((b,index)=>{
+        const sprite=sprites[index];
+        if(sprite.destroyed)return;
+        sprite.position.set(b.x,b.y-b.z*.43);
+        sprite.rotation=b.angle;
+        const bounce=1+Math.min(.45,b.z/220);
+        sprite.scale.set(bounce*(b.mass<1?.96:1),bounce);
+        if(types[index]===2){
+          sprite.scale.x*=Math.max(.17,Math.abs(Math.cos(b.angle*1.4)));
+        }
+      });
+      const allSettled=bodies.every(b=>b.z<.35&&
+        Math.hypot(b.vx,b.vy)<23&&Math.abs(b.vz)<2&&Math.abs(b.spin)<.6);
+      if((elapsedTime>1.1&&allSettled)||elapsedTime>5.3){finish();return;}
+      diceThrowAnimation.current=requestAnimationFrame(tick);
+    };
+    diceThrowAnimation.current=requestAnimationFrame(tick);
+  };
+  const addDiceCount=(sides:number)=>{
+    if(diceThrowAnimation.current!==null)return;
+    const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
+    diceQuantitiesRef.current={...diceQuantitiesRef.current,[sides]:next};
+    setDiceQuantities({...diceQuantitiesRef.current});
+    const badge=diceBadges.current.get(sides);
+    if(badge){
+      badge.body.children[0].visible=true;badge.count.text='×'+next;
+    }
+    if(next===20){
+      const source=diceSources.current.get(sides);
+      const mat=leftTrayMat.current,from=source?.toGlobal(new Point(0,0));
+      const into=mat?.toGlobal(new Point(-TCG_MAT_WIDTH/2+115,-TCG_MAT_HEIGHT/2+125));
+      throwDiceNow.current(sides,(into?.x??0)-(from?.x??-100),
+        (into?.y??0)-(from?.y??0),220);
+    }
+  };
+
   useEffect(()=>{
     let disposed=false;let resizeObserver:ResizeObserver|undefined;
     const app=new Application();
@@ -1640,6 +1774,32 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       for(const {el} of coinLayers)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,customCoinValue]);
+
+  useEffect(()=>{
+    const end=(e:PointerEvent,commit:boolean)=>{
+      const d=dicePointer.current;
+      if(!d||d.pointerId!==e.pointerId)return;
+      dicePointer.current=null;
+      if(controlPointer.current===e.pointerId)controlPointer.current=null;
+      if(!commit)return;
+      const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
+      if(Math.hypot(dx,dy)<10)addDiceCount(d.sides);
+      else{
+        // Include the source die in the throw even if it was not clicked
+        // first. Previously selected denominations join automatically.
+        throwDiceNow.current(d.sides,dx,dy,performance.now()-d.at);
+      }
+    };
+    const up=(e:PointerEvent)=>end(e,true);
+    const cancel=(e:PointerEvent)=>end(e,false);
+    window.addEventListener('pointerup',up);
+    window.addEventListener('pointercancel',cancel);
+    return()=>{
+      window.removeEventListener('pointerup',up);
+      window.removeEventListener('pointercancel',cancel);
+    };
+  },[]);
+
   // A source is immutable: only a transient ghost travels with the pointer.
   // Commit one deterministic TOKEN_PLACE or TOKEN_ADJUST event on release.
   useEffect(()=>{
@@ -2365,6 +2525,21 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         if(e.key==='Enter'){e.preventDefault();commitCoinEdit();}
         if(e.key==='Escape')setCoinEditing(null);
       }}/>}
+
+    {state.kind==='tcg'&&!readonly&&Object.values(diceQuantities).some(n=>n>0)&&
+      <div className="sennet-dice-selection" onPointerDown={e=>e.stopPropagation()}>
+        <strong>{DICE_TYPES.filter(s=>diceQuantities[s]).map(s=>diceLabel(s)+' ×'+diceQuantities[s]).join(' · ')}</strong>
+        <button type="button" onClick={()=>{
+          const chosen=DICE_TYPES.find(s=>diceQuantities[s]);
+          if(chosen!==undefined)throwDiceNow.current(chosen,0,0,240);
+        }}>Throw selected</button>
+        <button type="button" aria-label="Clear dice selection" onClick={()=>{
+          diceQuantitiesRef.current={};setDiceQuantities({});
+          for(const {body,count} of diceBadges.current.values()){
+            body.children[0].visible=false;count.text='';
+          }
+        }}>×</button>
+      </div>}
 
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
