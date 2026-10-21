@@ -2377,8 +2377,9 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       const localX=(projected.x-scene.x)/scene.scale.x;
       const localY=(projected.y-scene.y)/scene.scale.y;
       // Fit to the screen, including the view controls on PLAY 03.
-      // On sufficiently tall displays, the mat fills 96% of screen width.
-      const widthFit=.96*w/TCG_MAT_WIDTH;
+      // Both actual wooden side drawers (plus slim pull handles) must fit.
+      const completeMatWidth=TCG_MAT_WIDTH+2*(TCG_MAT.cardWidth+18);
+      const widthFit=.94*w/completeMatWidth;
       const heightFit=.91*h/(TCG_MAT_HEIGHT+148);
       const zoom=clampTableZoom(Math.min(widthFit,heightFit)/fit);
       const scale=fit*zoom;
@@ -2406,7 +2407,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       // Account for the FULL PLAY 03 circle hit radius, plus a minimal
       // 3-unit safety clearance, equally on all four sides of each mat.
       // This also gives both battlefield halves breathing room at the divider.
-      const bounds=battlefieldFitBounds(lineup.columns);
+      const bounds=battlefieldFitBounds(lineup.columns,BATTLEFIELD_PLAYMAT_PADDING,true);
       const heightScale=h/bounds.height;
       const widthScale=w/bounds.width;
       animateTo(Math.min(heightScale,widthScale)/fit,0,0);
