@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number];
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -274,6 +274,18 @@ export function isTcgRemoveDrop(x:number,y:number,seat:number):boolean {
   const cell=tcgMatCells(seat).find(c=>c.row===3&&c.column===2)!;
   const point=tcgMatLocal(x,y,seat),center=tcgMatLocal(cell.x,cell.y,seat);
   return Math.abs(point.x-center.x)<=cell.width/2&&Math.abs(point.y-center.y)<=cell.height/2;
+}
+/** The two wooden accessory boxes are independent of the card pockets.
+ * Dropping the CENTER of a used die in either one deletes that die; source
+ * generators never disappear. */
+export function isTcgSideBoxDrop(x:number,y:number,seat:number):boolean {
+  if(!Number.isFinite(x)||!Number.isFinite(y))return false;
+  const local=tcgMatLocal(x,y,seat);
+  const half=TCG_MAT.cardWidth/2+4;
+  const center=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+  const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap-5;
+  return local.y>=top&&local.y<=TCG_MAT_HEIGHT/2+5&&
+    (Math.abs(local.x-center)<=half||Math.abs(local.x+center)<=half);
 }
 /** Render and snap to contiguous merged center-row groups. Side rows remain separate. */
 export function tcgMatRegions(seat:number,merged:readonly number[]=[]):TcgMatRegion[] {
@@ -966,6 +978,11 @@ function safeUrl(v: unknown): string | undefined {
   if (typeof v !== 'string' || v.length > 2048) return undefined;
   try { const u = new URL(v); return u.protocol === 'https:' || (u.protocol === 'http:' && ['localhost','127.0.0.1'].includes(u.hostname)) ? u.href : undefined; } catch { return undefined; }
 }
+/** A normalized orientation is required for stable replay of the 3D die. */
+export function validThrowQuaternion(value:unknown):value is [number,number,number,number] {
+  return Array.isArray(value)&&value.length===4&&value.every(n=>typeof n==='number'&&Number.isFinite(n))&&
+    Math.abs(value.reduce((sum,n)=>sum+n*n,0)-1)<.035;
+}
 export function sanitizeObject(input: Record<string,unknown>): TableObject {
   const kinds: ObjectKind[] = ['card','deck','deck-box','token','miniature','die','tile','board','marker'];
   const kind = kinds.includes(input.kind as ObjectKind) ? input.kind as ObjectKind : 'token';
@@ -991,7 +1008,8 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
       throwRolls:Array.isArray(input.throwRolls)?
         input.throwRolls.slice(0,20).map(v=>Math.floor(finite(v,1))):[],
       throwQuantity:clamp(Math.floor(finite(input.throwQuantity,1)),1,20),
-      throwTotal:clamp(Math.floor(finite(input.throwTotal,1)),0,2000)
+      throwTotal:clamp(Math.floor(finite(input.throwTotal,1)),0,2000),
+      ...(validThrowQuaternion(input.throwQuaternion)?{throwQuaternion:input.throwQuaternion as [number,number,number,number]}:{})
     }:{}),
     ...(frameUrls?.length?{frameUrls}:{}),
     ...(safeUrl(input.faceUrl)?{faceUrl:safeUrl(input.faceUrl)}:{}),
@@ -1104,6 +1122,8 @@ export function validateCommand(state: GameState, command: Command): string | nu
        Number(command.payload.x)<0||Number(command.payload.x)>BOARD_W||
        Number(command.payload.y)<0||Number(command.payload.y)>BOARD_H||
        !Number.isFinite(command.payload.rotation))return 'Invalid reroll landing';
+    if(command.payload.quaternion!==undefined&&!validThrowQuaternion(command.payload.quaternion))
+      return 'Invalid 3D die orientation';
   }
   if(command.type==='COIN_MODIFY'){
     if(!target?.tokenCoin)return 'Only physical coins can be modified';
@@ -1139,6 +1159,8 @@ export function validateCommand(state: GameState, command: Command): string | nu
          t.x<0||t.y<0||t.x>BOARD_W||t.y>BOARD_H)
         return 'Invalid dice landing position';
       if(typeof t.rotation!=='number'||!Number.isFinite(t.rotation))return 'Invalid die rotation';
+      if(t.quaternion!==undefined&&!validThrowQuaternion(t.quaternion))
+        return 'Invalid 3D die orientation';
     }
     if(state.objects.length+throws.length>1000)return 'Maximum objects reached';
   }
@@ -1463,7 +1485,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
     }break;
     case 'THROW_TRAY':{
-      const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number}>;
+      const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number]}>;
       const summaries:string[]=[];
       for(let i=0;i<thrown.length;i++){
         const toss=thrown[i],isCoin=toss.sides===2;
@@ -1479,6 +1501,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
           id:command.id+'-throw-'+i,kind:'die',throwDice:true,
           throwRolls:toss.rolls,throwQuantity:toss.rolls.length,throwTotal:total,
           sides:toss.sides,value:isCoin?(heads?1:2):Math.min(100,total),
+          ...(toss.quaternion?{throwQuaternion:toss.quaternion}:{}),
           name:label,x:toss.x,y:toss.y,rotation:toss.rotation,
           zone:'TABLE',order:objects.length+100,faceUp:true,
           color:isCoin?'#d5b87f':'#b9c6b9',matSeat:carrier?.matSeat??Number(p.seat),
@@ -1497,6 +1520,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       obj.value=obj.sides===2?(heads?1:2):Math.min(100,total);
       obj.x=Number(p.x);obj.y=Number(p.y);
       obj.rotation=((Number(p.rotation)%360)+360)%360;
+      if(validThrowQuaternion(p.quaternion))obj.throwQuaternion=p.quaternion;
       const face=obj.sides===2?(rolls.length===1?(heads?'HEADS':'TAILS'):
         heads+'H / '+(rolls.length-heads)+'T'):String(total);
       obj.description=obj.name+' × '+rolls.length+': '+rolls.join(', ')+' → '+face;
