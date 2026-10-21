@@ -411,7 +411,7 @@ export default function App(){
         onCoinDuplicate={id=>takeAction('CLONE',{id,newId:createId()})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
         onDiceThrow={throws=>takeAction('THROW_TRAY',{seat,throws})}
-        onDiceReroll={(id,rolls,x,y,rotation)=>takeAction('REROLL_DIE',{id,rolls,x,y,rotation})}
+        onDiceReroll={(id,rolls,x,y,rotation,quaternion)=>takeAction('REROLL_DIE',{id,rolls,x,y,rotation,quaternion})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
@@ -424,9 +424,16 @@ export default function App(){
             const local=tcgMatLocal(x,y,seat);
             const right=TCG_MAT_WIDTH/2+3;
             const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
-            if(old.tokenCoin&&local.x>=right&&local.x<=right+TCG_MAT.cardWidth&&
+            if((old.tokenCoin||old.kind==='die')&&local.x>=right&&local.x<=right+TCG_MAT.cardWidth&&
               local.y>=top&&local.y<=TCG_MAT_HEIGHT/2){
               takeAction('DELETE',{id});return;
+            }
+            if(old.kind==='die'){
+              const left=-TCG_MAT_WIDTH/2-3;
+              if(local.x<=left&&local.x>=left-TCG_MAT.cardWidth&&
+                local.y>=top&&local.y<=TCG_MAT_HEIGHT/2){
+                takeAction('DELETE',{id});return;
+              }
             }
             takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
           }
@@ -557,7 +564,7 @@ export default function App(){
                 <p>Flip Coin, D04, D06, D08, D10, D12, D20 and D100 are permanent in the left box. Tap a die to select one, tap repeatedly to increase its count (maximum 20). Select different dice to combine them. Drag any selected die to throw the entire selection with natural motion, screen and tray wall rebounds, and collisions between the dice. Reaching 20 automatically throws the selection. Only one physical die of each type appears after a throw, but every selected roll is calculated and logged. The centered face displays the combined result; inspect a thrown die for its individual results.</p>
               </div>
               <div className="reader-block"><h3>Token coins</h3>
-                <p>Six stationary generators are staggered in the right wooden box. Drag the + or − half to make a copy, or select cards and tap either half to apply that amount. Hold the center number for 0.25 seconds to open its ten-part coin radial: duplicate, add/subtract 1/10/100/1000 and choose its color. A quick tap on Custom's number opens direct editing. The radial works on loose copies too.</p>
+                <p>Two permanent coins live in the right drawer: the standard coin uses a ten-action radial (hold its center for 0.25 seconds), and Custom is exclusively for direct number entry. Drag either coin to make a copy. Hold the standard coin center again to collapse its radial. Side-drawer pull tabs hide and reveal each box. Drop a used die into either open box to erase it; the original die sources remain available.</p>
                 <label>Custom coin number<input type="number" min={1} max={9999} step={1} value={customCoinValue}
                   onChange={e=>{const n=Number(e.target.value);if(Number.isInteger(n)&&n>=1&&n<=9999)setCustomCoinValue(n);}}/></label>
                 <label>Finish<select value={coinAppearance.finish}
