@@ -1172,8 +1172,8 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       if(index===0)onCoinDuplicate(m.id);
       else onCoinModify(m.id,{delta:increments[index]});
     }else if(m.type==='source'&&m.index!==undefined){
-      const i=m.index,defaults=[customCoinValue,10,20,30,50,100];
-      const value=i===0?customCoinValue:(coinSources.values[i]??defaults[i]);
+      const i=m.index;
+      const value=i===0?coinSources.values[0]??10:customCoinValue;
       const color=coinSources.colors[i]??'#d8b979';
       if(index===0){
         const point=tcgMatWorld(0,
@@ -1181,8 +1181,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
         onTokenPlace(value,1,point.x,point.y,undefined,color);
       }else{
         const next=Math.max(0,Math.min(9999,value+increments[index]));
-        if(i===0)onCustomCoinValue(next);
-        else setCoinSources(p=>({...p,values:{...p.values,[i]:next}}));
+        if(i===0)setCoinSources(p=>({...p,values:{...p.values,0:next}}));
       }
     }
     setCoinMenu(null);setCoinColorsOpen(false);
@@ -1660,13 +1659,13 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       mat.position.set(origin.x,origin.y);
       mat.rotation=origin.angle;
       (seatGroups?.get(seat)??board).addChild(mat);
-      const defaults=[customCoinValue,10,20,30,50,100];
-      const values=defaults.map((v,i)=>i===0?customCoinValue:coinSources.values[i]??v);
+      // Exactly two permanent sources: adjustable standard and entry-only Custom.
+      const values=[coinSources.values[0]??10,customCoinValue];
       const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       values.forEach((value,index)=>{
         const source=new Container();
-        source.position.set(boxX+(index%2===0?-8:8),top+22+index*34);
+        source.position.set(boxX,top+58+index*86);
         const color=coinSources.colors[index]??'#d8b979';
         source.addChild(makeCoin(value,coinAppearance,true,1,color));
         const highlight=new Graphics();
@@ -1699,7 +1698,19 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            startCoinHold(source,e.pointerId,'source',undefined,index,e.clientX,e.clientY);
+            if(index===0)
+              startCoinHold(source,e.pointerId,'source',undefined,index,e.clientX,e.clientY);
+            else{
+              // The Custom source never opens a radial. Its center is an
+              // immediate dedicated number entry, even on a long press.
+              const projected=source.toGlobal(new Point(0,0));
+              const rect=app.canvas.getBoundingClientRect();
+              setCoinDraft(String(customCoinValue));
+              setCoinEditing({
+                x:projected.x*rect.width/app.renderer.width,
+                y:projected.y*rect.height/app.renderer.height
+              });
+            }
             return;
           }
           const ghost=makeCoin(value,coinAppearance,false,sign,color);
@@ -2049,7 +2060,7 @@ export default function TableCanvas({bookDesign,bookDock,bookOffset,onBookMove,o
       window.clearTimeout(hold.timer);coinHold.current=null;
       if(controlPointer.current===e.pointerId)controlPointer.current=null;
       // Keep the original Custom generator's quick-edit gesture.
-      if(e.type==='pointerup'&&hold.kind==='source'&&hold.index===0&&
+      if(e.type==='pointerup'&&hold.kind==='source'&&hold.index===1&&
         Math.hypot(e.clientX-hold.startX,e.clientY-hold.startY)<8){
         setCoinDraft(String(customCoinValue));
         setCoinEditing({x:hold.x,y:hold.y});
