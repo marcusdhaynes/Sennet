@@ -870,10 +870,11 @@ function deckBoxArt(o:TableObject):Container{
  * perfectly z-sorted Pixi coin disappears behind the card's image.
  * This overlay is display-only: Pixi keeps all hit tests and drag gestures.
  */
-function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearance,color='#d8b979'):HTMLDivElement{
+function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAppearance,color='#d8b979',editable=false):HTMLDivElement{
   const root=document.createElement('div');
   root.className='sennet-coin-above-card';
   root.dataset.finish=style.finish;
+  if(editable)root.dataset.variant='editable';
   root.style.setProperty('--coin-size',String(style.size));
   root.style.setProperty('--coin-shine',String(style.shine/100));
   root.style.setProperty('--coin-bevel',String(style.bevel/100));
@@ -883,8 +884,10 @@ function coinDomVisual(value:number,sign:1|-1,source:boolean,style:CoinAppearanc
   // The central value is the only face marking. Both halves remain interactive.
   const center=document.createElement('span');
   center.className='sennet-coin-above-card-number';
-  center.textContent=String(value);
-  center.style.fontSize=String(String(value).length>=4?11.5:String(value).length===3?13:String(value).length===2?15:16)+'px';
+  const text=String(value);
+  center.textContent=text;
+  center.style.fontSize=String(text.length>12?4.2:text.length>9?5.2:text.length>6?6.4:
+    text.length>4?8:text.length===4?10.2:text.length===3?12:text.length===2?13.6:15)+'px';
   face.append(center);root.appendChild(face);
   return root;
 }
@@ -902,7 +905,7 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
   shadow.eventMode='none';box.addChild(shadow);
   if(o.tokenCoin){
     box.hitArea=new Circle(0,0,17*coinStyle.size*1.08);
-    box.addChild(makeCoin(o.value??1,coinStyle,false,o.tokenSign??1,o.color));
+    box.addChild(makeCoin(o.coinText??o.value??1,coinStyle,false,o.tokenSign??1,o.color,o.coinText!==undefined));
     if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size*1.08).stroke({color:0x9effee,width:2.2}));
   }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
@@ -1220,7 +1223,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     if(!m||!/^#[0-9a-fA-F]{6}$/.test(color))return;
     if(m.type==='copy'&&m.id)onCoinModify(m.id,{color});
     else if(m.type==='source'&&m.index!==undefined){
-      setCoinSources(p=>({...p,colors:{...p.colors,[m.index!]:color}}));
+      setCoinSources(p=>({...p,colors:{...p.colors,[m.index===1?0:1]:color}}));
     }
     setCoinMenu(null);setCoinColorsOpen(false);
   };
@@ -1733,8 +1736,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
     const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
-    const showCoinAboveArtwork=(piece:Container,value:number,sign:1|-1,source:boolean,color='#d8b979')=>{
-      const el=coinDomVisual(value,sign,source,coinAppearance,color);
+    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false)=>{
+      const el=coinDomVisual(value,sign,source,coinAppearance,color,editable);
       mount.current?.appendChild(el);
       coinLayers.push({piece,el});
       return el;
@@ -1975,7 +1978,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
-      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.value??1,obj.tokenSign??1,false,obj.color);
+      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.coinText??obj.value??1,obj.tokenSign??1,false,obj.color,obj.coinText!==undefined);
       if(obj.throwDice){
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
@@ -2079,7 +2082,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           }
           const local=piece.toLocal(e.global);
           const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(4.3,8*coinAppearance.size*1.08);
-          if(coinCenter)startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
+          if(coinCenter){
+            if(obj.coinText!==undefined){
+              const center=piece.toGlobal(new Point(0,0));
+              const rect=app.canvas.getBoundingClientRect();
+              setCoinDraft(obj.coinText);
+              setCoinEditing({x:center.x*rect.width/app.renderer.width,
+                y:center.y*rect.height/app.renderer.height,id:obj.id});
+              controlPointer.current=e.pointerId;
+              return;
+            }
+            startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
+          }
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
           const physicalStack=cardStackMembers(state,obj.id).filter(card=>
@@ -3033,8 +3047,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   },[]);
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
-    {coinEditing&&<input autoFocus className="sennet-coin-editor" type="number" min={1} max={9999} step={1}
-      aria-label="Edit Custom coin value" value={coinDraft} onChange={e=>setCoinDraft(e.target.value)}
+    {coinEditing&&<input autoFocus className="sennet-coin-editor" type="text" inputMode="text" maxLength={20}
+      aria-label="Edit coin inscription" value={coinDraft}
+      onChange={e=>{if(validCoinText(e.target.value))setCoinDraft(e.target.value);}}
       style={{left:coinEditing.x,top:coinEditing.y}} onPointerDown={e=>e.stopPropagation()}
       onBlur={commitCoinEdit} onKeyDown={e=>{
         if(e.key==='Enter'){e.preventDefault();commitCoinEdit();}
@@ -3129,7 +3144,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           <label>Custom <input aria-label="Custom coin color" type="color"
             defaultValue={coinMenu.type==='copy'?
               state.objects.find(o=>o.id===coinMenu.id)?.color??'#d8b979':
-              coinSources.colors[coinMenu.index??0]??'#d8b979'}
+              coinSources.colors[coinMenu.index===1?0:1]??'#d8b979'}
             onChange={e=>applyCoinColor(e.target.value)}/></label>
         </div>}
       </div>
