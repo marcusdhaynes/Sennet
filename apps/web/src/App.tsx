@@ -5,6 +5,8 @@ import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,expir
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import {formatActionDisplay} from './lib/actionDisplay';
+import {mergeReceipt,parseReplayFile,receiptForCommand,receiptTimestamp,RECEIPT_SCHEMA,
+  type ReceiptRow} from './lib/actionReceipt';
 import {DEFAULT_COIN_APPEARANCE,type CoinAppearance,type CoinFinish} from './components/CoinArt';
 import {DICE_THEMES,DICE_SIDES,DEFAULT_DICE_APPEARANCE,
   normalizeDiceAppearance,type DiceAppearance,type DiceThemeId,diceLabel}
@@ -21,7 +23,8 @@ import {directUpload,downloadText,getPacks,importPackFile,importPackUrl,remember
 type Book = 'sennet'|'games'|'settings';
 type GamePage = 'all'|'recent'|'library'|'tools';
 type SettingsPage = 'general'|'playmat'|'deckbuilder'|'multiplayer'|'scripting';
-type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[];seat?:number};
+type SavedSession = {id:string;title:string;updated:number;initial:GameState;game:GameState;history:EventRecord[];seat?:number;
+  redoStack?:EventRecord[];receipt?:ReceiptRow[]};
 const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
   {id:'sandbox',label:'Sandbox',description:'An open table with no rules.',symbol:'◈'},
   {id:'boardgame',label:'Board Games',description:'Boards, tiles, pawns and strategy.',symbol:'♟'},
@@ -116,7 +119,9 @@ export default function App(){
   const [game,setGame]=useState<GameState>(()=>restored?.game??emptyTable());
   const [initial,setInitial]=useState<GameState>(()=>restored?.initial??emptyTable());
   const [history,setHistory]=useState<EventRecord[]>(()=>restored?.history??[]);
-  const [redoStack,setRedoStack]=useState<EventRecord[]>([]);
+  const [redoStack,setRedoStack]=useState<EventRecord[]>(()=>restored?.redoStack??[]);
+  const [receipt,setReceipt]=useState<ReceiptRow[]>(()=>mergeReceipt(
+    restored?.receipt,restored?.initial??emptyTable(),restored?.history??[]));
   const current=useRef(game);current.current=game;
   const sessionId=useRef(restored?.id??createId());
   const [recent,setRecent]=useState<SavedSession[]>(recentGames);
@@ -195,6 +200,10 @@ export default function App(){
   const [isConnected,setConnected]=useState(false);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
+  const receiptUpload=useRef<HTMLInputElement|null>(null);
+  const writeReceipt=(type:string,location:string,description:string)=>{
+    setReceipt(rows=>[...rows,{id:createId(),at:Date.now(),type,location,description}]);
+  };
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
@@ -202,11 +211,12 @@ export default function App(){
     replay(initial,history.slice(0,replayIndex+1)),Date.now(),
     history.slice(0,replayIndex+1));
   function inform(message:string){setNotice(message);window.setTimeout(()=>setNotice(s=>s===message?'':s),4500);}
-  function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next){
+  function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next,
+    audit:ReceiptRow[]=[],redo:EventRecord[]=[]){
     if(!connection.current&&(current.current.objects.length>0||history.length>0)){
       const previous:SavedSession=pruneSession({
         id:sessionId.current,title:nameFor(current.current.kind),
-        updated:Date.now(),game:current.current,initial,history,seat
+        updated:Date.now(),game:current.current,initial,history,seat,redoStack,receipt
       });
       try{localStorage.setItem(REWIND_SESSION_KEY,JSON.stringify(previous));}
       catch{/* Continue without persistence when browser storage is full. */}
@@ -215,11 +225,13 @@ export default function App(){
     const cleanGame=expireThrownDice(next,Date.now(),past);
     const cleanOrigin=expireThrownDice(origin,Date.now(),past);
     sessionId.current=id;current.current=cleanGame;setInitial(cleanOrigin);
-    setGame(cleanGame);setHistory(past);setRedoStack([]);setSelected(null);setReplayAt(null);setBook(null);
+    setGame(cleanGame);setHistory(past);setRedoStack(redo);
+    setReceipt(mergeReceipt(audit,cleanOrigin,past));
+    setSelected(null);setReplayAt(null);setBook(null);setActionLogOpen(false);
   }
   function startGame(kind:GameKind){resetWith(createGame(kind));}
   function loadPack(pack:GamePack){resetWith(gameFromPack(pack));}
-  function loadRecent(s:SavedSession){resetWith(s.game,s.id,s.history,s.initial);}
+  function loadRecent(s:SavedSession){resetWith(s.game,s.id,s.history,s.initial,s.receipt,s.redoStack);}
   function returnToEmpty(){resetWith(emptyTable());}
   function takeAction(type:Command['type'],payload:Record<string,unknown>={}){
     if(replayAt!==null){inform('Exit replay mode before making a move.');return;}
@@ -228,9 +240,12 @@ export default function App(){
         ?{...payload,expiresAt:Date.now()+THROWN_DIE_LIFETIME_MS}:payload};
     if(isConnected){try{connection.current?.send(command);}catch(e){inform(String(e));}return;}
     try{
-      const next=applyCommand(current.current,command);current.current=next;setGame(next);
+      const before=current.current;
+      const next=applyCommand(before,command);current.current=next;setGame(next);
+      const event:EventRecord={...command,seq:next.seq,at:Date.now()};
       setRedoStack([]);
-      setHistory(h=>[...h,{...command,seq:next.seq,at:Date.now()}]);
+      setHistory(h=>[...h,event]);
+      setReceipt(rows=>[...rows,receiptForCommand(event,before,next)]);
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
   function disconnect(){connection.current?.close();connection.current=null;setConnected(false);setOnlineStatus('Offline · local game');}
@@ -248,10 +263,17 @@ export default function App(){
         onState:state=>{
           const clean=expireThrownDice(state,Date.now());
           current.current=clean;setGame(clean);setInitial(clean);
-          setHistory([]);setReplayAt(null);setConnected(true);setBook(null);
+          setHistory([]);setRedoStack([]);setReceipt([]);
+          setReplayAt(null);setConnected(true);setBook(null);
         },
-        onEvent:event=>{try{if(event.seq!==current.current.seq+1)throw new Error('Sequence gap');const next=expireThrownDice(applyCommand(current.current,event),Date.now(),[event as EventRecord]);
-          current.current=next;setGame(next);setHistory(h=>[...h,event as EventRecord]);}catch{inform('Out of sync. Reconnect to resynchronize.');}},
+        onEvent:event=>{try{
+          if(event.seq!==current.current.seq+1)throw new Error('Sequence gap');
+          const before=current.current;
+          const next=expireThrownDice(applyCommand(before,event),Date.now(),[event as EventRecord]);
+          current.current=next;setGame(next);
+          setHistory(h=>[...h,event as EventRecord]);
+          setReceipt(rows=>[...rows,receiptForCommand(event as EventRecord,before,next)]);
+        }catch{inform('Out of sync. Reconnect to resynchronize.');}},
         onPlayers:players=>{const next={...current.current,players};current.current=next;setGame(next);},
         onStatus:setOnlineStatus,onError:inform
       });
@@ -287,30 +309,64 @@ export default function App(){
     if(isConnected)return;
     const snapshot:SavedSession={
       id:sessionId.current,title:nameFor(game.kind),updated:Date.now(),
-      initial,game,history:history.slice(-500),seat
+      initial,game,history,redoStack,receipt,seat
     };
     try{localStorage.setItem(LAST_SESSION_KEY,JSON.stringify(snapshot));}
     catch{/* Storage quota or private session: current play remains usable. */}
-  },[game,history,initial,isConnected,seat]);
+  },[game,history,initial,isConnected,seat,redoStack,receipt]);
   useEffect(()=>{
     if(isConnected||(game.objects.length===0&&history.length===0))return;
     setRecent(old=>{
-      const saved:SavedSession={id:sessionId.current,title:nameFor(game.kind),updated:Date.now(),initial,game,history:history.slice(-500)};
+      const saved:SavedSession={id:sessionId.current,title:nameFor(game.kind),
+        updated:Date.now(),initial,game,history,redoStack,receipt,seat};
       const updated=[saved,...old.filter(item=>item.id!==saved.id)].slice(0,8);
       try{localStorage.setItem(RECENT_KEY,JSON.stringify(updated));}catch{/* Storage may be full. */}
       return updated;
     });
-  },[game,history,initial,isConnected]);
+  },[game,history,initial,isConnected,redoStack,receipt,seat]);
   useEffect(()=>{
     const handleKey=(event:KeyboardEvent)=>{if(event.key==='Escape'){setBook(null);setReplayAt(null);}};
     window.addEventListener('keydown',handleKey);return()=>window.removeEventListener('keydown',handleKey);
   },[]);
   async function importLocal(event:ChangeEvent<HTMLInputElement>){
     const file=event.target.files?.[0];if(!file)return;
-    try{const pack=await importPackFile(file);rememberPack(pack);setPacks(getPacks());inform('Imported '+pack.name);}catch(e){inform(String(e));}
+    try{
+      if(file.size>25_000_000)throw Error('Game file must be 25 MB or smaller.');
+      const raw=JSON.parse(await file.text()) as {schema?:string};
+      if(raw.schema==='sennet.replay/1'||raw.schema===RECEIPT_SCHEMA){
+        const loaded=parseReplayFile(raw);
+        if(isConnected)disconnect();
+        resetWith(loaded.game!,loaded.id||createId(),loaded.history,loaded.initial,
+          loaded.receipt,loaded.redoStack);
+        setSeat(loaded.seat);
+        inform('Restored full replay and undo/redo history.');
+      }else{
+        const pack=parseGamePack(raw);
+        rememberPack(pack);setPacks(getPacks());inform('Imported '+pack.name);
+      }
+    }catch(e){inform(String(e));}
     event.target.value='';
   }
   async function importRemote(){try{const pack=await importPackUrl(packUrl);rememberPack(pack);setPacks(getPacks());setPackUrl('');inform('Added '+pack.name);}catch(e){inform(String(e));}}
+  const replayFile=()=>({
+    schema:RECEIPT_SCHEMA,id:sessionId.current,exportedAt:Date.now(),
+    initial,history,redoStack,receipt,seat,game:current.current
+  });
+  const exportReceipt=()=>downloadText('sennet-session-'+sessionId.current+'.json',json(replayFile()));
+  async function importReceipt(event:ChangeEvent<HTMLInputElement>){
+    const file=event.target.files?.[0];event.target.value='';
+    if(!file)return;
+    try{
+      if(file.size>25_000_000)throw Error('Game file must be 25 MB or smaller.');
+      const restored=parseReplayFile(JSON.parse(await file.text()));
+      if(isConnected)disconnect();
+      resetWith(restored.game!,restored.id||createId(),restored.history,
+        restored.initial,restored.receipt,restored.redoStack);
+      setSeat(restored.seat);
+      setActionLogOpen(true);
+      inform('Game receipt imported. Replay and undo/redo restored.');
+    }catch(e){inform(e instanceof Error?e.message:String(e));}
+  }
   function exportGame(){
     const pack:GamePack={schema:'sennet.pack/1',id:'sennet.'+createId().slice(0,8),name:packTitle,author:playerName,kind:game.kind,objects:game.objects,centerMerges:game.centerMerges,license:'Creator supplied'};
     downloadText(pack.id+'.json',json(pack));rememberPack(pack);setPacks(getPacks());inform('Game exported. You can host it on your own storage.');
@@ -349,6 +405,8 @@ export default function App(){
       replay(initial,previous),Date.now(),previous);
     setRedoStack(stack=>[...stack,history[history.length-1]]);
     current.current=next;setGame(next);setHistory(previous);setSelected(null);setReplayAt(null);
+    writeReceipt('Undo','Game · #'+history[history.length-1].seq,
+      history[history.length-1].type.replaceAll('_',' '));
   }
   function redo(){
     if(isConnected){inform('Redo requires server approval in an online game.');return;}
@@ -362,8 +420,11 @@ export default function App(){
         replay(initial,past),Date.now(),past);
       current.current=next;setGame(next);setHistory(past);
       setRedoStack(items=>items.slice(0,-1));setSelected(null);
+      writeReceipt('Redo','Game · #'+record.seq,record.type.replaceAll('_',' '));
     }catch(error){inform(String(error));}
   }
+  const orderedReceipt=useMemo(()=>receipt.slice().sort((a,b)=>a.at-b.at),
+    [receipt]);
   const latestAction=history.length?formatActionDisplay(history[history.length-1],
     initial,history):'Ready · actions appear here';
   function botMove(){
@@ -436,8 +497,14 @@ export default function App(){
   }
   return <div className="sennet-home">
     <div className="table-world">
-      <TableCanvas bookDesign={bookDesign} bookDock={bookDock} bookOffset={bookOffset} onBookMove={setBookOffset} onBookOpen={()=>setBook('sennet')} state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
+      <TableCanvas bookDesign={bookDesign} bookDock={bookDock} bookOffset={bookOffset} onBookMove={point=>{
+          writeReceipt('Move','Book · '+Math.round(bookOffset.x)+','+Math.round(bookOffset.y)+
+            ' → '+Math.round(point.x)+','+Math.round(point.y),'Reposition');
+          setBookOffset(point);
+        }} onBookOpen={()=>{writeReceipt('Open','Book','Sennet');setBook('sennet');}} state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} wheelMode="docked"
+        onOpenReceipt={()=>setActionLogOpen(true)}
+        onInterfaceAction={(type,location,description)=>writeReceipt(type,location,description)}
         latestAction={latestAction} canUndo={!isConnected&&replayAt===null&&history.length>0}
         canRedo={!isConnected&&replayAt===null&&redoStack.length>0}
         onUndo={undo} onRedo={redo} drawer={<PersonalDrawer activeBook={book} openBook={setBook} seat={seat} name={playerName} onLog={()=>setActionLogOpen(v=>!v)} onRecall={()=>{
@@ -531,32 +598,47 @@ export default function App(){
           }
         }} readonly={replayAt!==null}/>
     </div>
-    {actionLogOpen&&<aside className="sennet-action-log" aria-label="Table action history">
-      <header><strong>Action log</strong><span>{history.length} events</span>
-        <button type="button" onClick={()=>setActionLogOpen(false)} aria-label="Close action log">×</button></header>
-      <div className="sennet-action-log-entries" role="log" aria-live="off">
-        {history.slice().reverse().map(h=>{
-          const ids=[h.payload?.id,...(Array.isArray(h.payload?.ids)?h.payload.ids:[])].filter((v):v is string=>typeof v==='string');
-          const references=ids.map(id=>game.objects.find(o=>o.id===id)??initial.objects.find(o=>o.id===id)).filter((o):o is NonNullable<typeof o>=>!!o);
-          const hidden=references.some(card=>(card.zone==='HAND'||card.zone==='DECK')&&!card.faceUp);
-          const player=game.players.find(p=>p.id===h.actor);
-          const action=h.type==='BATCH_CARD_ACTION'?String(h.payload.action??'card action').replaceAll('-',' '):h.type.toLowerCase().replaceAll('_',' ');
-          const names=hidden?'[Hidden card]':references.map(card=>card.name).join(', ');
-          const details=[names,typeof h.payload.degrees==='number'?String(h.payload.degrees)+'°':'',
-            typeof h.payload.zone==='string'?'Zone: '+h.payload.zone:'',
-            typeof h.payload.x==='number'&&typeof h.payload.y==='number'?'Position: '+Math.round(h.payload.x)+', '+Math.round(h.payload.y):'',
-            typeof h.payload.matSeat==='number'?'Seat '+(h.payload.matSeat+1):'',
-            ids.length>1?ids.length+' objects':''].filter(Boolean).join(' · ');
-          return <div className="sennet-action-log-entry" key={h.id}>
-            <span className="sennet-log-seq">#{h.seq}</span>
-            <span><strong>{player?.name??(h.actor==='local'?playerName:h.actor.slice(0,12))}</strong> · {action}
-              <small>{new Date(h.at).toLocaleTimeString()} · {details||'Table action'}</small>
-            </span>
-            <span className="sennet-log-share" title={hidden?'Hidden until a player explicitly reveals the card':'Public action'} aria-label={hidden?'Hidden card':'Public action'}>♧</span>
-          </div>;
-        })}
-      </div>
-    </aside>}
+    {actionLogOpen&&createPortal(<div className="sennet-receipt-backdrop"
+      onPointerDown={event=>{if(event.target===event.currentTarget)setActionLogOpen(false);}}>
+      <section className="sennet-receipt" role="dialog" aria-modal="true"
+        aria-label="Sennet action receipt">
+        <header className="sennet-receipt-header">
+          <div className="sennet-receipt-insignia">S</div>
+          <div><span className="sennet-receipt-eyebrow">SENNET · TABLE ACTIVITY</span>
+            <h2>Action Receipt</h2><small>{orderedReceipt.length} actions · Full session</small></div>
+          <button type="button" className="sennet-receipt-close"
+            aria-label="Close receipt" onClick={()=>setActionLogOpen(false)}>×</button>
+        </header>
+        <div className="sennet-receipt-scroll">
+          <table className="sennet-receipt-table">
+            <colgroup><col className="sennet-receipt-time-column"/><col className="sennet-receipt-type-column"/>
+              <col className="sennet-receipt-location-column"/><col/></colgroup>
+            <thead><tr><th scope="col">Time</th><th scope="col">Type</th>
+              <th scope="col">Location</th><th scope="col">Description</th></tr></thead>
+            <tbody>{orderedReceipt.map(row=>{
+              const date=receiptTimestamp(row.at);
+              return <tr key={row.id}>
+                <td className="sennet-receipt-timestamp">
+                  <span>{date.date}</span><span>{date.time}</span></td>
+                <td><strong>{row.type}</strong></td>
+                <td>{row.location}</td><td>{row.description}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+          {!orderedReceipt.length&&<p className="sennet-receipt-empty">
+            No actions recorded yet. Table actions appear here automatically.</p>}
+        </div>
+        <footer className="sennet-receipt-footer">
+          <small>YYYYMMDD · HHMMSSTT<br/>Full commands and undo/redo saved in session JSON</small>
+          <div className="sennet-receipt-actions">
+            <input ref={receiptUpload} hidden type="file" accept=".json,application/json"
+              onChange={importReceipt}/>
+            <button type="button" onClick={()=>receiptUpload.current?.click()}>Import</button>
+            <button type="button" onClick={exportReceipt}>Export game + log</button>
+          </div>
+        </footer>
+      </section>
+    </div>,document.body)}
     {tcgStudioOpen&&<TcgDeckBuilder onClose={()=>setTcgStudioOpen(false)}
       onLoadOnTable={loadStudioDeck}
       snapMerged={playmat.snapMerged}
@@ -615,7 +697,7 @@ export default function App(){
                 {(['Basic','Positive','Negative'] as const).map((kind,k)=><div key={kind}><h4>{kind} tokens</h4><div className="tool-buttons">{(k===0?['#FF3B30','#FF9500','#FFCC00','#4CD964','#007AFF','#5856D6','#FF2D55','#8E8E93']:k===1?['#A57C00','#FF006E','#5856D6','#007AFF','#FF3B30','#4CD964']:['#FF9500','#00FF87','#5856D6','#00F5FF','#FF006E','#8E8E93']).map((color,i)=>{const symbol=k===0?'■':k===1?['★','ϟ','↑','◆','♥','●'][i]:['△','⬡','Ⅱ','○','◇','⌛'][i];return <button key={color} aria-label={kind+' token '+(i+1)} style={{color:k===0?'#111':color,background:k===0?color:k===1?'#fff':'#0a0a0a',borderColor:color}} onClick={()=>{const cell=tcgMatCells(seat).find(c=>c.row===2&&c.column===1)!;takeAction('ADD',{object:{id:createId(),kind:'token',name:kind+' '+symbol,color,x:cell.x,y:cell.y,matSeat:seat}});}}>{symbol}</button>;})}</div></div>)}
               </div></details>}
               <details className="reader-details"><summary>Build a starter TCG deck</summary><div><label>Deck name<input value={deckName} onChange={e=>setDeckName(e.target.value)}/></label>{cards.map((card,i)=><div key={i} className="card-editor-row"><span>{card.name}</span><button aria-label={'Remove '+card.name} onClick={()=>setCards(a=>a.filter((_,j)=>j!==i))}><X size={13}/></button><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.max(1,c.amount-1)}:c))}><Minus size={13}/></button><strong>{card.amount}</strong><button onClick={()=>setCards(a=>a.map((c,j)=>i===j?{...c,amount:Math.min(60,c.amount+1)}:c))}><Plus size={13}/></button></div>)}<div className="field-row"><input value={cardName} onChange={e=>setCardName(e.target.value)} placeholder="Card name"/><button onClick={()=>{if(cardName.trim()){setCards(a=>[...a,{name:cardName.trim(),amount:1}]);setCardName('');}}}>Add</button></div><button className="reader-secondary" onClick={createDeck}>Load deck onto table</button></div></details>
-              <details className="reader-details"><summary>Move history and replay</summary><div><p>{history.length} actions recorded in compact command format.</p><div className="history-entries">{history.slice(-10).reverse().map(h=><button key={h.id} onClick={()=>{setReplayAt(h.seq);setBook(null);}}>{h.seq}. {h.type.toLowerCase().replaceAll('_',' ')}</button>)}</div>{replayAt!==null&&<button className="reader-secondary" onClick={()=>setReplayAt(null)}>Exit replay</button>}<button className="reader-secondary" onClick={()=>downloadText('sennet-replay.json',json({schema:'sennet.replay/1',initial,history}))}><Download size={15}/> Export moves</button></div></details>
+              <details className="reader-details"><summary>Move history and replay</summary><div><p>{history.length} actions recorded in compact command format.</p><div className="history-entries">{history.slice(-10).reverse().map(h=><button key={h.id} onClick={()=>{setReplayAt(h.seq);setBook(null);}}>{h.seq}. {h.type.toLowerCase().replaceAll('_',' ')}</button>)}</div>{replayAt!==null&&<button className="reader-secondary" onClick={()=>setReplayAt(null)}>Exit replay</button>}<button className="reader-secondary" onClick={exportReceipt}><Download size={15}/> Export moves</button></div></details>
               <button className="reader-primary" onClick={()=>setBook(null)}>Return to table <ChevronRight size={16}/></button>
             </>}
           </>}
