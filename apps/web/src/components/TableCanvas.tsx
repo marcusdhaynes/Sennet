@@ -1259,37 +1259,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       radialCenterHold.current=null;
     }
   };
-  const coinHold=useRef<{pointerId:number;timer:number;kind:'source'|'copy';
-    index?:number;x:number;y:number;startX:number;startY:number}|null>(null);
+  const coinSourcePress=useRef<{pointerId:number;index:number;x:number;y:number;
+    startX:number;startY:number}|null>(null);
   const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
     const current=session.current;if(!current)return;
     const p=piece.toGlobal(new Point(0,0)),rect=current.app.canvas.getBoundingClientRect();
     setCoinMenu({type,id,index,x:p.x*rect.width/current.app.renderer.width,
       y:p.y*rect.height/current.app.renderer.height});setCoinColorsOpen(false);
-  };
-  const startCoinHold=(piece:Container,pointerId:number,type:'source'|'copy',id?:string,index?:number,startX=0,startY=0)=>{
-    if(coinHold.current)window.clearTimeout(coinHold.current.timer);
-    // Capture screen coordinates NOW; selecting a coin rerenders Pixi and
-    // destroys its old visual before the 250ms timer fires.
-    const app=session.current?.app;
-    if(!app)return;
-    const p=piece.toGlobal(new Point(0,0)),rect=app.canvas.getBoundingClientRect();
-    const px=p.x*rect.width/app.renderer.width,py=p.y*rect.height/app.renderer.height;
-    // Anchor the radial exactly on the physical coin. The wedge ring
-    // begins beyond the coin rim; never shift the radial off the coin.
-    const x=px,y=py;
-    const timer=window.setTimeout(()=>{
-      if(coinHold.current?.pointerId!==pointerId)return;
-      coinHold.current=null;cancelActiveDrag.current();
-      controlPointer.current=null;
-      setCoinMenu(previous=>{
-        const same=previous?.type===type&&
-          (type==='source'?previous.index===index:previous.id===id);
-        return same?null:{type,id,index,x,y};
-      });
-      setCoinColorsOpen(false);
-    },250);
-    coinHold.current={pointerId,timer,kind:type,index,x,y,startX,startY};
   };
   const applyCoinAction=(index:number)=>{
     const m=coinMenu;if(!m)return;
@@ -1379,6 +1355,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     startClientX:number;startClientY:number;moved:boolean;
     whole:boolean;held:boolean;wheel:boolean;locked:boolean;selection:boolean;
     stackIds:string[];members:{id:string;x:number;y:number}[];
+    coinCenter:boolean;coinAnchor:{x:number;y:number}|null;
     timer:number|null;
   };
   const drag=useRef<ActiveDrag|null>(null);
@@ -1389,9 +1366,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const commitCoinEdit=()=>{
     if(validCoinText(coinDraft)){
       if(coinEditing?.id)onCoinModify(coinEditing.id,{coinText:coinDraft});
-      else onCustomCoinText(coinDraft);
-      const n=coinNumericValue(coinDraft).value;
-      if(n>=1&&n<=9999)onCustomCoinValue(n);
+      else {
+        onCustomCoinText(coinDraft);
+        const n=coinNumericValue(coinDraft).value;
+        if(n>=1&&n<=9999)onCustomCoinValue(n);
+      }
     }
     setCoinEditing(null);
   };
@@ -1960,19 +1939,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            if(index===1)
-              startCoinHold(source,e.pointerId,'source',undefined,index,e.clientX,e.clientY);
-            else{
-              // The Custom source never opens a radial. Its center is an
-              // immediate dedicated number entry, even on a long press.
-              const projected=source.toGlobal(new Point(0,0));
-              const rect=app.canvas.getBoundingClientRect();
-              setCoinDraft(customCoinText);
-              setCoinEditing({
-                x:projected.x*rect.width/app.renderer.width,
-                y:projected.y*rect.height/app.renderer.height
-              });
-            }
+            // Center-only click: white opens value editor, bronze opens radial.
+            // Any movement cancels; no long-press or tray movement.
+            const projected=source.toGlobal(new Point(0,0));
+            const rect=app.canvas.getBoundingClientRect();
+            coinSourcePress.current={pointerId:e.pointerId,index,
+              x:projected.x*rect.width/app.renderer.width,
+              y:projected.y*rect.height/app.renderer.height,
+              startX:e.clientX,startY:e.clientY};
             return;
           }
           const ghost=makeCoin(isEditable?faces[index]:value,coinAppearance,false,sign,color,isEditable);
@@ -2201,19 +2175,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             return; // Never enter generic card dragging or selection logic.
           }
           const local=piece.toLocal(e.global);
-          const coinCenter=!!obj.tokenCoin&&Math.hypot(local.x,local.y)<=Math.max(5,10.3*coinAppearance.size*1.08);
-          if(coinCenter){
-            if(obj.coinText!==undefined){
-              const center=piece.toGlobal(new Point(0,0));
-              const rect=app.canvas.getBoundingClientRect();
-              setCoinDraft(obj.coinText);
-              setCoinEditing({x:center.x*rect.width/app.renderer.width,
-                y:center.y*rect.height/app.renderer.height,id:obj.id});
-              controlPointer.current=e.pointerId;
-              return;
-            }
-            startCoinHold(piece,e.pointerId,'copy',obj.id,undefined,e.clientX,e.clientY);
-          }
+          const coinCenter=!!obj.tokenCoin&&
+            Math.hypot(local.x,local.y)<=Math.max(5,10.3*coinAppearance.size*1.08);
+          // Center click is handled ON RELEASE. A stationary HOLD still
+          // enters the exact same multiselection flow used by cards.
+          const coinAnchor=coinCenter?piece.toGlobal(new Point(0,0)):null;
           if(state.kind==='tcg'&&obj.owner&&obj.owner!==actorId&&
              !(obj.owner==='local'&&!state.players.length))return;
           const physicalStack=cardStackMembers(state,obj.id).filter(card=>
@@ -2232,7 +2198,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             startClientX:e.clientX,startClientY:e.clientY,moved:false,
             whole:false,held:false,wheel:false,
             locked:group.some(card=>!!card.locked),selection:multi,
-            stackIds,
+            stackIds,coinCenter,coinAnchor,
             members:group.map(card=>({id:card.id,x:card.x,y:card.y})),timer:null
           };
           drag.current=active;
@@ -2496,32 +2462,39 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
 
   useEffect(()=>{
     const release=(e:PointerEvent)=>{
-      const hold=coinHold.current;
-      if(!hold||hold.pointerId!==e.pointerId)return;
-      window.clearTimeout(hold.timer);coinHold.current=null;
+      const press=coinSourcePress.current;
+      if(!press||press.pointerId!==e.pointerId)return;
+      coinSourcePress.current=null;
       if(controlPointer.current===e.pointerId)controlPointer.current=null;
-      // Keep the original Custom generator's quick-edit gesture.
-      if(e.type==='pointerup'&&hold.kind==='source'&&hold.index===1&&
-        Math.hypot(e.clientX-hold.startX,e.clientY-hold.startY)<8){
-        setCoinDraft(String(customCoinValue));
-        setCoinEditing({x:hold.x,y:hold.y});
+      if(e.type!=='pointerup'||
+        Math.hypot(e.clientX-press.startX,e.clientY-press.startY)>=8)return;
+      setCoinColorsOpen(false);
+      if(press.index===0){
+        // The FIRST, silver/white source uses an editable inline inscription.
+        setCoinMenu(null);
+        setCoinDraft(customCoinText);
+        setCoinEditing({x:press.x,y:press.y});
+      }else{
+        setCoinEditing(null);
+        setCoinMenu(m=>m?.type==='source'&&m.index===press.index
+          ?null:{type:'source',index:press.index,x:press.x,y:press.y});
       }
     };
     const move=(e:PointerEvent)=>{
-      // A pointer moving into a drag must never accidentally activate the radial.
-      const h=coinHold.current,d=drag.current;
-      if(h&&h.pointerId===e.pointerId&&
-        (Math.hypot(e.clientX-h.startX,e.clientY-h.startY)>8||
-        (d?.pointerId===e.pointerId&&d.moved))){
-        window.clearTimeout(h.timer);coinHold.current=null;
-      }
+      const press=coinSourcePress.current;
+      if(press?.pointerId===e.pointerId&&
+        Math.hypot(e.clientX-press.startX,e.clientY-press.startY)>8)
+        coinSourcePress.current=null;
     };
-    window.addEventListener('pointerup',release);window.addEventListener('pointercancel',release);
+    window.addEventListener('pointerup',release);
+    window.addEventListener('pointercancel',release);
     window.addEventListener('pointermove',move);
-    return()=>{window.removeEventListener('pointerup',release);
+    return()=>{
+      window.removeEventListener('pointerup',release);
       window.removeEventListener('pointercancel',release);
-      window.removeEventListener('pointermove',move);};
-  },[customCoinValue]);
+      window.removeEventListener('pointermove',move);
+    };
+  },[customCoinText]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;
@@ -2644,6 +2617,30 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         if(selectedSet.current.size>0){
           const ids=radialTapMembership(selectedSet.current,d.id,d.stackIds);
           updateSelection(ids);
+          lastTap.current=null;
+          return;
+        }
+        if(d.coinCenter){
+          const object=currentState.current.objects.find(o=>o.id===d.id);
+          const currentVisual=visuals.current.get(d.id);
+          const app=session.current?.app;
+          const coords=currentVisual&&!currentVisual.destroyed&&app
+            ?currentVisual.toGlobal(new Point(0,0)):d.coinAnchor;
+          if(coords&&app){
+            const rect=app.canvas.getBoundingClientRect();
+            const x=coords.x*rect.width/app.renderer.width;
+            const y=coords.y*rect.height/app.renderer.height;
+            if(object?.coinText!==undefined){
+              setCoinDraft(object.coinText);
+              setCoinEditing({id:d.id,x,y});
+              setCoinMenu(null);
+            }else if(object?.tokenCoin){
+              setCoinEditing(null);
+              setCoinMenu(previous=>previous?.type==='copy'&&previous.id===d.id
+                ?null:{type:'copy',id:d.id,x,y});
+              setCoinColorsOpen(false);
+            }
+          }
           lastTap.current=null;
           return;
         }
@@ -3174,6 +3171,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
     {coinEditing&&<input autoFocus className="sennet-coin-editor" type="text" inputMode="text" maxLength={20}
       aria-label="Edit coin inscription" value={coinDraft}
+      onFocus={e=>e.currentTarget.select()}
       onChange={e=>{if(validCoinText(e.target.value))setCoinDraft(e.target.value);}}
       style={{left:coinEditing.x,top:coinEditing.y}} onPointerDown={e=>e.stopPropagation()}
       onBlur={commitCoinEdit} onKeyDown={e=>{
