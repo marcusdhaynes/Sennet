@@ -1606,6 +1606,32 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       return otherId!==id&&!!other&&(other.tokenCoin||other.throwDice||other.kind==='die');
     }).slice(-70).map(([,piece])=>toScreen(piece.toGlobal(new Point(0,0))));
     const parent=visual.parent??board;
+    let rerollCommitted=false;
+    const commitReroll=(results:RollFallbackResult[])=>{
+      if(rerollCommitted)return;rerollCommitted=true;
+      dice3DActive.current=false;dice3DStop.current=null;
+      if(session.current?.app!==app)return;
+      const result=results[0];if(!result)return;
+      dieShownAt.current.set(id,{fingerprint:'reroll-in-progress',at:Date.now()});
+      const at=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
+      diceRerollCallback.current(id,result.rolls,
+        Math.max(0,Math.min(BOARD_W,at.x)),
+        Math.max(0,Math.min(BOARD_W,at.y)),
+        ((result.rotation%360)+360)%360,result.quaternion,result.altitude);
+      if(!visual.destroyed)visual.visible=true;
+    };
+    const recoverReroll=(error:unknown)=>{
+      console.warn('3D die reroll unavailable; rolling with fallback:',error);
+      try{
+        commitReroll(fallbackDiceResults([{
+          sides:die.sides??6,quantity:die.throwQuantity??1,
+          x:start.x,y:start.y}],rect.width,rect.height,dx,dy));
+      }catch(fallbackError){
+        dice3DActive.current=false;dice3DStop.current=null;
+        if(!visual.destroyed)visual.visible=true;
+        setDice3DError('Reroll failed: '+String(fallbackError));
+      }
+    };
     dice3DActive.current=true;setDice3DError(null);
     // Hide the old mesh only once airborne physics is initialized.
     import('../lib/Dice3D').then(({roll3DDice})=>{
@@ -1619,31 +1645,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             themeId:resolveDiceTheme(diceAppearance,die.sides??6),scale,...start}],
           aimX:dx,aimY:dy,durationMs:elapsed,
           reroll:true,trays,obstacles,
-          done:results=>{
-            dice3DActive.current=false;dice3DStop.current=null;
-            if(session.current?.app!==app)return;
-            const result=results[0];
-            dieShownAt.current.set(id,{fingerprint:'reroll-in-progress',at:Date.now()});
-            const at=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
-            diceRerollCallback.current(id,result.rolls,
-              Math.max(0,Math.min(BOARD_W,at.x)),
-              Math.max(0,Math.min(BOARD_W,at.y)),
-              ((result.rotation%360)+360)%360,result.quaternion,result.altitude);
-            if(!visual.destroyed)visual.visible=true;
-          }});
+          done:commitReroll,onError:recoverReroll});
         dice3DStop.current=stop;
-      }catch(error){
-        dice3DActive.current=false;dice3DStop.current=null;
-        visual.position.set(die.x,die.y);visual.visible=true;
-        setDice3DError('3D reroll unavailable: '+String(error));
-      }
-    }).catch(error=>{
-      dice3DActive.current=false;dice3DStop.current=null;
-      if(!visual.destroyed){
-        visual.position.set(die.x,die.y);visual.visible=true;
-      }
-      setDice3DError('3D reroll unavailable: '+String(error));
-    });
+      }catch(error){recoverReroll(error);}
+    }).catch(recoverReroll);
   };
 
   /** Deselecting dice discards pending throw quantities and their
