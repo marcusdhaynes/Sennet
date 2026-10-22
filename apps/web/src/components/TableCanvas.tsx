@@ -32,6 +32,7 @@ import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic'
 import {roll3DDice} from '../lib/Dice3D';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
+import {expandDiceSources} from '../lib/diceSourceExpansion';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
@@ -1521,6 +1522,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       return {sides,quantity:selected[sides],
         scale,themeId:resolveDiceTheme(diceAppearance,sides),...convert(p)};
     });
+    // One independently simulated mesh, trajectory and roll result per
+    // selected die while the combined quantity is 20 or fewer.
+    const physicalSources=expandDiceSources(sources);
     const obstacles=[...visuals.current.entries()].filter(([id])=>{
       const obj=currentState.current.objects.find(o=>o.id===id);
       return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
@@ -1552,7 +1556,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // WebGL may be disabled, context-lost or a die geometry may fail.
       // Still record the actual sampled faces in one authoritative command.
       console.warn('3D dice renderer unavailable; using safe roll:',error);
-      try{commitResults(fallbackDiceResults(sources,rect.width,rect.height,dx,dy));}
+      try{commitResults(fallbackDiceResults(physicalSources,rect.width,rect.height,dx,dy));}
       catch(fallbackError){
         dice3DActive.current=false;dice3DStop.current=null;
         setDice3DError('Dice throw failed: '+String(fallbackError));
@@ -1567,7 +1571,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const beforePaint=staticDice3D.current?.getRenderedRevision()??0;
         const d=roll3DDice({host,width:rect.width,height:rect.height,
           canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
-          sources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
+          sources:physicalSources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
           done:commitResults,onError:recoverThrow});
         dice3DStop.current=d;
       }catch(err){recoverThrow(err);}
