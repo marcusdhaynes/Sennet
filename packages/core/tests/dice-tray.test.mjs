@@ -378,3 +378,34 @@ test('right drawer throws toward the playmat rather than away from it',()=>{
   const outside=spawnOutsideTray(500,210,r,[tray],-160,0);
   assert.deepEqual(outside,{x:500,y:210});
 });
+
+test('twenty matching dice become twenty independent movable and rerollable objects',()=>{
+  const initial=createGame('tcg');
+  const individual=Array.from({length:20},(_,i)=>({
+    sides:6,rolls:[i%6+1],x:1800+(i%5)*58,y:1850+Math.floor(i/5)*58,
+    rotation:i*13
+  }));
+  const action=command('twenty-physical-d6',individual);
+  const next=applyCommand(initial,action);
+  const physical=next.objects.filter(o=>o.throwDice);
+  assert.equal(physical.length,20);
+  assert.equal(new Set(physical.map(o=>o.id)).size,20);
+  assert.ok(physical.every(o=>o.throwQuantity===1&&o.throwRolls.length===1));
+  const move=applyCommand(next,{id:'move-one-d6',actor:'local',type:'MOVE',
+    payload:{id:physical[0].id,x:physical[0].x+60,y:physical[0].y+60}});
+  assert.ok(move.objects.find(o=>o.id===physical[0].id).x!==physical[0].x);
+  assert.equal(move.objects.find(o=>o.id===physical[1].id).x,physical[1].x);
+  assert.deepEqual(next,replay(initial,[action]));
+});
+test('more than twenty dice remain aggregated by die type',()=>{
+  const initial=createGame('tcg');
+  const action=command('twenty-one-grouped',[
+    {sides:6,rolls:Array(20).fill(4),x:1800,y:1800,rotation:0},
+    {sides:8,rolls:[8],x:1900,y:1900,rotation:0}
+  ]);
+  const next=applyCommand(initial,action);
+  const objects=next.objects.filter(o=>o.throwDice);
+  assert.equal(objects.length,2);
+  assert.deepEqual(objects.map(o=>o.throwQuantity),[20,1]);
+  assert.deepEqual(next,replay(initial,[action]));
+});
