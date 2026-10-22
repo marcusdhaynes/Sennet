@@ -82,11 +82,20 @@ export function receiptForCommand(
     const throws=Array.isArray(p.throws)?p.throws:[];
     description=throws.map(x=>{
       const item=x as {sides?:number;rolls?:unknown[]};
-      return (item.sides===2?'Flip':'D'+item.sides)+' ×'+(item.rolls?.length??1);
+      const rolls=Array.isArray(item.rolls)?item.rolls.filter(n=>
+        typeof n==='number'&&Number.isFinite(n)) as number[]:[];
+      const label=item.sides===2?'Flip':'D'+item.sides;
+      if(item.sides===2)
+        return label+' ×'+(rolls.length||1)+' · '+rolls.filter(n=>n===1).length+'H';
+      return label+' ×'+(rolls.length||1)+
+        (rolls.length?' = '+rolls.reduce((a,n)=>a+n,0):'');
     }).join(', ')||'Dice';
     location='P'+(Number(p.seat??0)+1)+' · Dice tray → Table';
   }
-  if(event.type==='REROLL_DIE')description=(description||'Die')+' · Reroll';
+  if(event.type==='REROLL_DIE')description=updated
+    ?(updated.sides===2?'Flip':'D'+(updated.sides??6))+
+      ' ×'+(updated.throwQuantity??1)+' = '+(updated.throwTotal??updated.value??0)
+    :(description||'Die')+' · Reroll';
   if(event.type==='SET_CENTER_MERGE'){
     location='P'+(Number(p.seat??0)+1)+' · PLAY '+(Number(p.boundary??0)+1);
     type=p.merged?'Merge':'Split';
