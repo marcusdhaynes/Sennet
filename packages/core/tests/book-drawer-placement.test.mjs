@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {drawerInnerWell,isBookWithinDrawer,bookOpenPoseX,bookSavedOffset} from
+import {drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer,bookOpenPoseX,bookSavedOffset} from
   '../../../apps/web/src/lib/bookDrawerPlacement.ts';
 
 test('a book centered in the open drawer belongs to that drawer',()=>{
@@ -39,4 +39,19 @@ test('drop in opposite drawer persists its open-pose coordinate',()=>{
   const baseRight=250,oldOffset=10,leftDrop=-250;
   const saved=bookSavedOffset(oldOffset,leftDrop,baseRight+oldOffset);
   assert.equal(baseRight+saved,leftDrop);
+});
+
+test('right-drawer book snap is available as soon as the book center is within the walls',()=>{
+  const right=drawerInnerWell(320,42,62,294);
+  assert.equal(isBookCenterWithinDrawer(320,151,right),true);
+  assert.equal(isBookCenterWithinDrawer(320-32,151,right),true);
+  assert.equal(isBookCenterWithinDrawer(320-45,151,right),false);
+  assert.equal(isBookCenterWithinDrawer(200,151,right),false);
+});
+test('right-drawer snap resets previous free offset to the home coordinate',()=>{
+  const right=drawerInnerWell(320,42,62,294);
+  const originalBaseX=320,previousOffsetX=-110;
+  const start=originalBaseX+previousOffsetX;
+  const saved=bookSavedOffset(previousOffsetX,right.x,start);
+  assert.equal(originalBaseX+saved,right.x);
 });

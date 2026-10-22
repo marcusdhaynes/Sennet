@@ -31,7 +31,7 @@ import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {diceRackLocations} from '../lib/diceCoordinates';
-import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer} from '../lib/bookDrawerPlacement';
+import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -388,9 +388,23 @@ function drawTcgMats(
             if(event.type!=='pointercancel')onBookOpen();
             return;
           }
-          // A drop wholly inside an OPEN drawer becomes part of that
-          // drawer, whichever side it is. Outside either well the book
-          // remains a freely draggable top-layer physical object.
+          // The right drawer is the book's HOME: dropping its center
+          // inside the wooden walls snaps it to the original bottom-center
+          // seat, regardless of where it was picked up or its old offset.
+          const rightDrawer=drawerGroups.get(1);
+          const insideRight=rightDrawer&&!drawerState.right&&
+            isBookCenterWithinDrawer(book.position.x,book.position.y,
+              wellFor(1),rightDrawer.position.x);
+          if(insideRight){
+            const homeX=wellFor(1).x;
+            const homeY=trayBottom-bh*.44-10;
+            stow(1,homeX,homeY);
+            onBookMove({x:bookSavedOffset(bookOffset.x,homeX,bx),
+              y:bookSavedOffset(bookOffset.y,homeY,by)});
+            return;
+          }
+          // The left drawer retains its existing freely positioned stow.
+          // Outside both drawers the book remains a free movable object.
           const target=([-1,1] as const).find(s=>{
             const drawer=drawerGroups.get(s);
             return drawer&&!(s===-1?drawerState.left:drawerState.right)&&
@@ -1264,8 +1278,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       radialCenterHold.current=null;
     }
   };
-  const coinSourcePress=useRef<{pointerId:number;index:number;x:number;y:number;
-    startX:number;startY:number}|null>(null);
   const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
     const current=session.current;if(!current)return;
     const p=piece.toGlobal(new Point(0,0)),rect=current.app.canvas.getBoundingClientRect();
@@ -1828,11 +1840,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     for(const id of [...dieShownAt.current.keys()]){
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
-    const coinLayers:{piece:Container;el:HTMLDivElement}[]=[];
-    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false)=>{
+    const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number}[]=[];
+    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1)=>{
       const el=coinDomVisual(value,sign,source,coinAppearance,color,editable);
       mount.current?.appendChild(el);
-      coinLayers.push({piece,el});
+      coinLayers.push({piece,el,displayScale});
       return el;
     };
     // The LEFT box is a permanent dice/coin rack. The first gesture on a
@@ -1909,22 +1921,34 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       values.forEach((value,index)=>{
         const source=new Container();
         source.visible=!boxClosed.right;
-        source.position.set(boxX,top+58+index*86);
+        // Match the LEFT dice rack's 25-unit top row and 18-unit label
+        // offset. Small physical coins share one row inside the narrow felt.
+        source.position.set(boxX+(index===0?-15:15),top+25);
         const isEditable=index===0;
+        // Accommodate enlarged user-selected coin sizes, without allowing
+        // either coin/overlay to break through the drawer sidewalls.
+        const sourceScale=Math.min(.72,.68/Math.max(.75,Math.min(1.3,coinAppearance.size)));
         const color=coinSources.colors[isEditable?1:0]??(isEditable?'#c4d8d9':'#d8b979');
-        source.addChild(makeCoin(isEditable?faces[index]:value,coinAppearance,true,1,color,isEditable));
+        const face=makeCoin(isEditable?faces[index]:value,coinAppearance,true,1,color,isEditable);
+        face.scale.set(face.scale.x*sourceScale);
+        source.addChild(face);
+        // Both markings use exactly the dice-label font size and baseline.
+        const symbol=label(isEditable?'∞':'∑',8,0xffedbe,'bold');
+        symbol.position.set(0,18);symbol.eventMode='none';
+        source.addChild(symbol);
         const highlight=new Graphics();
-        highlight.scale.set(coinAppearance.size*1.08);
+        highlight.scale.set(coinAppearance.size*1.08*sourceScale);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
         paintLayers.objects.attach(source);
-        const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable);
+        const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable,sourceScale);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
-        source.hitArea=new Circle(0,0,17.5*coinAppearance.size*1.08);
+        const sourceRadius=17.5*coinAppearance.size*1.08*sourceScale;
+        source.hitArea=new Circle(0,0,sourceRadius);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=Math.max(5,10.3*coinAppearance.size*1.08))return 0;
+          if(Math.hypot(here.x,here.y)<=Math.max(5,10.3*coinAppearance.size*1.08*sourceScale))return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
@@ -1944,14 +1968,23 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           controlPointer.current=e.pointerId;
           const sign=sideAt(e.global);
           if(sign===0){
-            // Center-only click: white opens value editor, bronze opens radial.
-            // Any movement cancels; no long-press or tray movement.
+            // Open immediately from the coin center: a bubbling window
+            // pointerup was losing clicks on the right drawer source.
+            // Upper/lower rims still initiate the existing coin drag.
             const projected=source.toGlobal(new Point(0,0));
             const rect=app.canvas.getBoundingClientRect();
-            coinSourcePress.current={pointerId:e.pointerId,index,
-              x:projected.x*rect.width/app.renderer.width,
-              y:projected.y*rect.height/app.renderer.height,
-              startX:e.clientX,startY:e.clientY};
+            const x=projected.x*rect.width/app.renderer.width;
+            const y=projected.y*rect.height/app.renderer.height;
+            if(index===0){
+              setCoinMenu(null);setCoinColorsOpen(false);
+              setCoinDraft(customCoinText);
+              setCoinEditing({x,y});
+            }else{
+              setCoinEditing(null);
+              setCoinColorsOpen(false);
+              setCoinMenu(previous=>previous?.type==='source'&&previous.index===index
+                ?null:{type:'source',index,x,y});
+            }
             return;
           }
           const ghost=makeCoin(isEditable?faces[index]:value,coinAppearance,false,sign,color,isEditable);
@@ -2018,7 +2051,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       }
       // A separate DOM layer at z-index 6 keeps every coin above every
       // imported card image (z-index 5), even during camera or card motion.
-      for(const {piece,el} of coinLayers){
+      for(const {piece,el,displayScale} of coinLayers){
         if(piece.destroyed||!el.isConnected)continue;
         let visible=true,ancestor:Container|null=piece;
         while(ancestor){
@@ -2036,9 +2069,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const down=piece.toGlobal(new Point(0,1));
         const aa=(right.x-p.x)*sx,bb=(right.y-p.y)*sy;
         const cc=(down.x-p.x)*sx,dd=(down.y-p.y)*sy;
-        const tx=p.x*sx-18*aa-18*cc;
-        const ty=p.y*sy-18*bb-18*dd;
-        el.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
+        const ax=aa*displayScale,bx=bb*displayScale;
+        const cx=cc*displayScale,dy=dd*displayScale;
+        const tx=p.x*sx-18*ax-18*cx;
+        const ty=p.y*sy-18*bx-18*dy;
+        el.style.transform=`matrix(${ax},${bx},${cx},${dy},${tx},${ty})`;
       }
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
@@ -2469,41 +2504,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     };
   },[actorId]);
 
-  useEffect(()=>{
-    const release=(e:PointerEvent)=>{
-      const press=coinSourcePress.current;
-      if(!press||press.pointerId!==e.pointerId)return;
-      coinSourcePress.current=null;
-      if(controlPointer.current===e.pointerId)controlPointer.current=null;
-      if(e.type!=='pointerup'||
-        Math.hypot(e.clientX-press.startX,e.clientY-press.startY)>=8)return;
-      setCoinColorsOpen(false);
-      if(press.index===0){
-        // The FIRST, silver/white source uses an editable inline inscription.
-        setCoinMenu(null);
-        setCoinDraft(customCoinText);
-        setCoinEditing({x:press.x,y:press.y});
-      }else{
-        setCoinEditing(null);
-        setCoinMenu(m=>m?.type==='source'&&m.index===press.index
-          ?null:{type:'source',index:press.index,x:press.x,y:press.y});
-      }
-    };
-    const move=(e:PointerEvent)=>{
-      const press=coinSourcePress.current;
-      if(press?.pointerId===e.pointerId&&
-        Math.hypot(e.clientX-press.startX,e.clientY-press.startY)>8)
-        coinSourcePress.current=null;
-    };
-    window.addEventListener('pointerup',release);
-    window.addEventListener('pointercancel',release);
-    window.addEventListener('pointermove',move);
-    return()=>{
-      window.removeEventListener('pointerup',release);
-      window.removeEventListener('pointercancel',release);
-      window.removeEventListener('pointermove',move);
-    };
-  },[customCoinText]);
   useEffect(()=>{
     const clearHighlight=()=>{
       const hint=snapHighlight.current;

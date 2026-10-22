@@ -34,3 +34,15 @@ export function bookOpenPoseX(visibleX:number,drawerShiftX:number):number{
 export function bookSavedOffset(previousOffset:number,destination:number,startPosition:number):number{
   return previousOffset+destination-startPosition;
 }
+
+/** Dropping the center of a dragged book inside a drawer is intentional
+ * even when some of its footprint still overlaps a wooden sidewall.
+ * Test the center, not the entire projected footprint. */
+export function isBookCenterWithinDrawer(
+  x:number,y:number,well:DrawerWell,slideX=0
+):boolean{
+  return [x,y,well.x,well.y,well.width,well.height,slideX].every(Number.isFinite)&&
+    well.width>0&&well.height>0&&
+    Math.abs(x-(well.x+slideX))<=well.width/2+4&&
+    Math.abs(y-well.y)<=well.height/2+4;
+}
