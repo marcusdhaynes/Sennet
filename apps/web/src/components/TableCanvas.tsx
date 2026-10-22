@@ -1944,11 +1944,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable,sourceScale);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
-        const sourceRadius=17.5*coinAppearance.size*1.08*sourceScale;
+        // The coin mesh internally clamps appearance.size; hit detection
+        // must use that same clamp so small custom sizes remain clickable.
+        const visibleSize=Math.max(.75,Math.min(1.3,coinAppearance.size));
+        const sourceRadius=17.5*visibleSize*1.08*sourceScale;
         source.hitArea=new Circle(0,0,sourceRadius);
         const sideAt=(global:Point):1|-1|0=>{
           const here=source.toLocal(global);
-          if(Math.hypot(here.x,here.y)<=Math.max(5,10.3*coinAppearance.size*1.08*sourceScale))return 0;
+          if(Math.hypot(here.x,here.y)<=Math.max(5,10.3*visibleSize*1.08*sourceScale))return 0;
           return here.y<0?1:-1;
         };
         const highlightSide=(global:Point)=>{
