@@ -321,11 +321,12 @@ function drawTcgMats(
           if(event.pointerId!==e.pointerId)return;
           event.stopPropagation();
           if(event.cancelable)event.preventDefault();
-          const appScreen=session.current?.app.screen;
-          if(!appScreen)return;
+          // Use the original Pixi pointer position as the coordinate
+          // origin. DOM motion is scaled into the SAME canvas units, so
+          // zooming or dragging outside the drawer never makes the book jump.
           const global=new Point(
-            (event.clientX-rect.left)*appScreen.width/rect.width,
-            (event.clientY-rect.top)*appScreen.height/rect.height);
+            startX+(event.clientX-e.clientX)*stage.clientWidth/rect.width,
+            startY+(event.clientY-e.clientY)*stage.clientHeight/rect.height);
           const start=mat.toLocal(new Point(startX,startY));
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
