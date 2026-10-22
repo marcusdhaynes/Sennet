@@ -6,6 +6,7 @@ type Props={
  onChoose:(action:RadialAction)=>void;
  onCancel:()=>void;
  onMoveDock?:(position:{x:number;y:number})=>void;
+ onExpandedChange?:(expanded:boolean)=>void;
 };
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
@@ -27,10 +28,15 @@ function multiline(label:string){
  if(label==='Lock / Unlock')return ['Lock /','Unlock'];
  return [label];
 }
-export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,half=false,tapLabel='Tap',onMoveDock}:Props){
+export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,half=false,tapLabel='Tap',onMoveDock,onExpandedChange}:Props){
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
  const [category,setCategory]=useState<number|null>(null);
  const [collapsed,setCollapsed]=useState(false);
+ const toggleCollapsed=()=>{
+   const next=!collapsed;
+   setCollapsed(next);
+   onExpandedChange?.(!next);
+ };
  const centerTimer=useRef<number|null>(null);
  const clearCenterTimer=()=>{if(centerTimer.current!==null){window.clearTimeout(centerTimer.current);centerTimer.current=null;}};
  const clearHighlight=()=>{state.current.category=null;state.current.action=null;setCategory(null);setAction(null);};
@@ -129,7 +135,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
        // same held pointer must NOT start a drag or pan the table.
        let moved=false,longHeld=false;
        centerTimer.current=window.setTimeout(()=>{
-         longHeld=true;setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;
+         longHeld=true;toggleCollapsed();clearHighlight();centerTimer.current=null;
        },450);
        const bound=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
        const bounds=()=>({x:Math.max(size/2,window.innerWidth-size/2),y:Math.max(size/2,window.innerHeight-size/2)});
@@ -170,7 +176,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
        window.addEventListener('pointerup',finish,{capture:true,passive:false});
        window.addEventListener('pointercancel',finish,{capture:true,passive:false});
      }}
-     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
+     onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleCollapsed();clearHighlight();}}}>
    <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#ad94cf" strokeWidth={collapsed?5:3}/>
    <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800" fontSize={half?21:22} textAnchor="middle">{count} Selected</text>
    </g>

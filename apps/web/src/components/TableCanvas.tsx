@@ -1195,16 +1195,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const drawerGroups=useRef(new Map<number,Container>());
   const drawerTabs=useRef(new Map<number,Container>());
   const lastBoxClosed=useRef(boxClosed);
+  const boxClosedRef=useRef(boxClosed);boxClosedRef.current=boxClosed;
   const interfaceAction=useRef(onInterfaceAction);interfaceAction.current=onInterfaceAction;
-  const toggleBox=(side:-1|1)=>setBoxClosed(previous=>{
+  const toggleBox=(side:-1|1)=>{
     const key=side===-1?'left':'right';
-    const opening=previous[key];
-    // One physical drawer change is one receipt row.
+    const opening=boxClosedRef.current[key];
+    // Log once per user interaction, outside React's state updater.
     interfaceAction.current(opening?'Expand':'Collapse',
       key==='left'?'Left drawer':'Right drawer',
       opening?'Open drawer':'Close drawer');
-    return {...previous,[key]:!previous[key]};
-  });
+    boxClosedRef.current={...boxClosedRef.current,[key]:!opening};
+    setBoxClosed(boxClosedRef.current);
+  };
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
   const diceTrayMat=useRef<Container|null>(null);
@@ -3383,6 +3385,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           wheelPointer.current=null;
         }}
         onCancel={()=>{if(wheelMode==='hold')setRadialWheel(null);wheelPointer.current=null;}}
+        onExpandedChange={expanded=>interfaceAction.current(expanded?'Expand':'Collapse',
+          'Action radial',expanded?'Show actions':'Hide actions')}
       />
       </div>
     </div>}
