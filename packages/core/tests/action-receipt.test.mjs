@@ -24,7 +24,10 @@ test('move receipt shows the exact old and new coordinates',()=>{
   assert.equal(row.type,'Move');
   assert.match(row.location, / → /);
   assert.ok(row.location.includes(Math.round(target.x)+','+Math.round(target.y)));
-  assert.ok(row.location.includes(Math.round(target.x+43)+','+Math.round(target.y-17)));
+  const committed=moved.objects.find(x=>x.id===target.id);
+  assert.ok(committed);
+  assert.ok(row.location.includes(Math.round(committed.x)+','+Math.round(committed.y)),
+    'the receipt uses the actual grid-snapped destination, not pointer coords');
   assert.ok(row.description.length>0);
   assert.equal(row.commandId,event.id);
 });
