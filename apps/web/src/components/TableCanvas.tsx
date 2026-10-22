@@ -1815,6 +1815,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       const slots=diceRackLocations(boxX,top);
       DICE_TYPES.forEach((sides,index)=>{
         const source=new Container();
+        // The source belongs inside this drawer; a closed drawer never
+        // leaks an unattached high-priority object through the playmat.
+        source.visible=!boxClosed.left;
         // Fixed, real drawer-relative coordinates. Zooming and changing
         // the camera never edits these physical positions.
         source.position.set(slots[index].x,slots[index].y);
@@ -1873,6 +1876,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       values.forEach((value,index)=>{
         const source=new Container();
+        source.visible=!boxClosed.right;
         source.position.set(boxX,top+58+index*86);
         const isEditable=index===0;
         const color=coinSources.colors[isEditable?1:0]??(isEditable?'#c4d8d9':'#d8b979');
