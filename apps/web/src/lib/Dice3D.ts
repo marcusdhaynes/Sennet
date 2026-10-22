@@ -39,6 +39,8 @@ export interface Dice3DOptions {
   reroll?:boolean;
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
+  /** A GPU/context/physics failure must never strand the roll in flight. */
+  onError?:(error:unknown)=>void;
   /** True only once the replacement 3D renderer has painted the outcome. */
   canHandoff?:()=>boolean;
 }
@@ -74,6 +76,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const {host,width:w,height:h}=opts;
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,
     premultipliedAlpha:false,powerPreference:'high-performance'});
+  try{
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.8));
   renderer.setSize(w,h,false);
   renderer.setClearColor(0x000000,0);
@@ -188,7 +191,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
         }
       }
     });
-    shadowTex.dispose();renderer.dispose();
+    shadowTex.dispose();renderer.dispose();renderer.forceContextLoss();
   };
   const complete=()=>{
     const result:Dice3DResult[]=objects.map(obj=>{
@@ -228,23 +231,34 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   };
   const tick=(now:number)=>{
     if(stopped)return;
-    const elapsed=(now-started)/1000,dt=Math.min(.05,(now-previous)/1000);
-    previous=now;world.step(1/60,dt,4);
-    for(const obj of objects){
-      const b=obj.body,m=obj.mesh;
-      m.position.set(b.position.x,b.position.y,b.position.z);
-      m.quaternion.set(b.quaternion.x,b.quaternion.y,b.quaternion.z,b.quaternion.w);
-      obj.shadow.position.set(b.position.x,b.position.y,.4);
-      obj.shadow.scale.setScalar(1+Math.min(1,b.position.z/150));
-      (obj.shadow.material as THREE.MeshBasicMaterial).opacity=
-        Math.max(.1,.45-Math.max(0,b.position.z)*.002);
+    try{
+      const elapsed=(now-started)/1000,dt=Math.min(.05,(now-previous)/1000);
+      previous=now;world.step(1/60,dt,4);
+      for(const obj of objects){
+        const b=obj.body,m=obj.mesh;
+        m.position.set(b.position.x,b.position.y,b.position.z);
+        m.quaternion.set(b.quaternion.x,b.quaternion.y,b.quaternion.z,b.quaternion.w);
+        obj.shadow.position.set(b.position.x,b.position.y,.4);
+        obj.shadow.scale.setScalar(1+Math.min(1,b.position.z/150));
+        (obj.shadow.material as THREE.MeshBasicMaterial).opacity=
+          Math.max(.1,.45-Math.max(0,b.position.z)*.002);
+      }
+      renderer.render(scene,camera);
+      if(elapsed>1.5&&objects.every(o=>o.body.sleepState===CANNON.Body.SLEEPING||
+        (o.body.velocity.length()<13&&o.body.angularVelocity.length()<.55&&o.body.position.z<32))||
+        elapsed>6){complete();return;}
+      frame=requestAnimationFrame(tick);
+    }catch(error){
+      cleanup();
+      opts.onError?.(error);
     }
-    renderer.render(scene,camera);
-    if(elapsed>1.5&&objects.every(o=>o.body.sleepState===CANNON.Body.SLEEPING||
-      (o.body.velocity.length()<13&&o.body.angularVelocity.length()<.55&&o.body.position.z<32))||
-      elapsed>6){complete();return;}
-    frame=requestAnimationFrame(tick);
   };
   frame=requestAnimationFrame(tick);
   return cleanup;
+  }catch(error){
+    // A partially initialized 3D scene must not consume GPU contexts.
+    try{renderer.dispose();renderer.forceContextLoss();}
+    finally{renderer.domElement.remove();}
+    throw error;
+  }
 }
