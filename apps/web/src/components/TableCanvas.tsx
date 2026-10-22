@@ -474,10 +474,11 @@ function drawTcgMats(
       }
       const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
-      // A small dark etched outline separates zone words from any mat
-      // texture, color or imported artwork without changing their layout.
+      // Keep the etched letter edges crisp while a wider, soft shadow
+      // falls off gradually across busy felt textures and artwork.
+      // This affects only playmat zone labels, not cards or HUD text.
       text.style.stroke={color:0x091a18,width:2.8,join:'round'};
-      text.style.dropShadow={color:0x020b09,alpha:.77,blur:1.5,distance:1.4,angle:Math.PI/2};
+      text.style.dropShadow={color:0x020b09,alpha:.92,blur:5.5,distance:1.6,angle:Math.PI/2};
       text.alpha=merged?1:.94;text.eventMode='none';
       // Center EVERY center-column label. Side labels face toward the
       // middle: left reads one way, right reads the opposite way.
