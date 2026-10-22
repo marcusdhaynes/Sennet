@@ -30,6 +30,7 @@ const coinSector=(index:number)=>{
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
+import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
@@ -1525,6 +1526,32 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     for(const {body,count} of diceBadges.current.values()){
       body.children[0].visible=false;count.text='';
     }
+    let thrown=false;
+    const commitResults=(results:RollFallbackResult[])=>{
+      if(thrown)return;thrown=true;
+      dice3DActive.current=false;dice3DStop.current=null;
+      if(session.current?.app!==app)return;
+      const parent=duelLayers.current?.get(seatRef.current)??board;
+      const throws=results.map(result=>{
+        const point=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
+        return {sides:result.sides,rolls:result.rolls,
+          x:Math.max(0,Math.min(BOARD_W,point.x)),
+          y:Math.max(0,Math.min(BOARD_W,point.y)),
+          rotation:((result.rotation%360)+360)%360,
+          quaternion:result.quaternion,altitude:result.altitude};
+      });
+      diceThrowCallback.current(throws);
+    };
+    const recoverThrow=(error:unknown)=>{
+      // WebGL may be disabled, context-lost or a die geometry may fail.
+      // Still record the actual sampled faces in one authoritative command.
+      console.warn('3D dice renderer unavailable; using safe roll:',error);
+      try{commitResults(fallbackDiceResults(sources,rect.width,rect.height,dx,dy));}
+      catch(fallbackError){
+        dice3DActive.current=false;dice3DStop.current=null;
+        setDice3DError('Dice throw failed: '+String(fallbackError));
+      }
+    };
     setDice3DError(null);dice3DActive.current=true;
     // Independent 3D viewport: no WebGL physics/rendering overhead while
     // playing cards or editing Sennet's 2D tabletop.
@@ -1535,29 +1562,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const d=roll3DDice({host,width:rect.width,height:rect.height,
           canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
           sources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
-          done:results=>{
-            dice3DActive.current=false;dice3DStop.current=null;
-            if(session.current?.app!==app)return;
-            const parent=duelLayers.current?.get(seatRef.current)??board;
-            const throws=results.map(result=>{
-              const point=parent.toLocal(new Point(result.x/sx,result.y/sy),app.stage);
-              return {sides:result.sides,rolls:result.rolls,
-                x:Math.max(0,Math.min(BOARD_W,point.x)),
-                y:Math.max(0,Math.min(BOARD_W,point.y)),
-                rotation:((result.rotation%360)+360)%360,
-                quaternion:result.quaternion,altitude:result.altitude};
-            });
-            diceThrowCallback.current(throws);
-          }});
+          done:commitResults,onError:recoverThrow});
         dice3DStop.current=d;
-      }catch(err){
-        dice3DActive.current=false;dice3DStop.current=null;
-        setDice3DError('3D dice need WebGL support. '+String(err));
-      }
-    }).catch(err=>{
-      dice3DActive.current=false;dice3DStop.current=null;
-      setDice3DError('Could not load the 3D dice engine: '+String(err));
-    });
+      }catch(err){recoverThrow(err);}
+    }).catch(recoverThrow);
     void origin;
   };
   rerollDieNow.current=(id,cursorX,cursorY,dx,dy,elapsed)=>{
