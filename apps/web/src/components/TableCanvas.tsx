@@ -26,7 +26,7 @@ import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {diceRackLocations} from '../lib/diceCoordinates';
-import {bookOpenPoseX,drawerInnerWell,isBookWithinDrawer} from '../lib/bookDrawerPlacement';
+import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -395,7 +395,10 @@ function drawTcgMats(
           const openX=target===undefined?visibleX:
             bookOpenPoseX(visibleX,drawerGroups.get(target)?.position.x??0);
           if(target!==undefined)stow(target,openX,visibleY);
-          onBookMove({x:openX-bx,y:visibleY-by});
+          // bx/by already contain the prior offset. Preserve it when saving
+          // the movement delta, otherwise every drop jumps on scene rebuild.
+          onBookMove({x:bookSavedOffset(bookOffset.x,openX,bx),
+            y:bookSavedOffset(bookOffset.y,visibleY,by)});
         };
         release=onUp;
         window.addEventListener('pointermove',onMove,true);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {drawerInnerWell,isBookWithinDrawer,bookOpenPoseX} from
+import {drawerInnerWell,isBookWithinDrawer,bookOpenPoseX,bookSavedOffset} from
   '../../../apps/web/src/lib/bookDrawerPlacement.ts';
 
 test('a book centered in the open drawer belongs to that drawer',()=>{
@@ -25,4 +25,18 @@ test('left and right drawers use the same fit rules',()=>{
   const left=drawerInnerWell(-250,49,62,290);
   assert.equal(isBookWithinDrawer(-250,150,46,60,left),true);
   assert.equal(isBookWithinDrawer(250,150,46,60,left),false);
+});
+
+test('saved offset does not apply the previous book offset twice',()=>{
+  const baseRight=250,oldOffset=-24;
+  const start=baseRight+oldOffset;
+  const drop=start-40;
+  const saved=bookSavedOffset(oldOffset,drop,start);
+  assert.equal(saved,-64);
+  assert.equal(baseRight+saved,drop);
+});
+test('drop in opposite drawer persists its open-pose coordinate',()=>{
+  const baseRight=250,oldOffset=10,leftDrop=-250;
+  const saved=bookSavedOffset(oldOffset,leftDrop,baseRight+oldOffset);
+  assert.equal(baseRight+saved,leftDrop);
 });

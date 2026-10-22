@@ -29,3 +29,8 @@ export function drawerInnerWell(
 export function bookOpenPoseX(visibleX:number,drawerShiftX:number):number{
   return visibleX-drawerShiftX;
 }
+
+/** Rebuild-safe saved offset: startPosition ALREADY contains previousOffset. */
+export function bookSavedOffset(previousOffset:number,destination:number,startPosition:number):number{
+  return previousOffset+destination-startPosition;
+}
