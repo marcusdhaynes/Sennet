@@ -787,19 +787,19 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
       BOARD_CENTER+(p.y-BOARD_CENTER)*.972]).flat()).fill(COLORS.felt)
       .stroke({color:0x112d2b,width:4}));
   }
-  const layers=duelOpponent===null&&!castleActive
+  const seatLayers=duelOpponent===null&&!castleActive
     ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,
       castleMode,castleBaseMode,focused,viewport,selectedEnemy);
   if(state.kind==='tcg')drawTcgMats(board,layers,state,seat,readonly,opacity,hoverMs,playmat,
     bookDesign,bookDock,bookOffset,onBookOpen,onBookMove,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
-    castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,layers,
+    castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,seatLayers,
     eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
-    if(layers)continue;
+    if(seatLayers)continue;
     const angle=i*Math.PI/6-Math.PI/2;
     const x=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle);
     const y=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle);
@@ -817,7 +817,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     board.addChild(chair);
     layers.labels.attach(chair);
   }
-  return layers;
+  return seatLayers;
 }
 function markHeldStack(piece:Container,count:number){
   const indicator=new Graphics().ellipse(0,0,44,58)
