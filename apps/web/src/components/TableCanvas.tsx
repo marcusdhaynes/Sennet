@@ -1145,8 +1145,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
   // coordinates, not viewport dimensions. Camera zoom is its only scaling.
-  const [dockGeometry,setDockGeometry]=useState({x:0,y:0,size:0});
-  const [actionScreenGeometry,setActionScreenGeometry]=useState({left:0,y:0,width:0,heightScale:1,visible:false});
+  // HUD geometry is stored without a React rerender per pan/zoom frame.
+  // Only visibility changes need to trigger a React render.
+  const [actionScreenVisible,setActionScreenVisible]=useState(false);
   const [playerTagGeometry,setPlayerTagGeometry]=useState({x:0,y:0,scale:1,width:320,outward:'bottom' as 'top'|'bottom'|'left'|'right'});
 
   const [eyeView,setEyeView]=useState<EyeView>({kind:'overview',opponent:null});
@@ -1174,6 +1175,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const duelLayers=useRef<Map<number,Container>|null>(null);
   const selectedRef=useRef(selected);selectedRef.current=selected;
   const mount=useRef<HTMLDivElement>(null);
+  const actionLcdRef=useRef<HTMLDivElement|null>(null);
+  const dockedWheelRef=useRef<HTMLDivElement|null>(null);
+  const dockedWheelGeometry=useRef({x:0,y:0,size:0});
+  const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
@@ -1601,9 +1606,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           );
           const projected=(duelLayers.current?.get(seatRef.current)??board).toGlobal(bottom);
           const next={x:projected.x,y:projected.y,size:TCG_MAT_WIDTH*.30*scale};
-          setDockGeometry(previous=>
-            Math.abs(previous.x-next.x)<.35&&Math.abs(previous.y-next.y)<.35&&
-            Math.abs(previous.size-next.size)<.35?previous:next);
+          dockedWheelGeometry.current=next;
+          const dock=dockedWheelRef.current;
+          if(dock){
+            // Constant 180-unit wheel; a single CSS transform applies the
+            // same camera scale and translation as the Pixi playmat.
+            const factor=next.size/180;
+            dock.style.transform=`translate3d(${next.x-90*factor}px,${next.y}px,0) scale(${factor})`;
+          }
           // Keep the LCD immediately below the playmat. Its LEFT edge
           // projects from the real playmat edge; its RIGHT edge meets the
           // leftmost point of the docked half-radial. Recalculate both using
@@ -1621,14 +1631,20 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           const display=fitActionScreenToWheel(
             projectedLeft.x,projectedRight.x,projected.x,next.size,
             screen.y,matScreenWidth/TCG_MAT_WIDTH);
-          setActionScreenGeometry(prev=>
-            Math.abs(prev.left-display.left)<.25&&
-            Math.abs(prev.y-display.y)<.25&&
-            Math.abs(prev.width-display.width)<.25&&
-            Math.abs(prev.heightScale-display.heightScale)<.001&&
-            prev.visible===display.visible?prev:display);
+          actionScreenLatest.current=display;
+          if(actionLcdRef.current){
+            const lcd=actionLcdRef.current;
+            lcd.style.left=display.left+'px';
+            lcd.style.top=display.y+'px';
+            lcd.style.width=(display.width/Math.max(.0001,display.heightScale))+'px';
+            lcd.style.transform=`translateY(-50%) scale(${display.heightScale})`;
+          }
+          setActionScreenVisible(previous=>previous===display.visible?previous:display.visible);
         }
 
+        // Do not wait for the throttled animation ticker to catch the 3D
+        // die geometry up with a mouse/touchpad camera move.
+        staticDice3D.current?.sync(true);
         const angle=-Math.PI/2+seatRef.current*Math.PI/6;
         const localChair=new Point(BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle),
           BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle));
@@ -3112,13 +3128,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         if(e.key==='Escape')setCoinEditing(null);
       }}/>}
 
-    {state.kind==='tcg'&&actionScreenGeometry.visible&&
-      <div className="sennet-action-lcd" style={{
-        left:actionScreenGeometry.left,top:actionScreenGeometry.y,
-        width:actionScreenGeometry.width/Math.max(.0001,actionScreenGeometry.heightScale),
-        transformOrigin:'left center',
-        transform:`translateY(-50%) scale(${actionScreenGeometry.heightScale})`
-      }} role="group" aria-label="Latest action with undo and redo"
+    {state.kind==='tcg'&&actionScreenVisible&&
+      <div ref={node=>{
+        actionLcdRef.current=node;
+        if(node){
+          const geometry=actionScreenLatest.current;
+          node.style.left=geometry.left+'px';
+          node.style.top=geometry.y+'px';
+          node.style.width=(geometry.width/Math.max(.0001,geometry.heightScale))+'px';
+          node.style.transform=`translateY(-50%) scale(${geometry.heightScale})`;
+        }
+      }} className="sennet-action-lcd" style={{transformOrigin:'left center'}}
+      role="group" aria-label="Latest action with undo and redo"
         onPointerDown={event=>event.stopPropagation()}>
         <button type="button" className="sennet-action-lcd-button"
           onClick={onUndo} disabled={!canUndo}
@@ -3205,8 +3226,17 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     </div>}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
+      <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
+        ref={node=>{
+          dockedWheelRef.current=wheelMode==='docked'?node:null;
+          if(node&&wheelMode==='docked'){
+            const geometry=dockedWheelGeometry.current;
+            const factor=geometry.size/180;
+            node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
+          }
+        }}>
       <CardRadialWheel
-        x={wheelMode==='docked'?dockGeometry.x:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?dockGeometry.y:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?dockGeometry.size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}
@@ -3219,8 +3249,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         }}
         onCancel={()=>{if(wheelMode==='hold')setRadialWheel(null);wheelPointer.current=null;}}
       />
-
-
+      </div>
     </div>}
     {gestureMenu&&(()=>{
       const item=state.objects.find(o=>o.id===gestureMenu.id);

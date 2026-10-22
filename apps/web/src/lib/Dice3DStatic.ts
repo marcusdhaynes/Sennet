@@ -181,7 +181,7 @@ export function createStaticDice3D(
   const sync=(force=false)=>{
     if(stopped)return;
     const now=performance.now();
-    if(!force&&now-lastFrame<28)return;
+    if(!force&&now-lastFrame<14)return;
     lastFrame=now;
     const rect=canvas.getBoundingClientRect();
     if(rect.width<=0||rect.height<=0)return;

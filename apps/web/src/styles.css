@@ -1846,3 +1846,16 @@ body>.reader-backdrop{
    Pixi's objects > buttons > mats > accessories > seat labels hierarchy. */
 .pixi-host>.sennet-coin-above-card{z-index:86}
 .pixi-host>.sennet-rolled-die-above-card{z-index:87}
+
+
+/* Synchronized Pixi/HTML camera attachment: no React layout interpolation. */
+.sennet-radial-camera-anchor{
+  position:absolute;left:0;top:0;width:180px;height:90px;
+  transform-origin:0 0;pointer-events:none;will-change:transform;
+}
+.sennet-radial-free-anchor{position:absolute;inset:0;pointer-events:none}
+.sennet-radial-camera-anchor .card-radial-wheel{
+  animation:none;transition:none!important;
+}
+.sennet-action-lcd{transition:none!important;will-change:transform,left,top}
+.pixi-host>.sennet-dice-source-count{z-index:90}
