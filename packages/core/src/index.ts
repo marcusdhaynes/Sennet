@@ -96,6 +96,7 @@ export interface PlaymatAppearance {
   spanningImageId:string;
   selectedSections:number[];
   snapMerged:boolean;
+  freePlacement:boolean;
   sideBoxStyle:'walnut'|'carved'|'maple'|'ebony'|'mahogany';
 }
 export const DEFAULT_PLAYMAT_SECTION_STYLE:PlaymatSectionStyle={
@@ -119,7 +120,7 @@ export function defaultPlaymatAppearance():PlaymatAppearance {
       }
     })),
     images:{},imageMode:'repeat',spanningImageId:'',selectedSections:Array.from({length:12},(_,i)=>i),
-    snapMerged:false,sideBoxStyle:'walnut'
+    snapMerged:false,freePlacement:false,sideBoxStyle:'walnut'
   };
 }
 /** Each client applies its stored appearance only to its own seat.
@@ -186,6 +187,7 @@ export function normalizePlaymatAppearance(value:unknown):PlaymatAppearance {
   const spanningImageId=typeof input.spanningImageId==='string'&&images[input.spanningImageId]
     ?input.spanningImageId:'';
   return {sections,images,imageMode,spanningImageId,selectedSections,snapMerged:input.snapMerged===true,
+    freePlacement:input.freePlacement===true,
     sideBoxStyle:['walnut','carved','maple','ebony','mahogany'].includes(String(input.sideBoxStyle))
       ?input.sideBoxStyle as PlaymatAppearance['sideBoxStyle']:'walnut'};
 }
@@ -934,6 +936,50 @@ export function tcgSnapPoint(x:number,y:number,merged:readonly number[]=[],snapM
   }
   return best;
 }
+/** Project a rotated card's entire footprint into playmat coordinates. */
+export function tcgCardZoneHalfExtents(cardScale=1,rotation=0):{x:number;y:number}{
+  const scale=Number.isFinite(cardScale)&&cardScale>0?cardScale:1;
+  const angle=(Number.isFinite(rotation)?rotation:0)*Math.PI/180;
+  const cos=Math.abs(Math.cos(angle)),sin=Math.abs(Math.sin(angle));
+  return {x:(TCG_MAT.cardWidth*cos+TCG_MAT.cardHeight*sin)*scale/2,
+    y:(TCG_MAT.cardHeight*cos+TCG_MAT.cardWidth*sin)*scale/2};
+}
+export interface TcgPlacementLocation extends TcgSnapLocation{freePlacement?:boolean}
+/** Shared deterministic resolver: free horizontal alignment in separate
+ * center PLAY/HAND pockets; free X/Y inside merged pockets. Clamp the
+ * ENTIRE card inside the nearest region, even when its center is just
+ * outside it. Side pockets and other players retain existing behavior. */
+export function tcgPlacementPoint(
+  x:number,y:number,merged:readonly number[]=[],snapMerged=false,
+  preferredSeat?:number,cardScale=1,freePlacement=false,cardRotation=0
+):TcgPlacementLocation|null{
+  if(!freePlacement||!Number.isInteger(preferredSeat)||
+    Number(preferredSeat)<0||Number(preferredSeat)>=SEATS)
+    return tcgSnapPoint(x,y,merged,snapMerged,preferredSeat,cardScale);
+  const seat=Number(preferredSeat),local=tcgMatLocal(x,y,seat);
+  if(!Number.isFinite(local.x)||!Number.isFinite(local.y))return null;
+  const ext=tcgCardZoneHalfExtents(cardScale,cardRotation);
+  let closest:TcgMatRegion|null=null,dist=Infinity;
+  for(const region of tcgMatRegions(seat,merged)){
+    const anchor=tcgMatLocal(region.x,region.y,seat);
+    const dx=Math.max(0,Math.abs(local.x-anchor.x)-region.width/2);
+    const dy=Math.max(0,Math.abs(local.y-anchor.y)-region.height/2);
+    const d=Math.hypot(dx,dy);
+    if(d<dist-1e-8){closest=region;dist=d;}
+  }
+  if(!closest||dist>Math.max(TCG_MAT.snapOutside,ext.x,ext.y))
+    return tcgSnapPoint(x,y,merged,snapMerged,preferredSeat,cardScale);
+  if(closest.column!==1)return tcgSnapPoint(x,y,merged,snapMerged,preferredSeat,cardScale);
+  const anchor=tcgMatLocal(closest.x,closest.y,seat);
+  const xMin=anchor.x-closest.width/2+ext.x,xMax=anchor.x+closest.width/2-ext.x;
+  const yMin=anchor.y-closest.height/2+ext.y,yMax=anchor.y+closest.height/2-ext.y;
+  const clampedX=xMin<=xMax?Math.max(xMin,Math.min(xMax,local.x)):anchor.x;
+  const clampedY=closest.row!==closest.lastRow&&yMin<=yMax
+    ?Math.max(yMin,Math.min(yMax,local.y)):anchor.y;
+  const point=tcgMatWorld(clampedX,clampedY,seat);
+  return {...closest,...point,slot:0,freePlacement:true};
+}
+
 /** Rotates the whole table so the viewer's seat sits on the bottom edge. */
 export function viewerTableRotation(seat:number):number {
   return Math.PI - ((((seat%SEATS)+SEATS)%SEATS)*Math.PI/6);
@@ -1379,14 +1425,15 @@ export function applyCommand(state: GameState, command: Command): GameState {
       // Only cards/decks/tiles use the playmat slot-magnet system.
       const snapEligible=state.kind==='tcg'&&
         (obj.kind==='card'||obj.kind==='deck'||obj.kind==='tile');
-      const snapped=snapEligible?tcgSnapPoint(x,y,state.centerMerges,p.snapMerged===true,
+      const snapped=snapEligible?tcgPlacementPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-          ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
+          ?Number(p.snapMergedSeat):undefined,obj.scale??1,p.freePlacement===true,obj.rotation):null;
       obj.x=snapped?snapped.x:x;
       obj.y=snapped?snapped.y:y;
       if(snapped) { obj.matSeat=snapped.seat;
         if(obj.kind==='card'||obj.kind==='deck')
-          applyPocketDrop([obj],x,y,snapped.seat);
+          applyPocketDrop([obj],snapped.freePlacement?snapped.x:x,
+            snapped.freePlacement?snapped.y:y,snapped.seat);
         message=`Placed ${obj.name} on seat ${snapped.seat+1}, row ${snapped.row+1}, column ${snapped.column+1}, position ${snapped.slot+1}`;
       } else {
         if(snapEligible)delete obj.matSeat;
@@ -1402,9 +1449,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const cards=cardStackMembers(state,obj.id);
       const requestedX=clamp(finite(p.x,obj.x),0,BOARD_W);
       const requestedY=clamp(finite(p.y,obj.y),0,BOARD_H);
-      const snapped=state.kind==='tcg'?tcgSnapPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true,
+      const snapped=state.kind==='tcg'?tcgPlacementPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-          ?Number(p.snapMergedSeat):undefined,obj.scale??1):null;
+          ?Number(p.snapMergedSeat):undefined,obj.scale??1,p.freePlacement===true,obj.rotation):null;
       const dx=(snapped?.x??requestedX)-obj.x;
       const dy=(snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
@@ -1420,7 +1467,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
       if(snapped){
         const placed=objects.filter(card=>ids.has(card.id));
         if(placed.length&&placed.every(card=>card.kind==='card'||card.kind==='deck'))
-          applyPocketDrop(placed,requestedX,requestedY,snapped.seat);
+          applyPocketDrop(placed,snapped.freePlacement?snapped.x:requestedX,
+            snapped.freePlacement?snapped.y:requestedY,snapped.seat);
       }
       message=`Moved stack of ${cards.length} cards`;
     }break;
@@ -1435,9 +1483,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const anchor=picked.find(card=>card.id===p.anchorId)!;
         const tx=clamp(Number(p.x),0,BOARD_W),ty=clamp(Number(p.y),0,BOARD_H);
         const snapped=(anchor.kind==='card'||anchor.kind==='deck'||anchor.kind==='tile')
-          ?tcgSnapPoint(tx,ty,state.centerMerges,p.snapMerged===true,
+          ?tcgPlacementPoint(tx,ty,state.centerMerges,p.snapMerged===true,
           Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
-            ?Number(p.snapMergedSeat):undefined,anchor.scale??1):null;
+            ?Number(p.snapMergedSeat):undefined,anchor.scale??1,p.freePlacement===true,anchor.rotation):null;
         // Clamp the shared translation against the whole selection's
         // bounding box, not each card individually. Otherwise a card
         // hitting a table edge could pull the group out of formation.
@@ -1455,7 +1503,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
           if(card.zone==='DECK'&&snapped)card.zone='TABLE';
         }
         if(snapped&&picked.every(card=>card.kind==='card'||card.kind==='deck'))
-          applyPocketDrop(picked,tx,ty,snapped.seat);
+          applyPocketDrop(picked,snapped.freePlacement?snapped.x:tx,
+            snapped.freePlacement?snapped.y:ty,snapped.seat);
       }
       if(action==='flip')for(const card of picked)card.faceUp=!card.faceUp;
       if(action==='reveal')for(const card of picked)card.faceUp=true;
