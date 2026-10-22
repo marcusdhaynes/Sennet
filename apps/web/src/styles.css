@@ -1966,3 +1966,410 @@ body>.reader-backdrop{
  .sennet-receipt-actions button{padding:8px}
 }
 
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   THE OPEN SENNET VOLUMES — genuinely facing folios, not a flat dialog.
+   The paper, rounded fore edges, sewn gutter, page stack and cloth boards
+   are separate visual layers. All existing book controls remain native.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.reader.reader-open-book.unified-tome{
+  --folio-paper:#f3e5c8;
+  --folio-ink:#443324;
+  --folio-muted:#806c50;
+  --folio-gold:#b39a6e;
+  --folio-cloth:#203a33;
+  --folio-edge:#b79e79;
+  position:relative;
+  box-sizing:border-box;
+  display:block;
+  width:min(1120px,calc(100vw - 30px));
+  height:min(800px,calc(100dvh - 64px));
+  max-height:calc(100dvh - 64px);
+  overflow:visible;
+  border:0!important;
+  border-radius:0!important;
+  color:var(--folio-ink);
+  background:transparent!important;
+  box-shadow:none!important;
+  isolation:isolate;
+  font-family:Georgia,'Iowan Old Style','Palatino Linotype',serif;
+  animation:openBook .28s cubic-bezier(.18,.84,.2,1) both;
+}
+.reader-open-book.tome-dragon{--folio-cloth:#164657;--folio-edge:#8daaae;--folio-gold:#b1a079}
+.reader-open-book.tome-journal{--folio-cloth:#623039;--folio-edge:#ad897f;--folio-gold:#bd977b}
+.reader-open-book.tome-arcane{--folio-cloth:#47402d;--folio-edge:#c2a979;--folio-gold:#c4a36d}
+.reader-open-book.tome-strapped{--folio-cloth:#493627;--folio-edge:#a18c74;--folio-gold:#baa07e}
+.reader-open-book .reader-cover-board{
+  position:absolute;inset:20px 0 4px;z-index:0;pointer-events:none;
+  border:2px solid #8e754e;border-radius:18px 22px 20px 22px;
+  background:
+    radial-gradient(ellipse at 11% 45%,#d6c18d17,transparent 42%),
+    repeating-linear-gradient(83deg,#ffffff04 0 1px,#0000 1px 5px),
+    linear-gradient(90deg,#0c211a,var(--folio-cloth) 8% 48%,#0b231c 50%,
+      var(--folio-cloth) 54% 92%,#091e18);
+  box-shadow:0 22px 14px -10px #0008,0 39px 65px #000b,
+    0 0 0 3px #0d211c,0 0 0 5px #79603e,
+    inset 0 0 0 4px #091916,inset 0 0 0 5px #c4a36f8c,
+    inset 0 10px 18px #0008,inset 0 -8px 11px #000b;
+}
+.reader-open-book .reader-cover-board::before{
+  content:"";position:absolute;inset:5px 49.4%;border-radius:14px;
+  background:linear-gradient(90deg,#07120f,#94774d77 40%,#100d0c);
+  box-shadow:0 0 15px #000b,0 0 0 1px #c09b5f5a;
+}
+.reader-open-book .reader-page-stack{
+  position:absolute;inset:39px 13px 13px;z-index:1;pointer-events:none;
+  border:1px solid #b39a72;border-radius:16px 23px 19px 18px;
+  background:linear-gradient(90deg,#b4a07d,#e7d6b4 2%,#fff0d0 47%,
+    #94744e 49.5%,#8b6f4b 50%,#fff4d9 52%,#e3ceac 98%,#a28b69);
+  box-shadow:3px 3px 0 #b09b76,4px 5px 0 #d3bc93,
+    5px 7px 0 #9d8a70,8px 10px 12px #0009;
+}
+.reader-open-book .reader-page-stack::after{
+  content:"";position:absolute;inset:0 -2px -6px;
+  border-radius:inherit;pointer-events:none;
+  background:repeating-linear-gradient(180deg,#6b564735 0 1px,
+    transparent 1px 3px);
+  opacity:.19;clip-path:polygon(0 94%,100% 94%,100% 100%,0 100%);
+}
+/* Real tabbed bookmarks poke above the paper and cloth boards. */
+.reader-open-book .unified-tome-tabs{
+  position:absolute;z-index:8;top:0;left:16%;right:16%;
+  display:flex;justify-content:center;gap:5px;align-items:flex-end;
+  padding:0 8px;height:48px;background:none;pointer-events:auto;
+}
+.reader-open-book .unified-tome-tabs button{
+  position:relative;flex:1;max-width:195px;min-width:0;height:37px;
+  border:1px solid #977950;border-bottom:0;
+  border-radius:8px 8px 0 0;padding:8px 10px 9px;
+  background:linear-gradient(#53402c,#29251e 65%,#38291e);
+  box-shadow:inset 0 1px #c2a16b88,2px -3px 9px #0007;
+  color:#f1deb7;font:700 12px/1.2 Georgia,serif;
+  letter-spacing:.05em;cursor:pointer;transform:translateY(0);
+}
+.reader-open-book .unified-tome-tabs button.active{
+  height:42px;color:#37271b;border-color:#c5a77a;
+  background:linear-gradient(#faefdb,#e2cda8 72%,#eadbbd);
+  text-shadow:0 1px #fff7e6;
+  box-shadow:inset 0 2px #fff9e7,1px -2px 8px #0003;
+}
+.reader-open-book .unified-tome-tabs button:not(.active):hover{
+  background:#6f5134;color:#fff2d2;
+}
+.reader-open-book .unified-tome-tabs button:focus-visible{
+  outline:2px solid #e6c18c;outline-offset:2px;
+}
+.reader-open-book .reader-spread{
+  position:absolute;z-index:3;
+  inset:46px 21px 27px;
+  display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);
+  min-height:0;filter:drop-shadow(0 3px 3px #35200c66);
+}
+.reader-open-book .reader-page{
+  min-width:0;min-height:0;position:relative;isolation:isolate;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  background:var(--folio-paper);
+  border:1px solid #d5bf98;
+  box-shadow:inset 0 0 18px #c2aa784f;
+}
+.reader-open-book .reader-page::before{
+  content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 40% 30%,#fffdf0a8 0%,transparent 72%),
+    repeating-linear-gradient(0deg,#7b573008 0 1px,transparent 1px 4px),
+    repeating-linear-gradient(93deg,#795b2c05 0 1px,transparent 1px 7px);
+  opacity:.85;
+}
+.reader-open-book .reader-page::after{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+}
+.reader-open-book .reader-page-left{
+  border-radius:16px 2px 3px 12px;
+  background:linear-gradient(90deg,#d4bb95 0%,#f5e8ca 3%,#fbf0d6 34%,
+    #f6e9ce 77%,#e2cda8 94%,#bda078 100%);
+  transform-origin:100% 50%;
+}
+.reader-open-book .reader-page-left::after{
+  background:linear-gradient(90deg,#70502d25,transparent 9%,transparent 64%,
+    #8d63452b 85%,#301b1059 99%);
+  border-radius:inherit;
+}
+.reader-open-book .reader-page-right{
+  border-radius:2px 17px 13px 3px;
+  background:linear-gradient(90deg,#aa865f 0%,#e6d4b3 5%,#f8ecd2 19%,
+    #fdf2d9 67%,#f6e7c8 96%,#d0ad7d 100%);
+  transform-origin:0 50%;
+}
+.reader-open-book .reader-page-right::after{
+  background:linear-gradient(90deg,#35211379 0%,#74513237 7%,
+    transparent 23%,transparent 92%,#66462324 100%);
+}
+.reader-open-book .reader-spine-gutter{
+  position:relative;z-index:4;min-height:0;pointer-events:none;
+  margin:0 -5px;
+  background:linear-gradient(90deg,
+    #62482f2b,#2a170d88 16%,#24140abb 47%,#29180bb8 54%,
+    #9f845c61 84%,#e1c9a75e);
+  box-shadow:-6px 0 10px #3b1f1838,7px 0 12px #351e173b;
+}
+.reader-open-book .reader-spine-gutter::before{
+  content:"";position:absolute;inset:13px 7px;
+  border-inline:1px solid #f3e5c14f;
+  background:repeating-linear-gradient(180deg,#422b1d67 0 1px,
+    transparent 1px 17px,#e5c49364 17px 19px,transparent 19px 26px);
+  box-shadow:inset 2px 0 4px #0005;
+  opacity:.65;
+}
+/* Every accessible control stays above the paper texture and shaded edges. */
+.reader-open-book .reader-page > :not(.reader-spine-gutter){
+  position:relative;z-index:3;
+}
+.reader-open-book .reader-page-topline,.reader-open-book .reader-right-header{
+  min-height:54px;flex:none;display:flex;justify-content:space-between;
+  align-items:center;gap:10px;
+  border-bottom:1px solid #ad936a52;color:var(--folio-muted);
+  padding:13px clamp(16px,3vw,35px) 9px;
+  font:700 10px/1.3 Georgia,serif;letter-spacing:.16em;
+}
+.reader-open-book .reader-right-header{
+  padding-left:clamp(21px,3vw,42px);padding-right:clamp(13px,2.8vw,27px);
+}
+.reader-open-book .reader-header{
+  flex:none;gap:14px;padding:clamp(17px,2.3vw,28px) clamp(17px,3vw,38px) 10px;
+  border:0;background:none;
+}
+.reader-open-book .reader-header h1{
+  font-size:clamp(36px,5.2vw,64px);letter-spacing:-.025em;
+  color:#3f3022;text-shadow:0 1px #fff5dc;
+}
+.reader-open-book .reader-mark{
+  width:43px;height:51px;flex:none;border:1px solid #957a4d;
+  border-radius:3px;background:
+    radial-gradient(circle at 30% 15%,#6782707d,transparent 55%),
+    linear-gradient(115deg,#1d3b31,#0f2821);
+  box-shadow:1px 2px 0 #b39b70,3px 3px 6px #5c44234d,
+    inset 0 0 0 3px #c9ad7463;
+}
+.reader-open-book .reader-eyebrow{font-size:9px;letter-spacing:1.8px}
+.reader-open-book .reader-left-content{
+  position:relative;z-index:3;flex:1;min-height:0;
+  padding:5px clamp(22px,3.7vw,46px) 16px;
+  overflow-y:auto;scrollbar-width:thin;scrollbar-color:#baa27a transparent;
+}
+.reader-open-book .reader-engraving{
+  display:flex;align-items:center;justify-content:center;gap:17px;
+  font-size:33px;line-height:1;color:#a48758;margin:10px 0 16px;
+}
+.reader-open-book .reader-engraving i{
+  display:block;width:min(110px,25%);height:1px;
+  background:linear-gradient(90deg,transparent,#947b52,transparent);
+}
+.reader-open-book .reader-left-kicker{
+  text-transform:uppercase;letter-spacing:.20em;font-weight:700!important;
+  font-size:10px!important;text-align:center;color:#876c48!important;
+  margin-bottom:12px!important;
+}
+.reader-open-book .reader-lead{
+  font:italic 500 clamp(20px,2.45vw,29px)/1.3 'Cormorant Garamond',Georgia,serif;
+  text-align:center;color:#53402d;margin:0 0 21px;
+  text-wrap:balance;
+}
+.reader-open-book .reader-printed-rule{
+  display:flex;justify-content:center;align-items:center;gap:8px;
+  margin:9px 0 22px;color:#a58b61;font-size:12px;
+}
+.reader-open-book .reader-printed-rule::before,
+.reader-open-book .reader-printed-rule::after{
+  content:"";height:1px;width:27%;
+  background:linear-gradient(90deg,transparent,#aa8e61);
+}
+.reader-open-book .reader-printed-rule::after{
+  transform:rotate(180deg);
+}
+.reader-open-book .reader-chapter-index h2{
+  text-align:left;margin:0 0 10px;
+  padding-bottom:7px;border-bottom:1px solid #b79a7457;
+  color:#493a28;font:600 27px/1.1 'Cormorant Garamond',Georgia,serif;
+}
+.reader-open-book .reader-chapter-index>button{
+  display:flex;align-items:baseline;gap:12px;
+  width:100%;padding:7px 0;border:0;text-align:left;
+  background:transparent;color:#493825;cursor:pointer;
+  font:600 14px/1.2 'Cormorant Garamond',Georgia,serif;
+}
+.reader-open-book .reader-chapter-index>button>span:first-child{
+  width:21px;flex:none;color:#957750;font:700 10px/1.4 Georgia,serif;
+}
+.reader-open-book .reader-chapter-index>button:hover,
+.reader-open-book .reader-chapter-index>button:focus-visible{color:#16704f}
+.reader-open-book .reader-index-dots{
+  align-self:baseline;flex:1;height:1px;min-width:10px;
+  background:repeating-linear-gradient(90deg,#b5a080 0 1px,transparent 1px 5px);
+}
+.reader-open-book .reader-volume-navigation .book-tabs{
+  display:flex;flex-direction:column;gap:2px;
+  margin:0;padding:0;border:0;flex-wrap:nowrap;
+}
+.reader-open-book .reader-volume-navigation .book-tabs button{
+  display:block;text-align:left;flex:none;width:100%;min-width:0;
+  padding:10px 10px 10px 23px;border:0;border-bottom:1px solid #b69c7952;
+  border-radius:0;background:transparent;color:#564734;
+  font:600 clamp(14px,1.8vw,18px)/1.3 'Cormorant Garamond',Georgia,serif;
+  transition:background .15s,color .15s;
+}
+.reader-open-book .reader-volume-navigation .book-tabs button::before{
+  content:"✦";display:inline-block;width:0;position:relative;left:-17px;
+  opacity:0;color:#a27e46;transition:opacity .15s;
+}
+.reader-open-book .reader-volume-navigation .book-tabs button.current,
+.reader-open-book .reader-volume-navigation .book-tabs button:hover{
+  color:#1e4b3b;background:#c7ae7a26;
+}
+.reader-open-book .reader-volume-navigation .book-tabs button.current::before{
+  opacity:1;
+}
+.reader-open-book .reader-seal{
+  margin:27px auto 8px;display:flex;justify-content:center;align-items:center;
+  gap:15px;color:#8c744f;opacity:.65;
+}
+.reader-open-book .reader-seal strong{
+  display:grid;place-items:center;width:43px;height:43px;
+  border:2px double #a18a61;border-radius:50%;
+  font:600 26px/1 'Cormorant Garamond',Georgia,serif;
+  box-shadow:inset 0 0 0 3px #bda47a36;
+}
+.reader-open-book .reader-page-number,
+.reader-open-book .reader-footer{
+  min-height:36px;flex:none;display:flex;align-items:center;
+  justify-content:space-between;gap:10px;
+  border:0;border-top:1px solid #a4886359;
+  padding:8px clamp(17px,3.1vw,34px);
+  color:#816c4d;font:700 9px/1.2 Georgia,serif;letter-spacing:.11em;
+  background:transparent;
+}
+.reader-open-book .reader-content{
+  position:relative;z-index:3;flex:1;min-height:0;
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:19px clamp(19px,3.25vw,42px) 28px;
+  background:none;scrollbar-width:thin;scrollbar-color:#bda17a transparent;
+}
+.reader-open-book .reader-content::-webkit-scrollbar,
+.reader-open-book .reader-left-content::-webkit-scrollbar{width:7px}
+.reader-open-book .reader-content::-webkit-scrollbar-thumb,
+.reader-open-book .reader-left-content::-webkit-scrollbar-thumb{
+  background:#b99b706b;border:2px solid transparent;background-clip:padding-box;
+  border-radius:10px;
+}
+.reader-open-book .reader-close{
+  width:31px;height:31px;margin:0;flex:none;
+  border:1px solid #ac8e645e;background:#ebdcbb66;
+  border-radius:50%;color:#675039;transition:background .15s;
+}
+.reader-open-book .reader-close:hover{background:#e2cb9e}
+.reader-open-book .reader .intro,.reader-open-book .intro{
+  font:italic 500 24px/1.3 'Cormorant Garamond',Georgia,serif;
+  margin:2px 0 18px;color:#4f3c29;
+}
+.reader-open-book .guide-grid{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:8px;
+}
+.reader-open-book .guide-grid article{
+  scroll-margin-top:7px;
+  border:0;border-bottom:1px solid #b6a0804b;
+  border-radius:0;background:transparent;padding:11px 1px 14px;
+}
+.reader-open-book .guide-grid article>span{
+  float:left;min-width:32px;font:700 11px/1.8 Georgia,serif;
+  color:#997748;margin:0;
+}
+.reader-open-book .guide-grid article h3{
+  font-size:23px;margin:0 0 2px;color:#493524;
+}
+.reader-open-book .guide-grid article p{
+  margin:0;font-size:12px;line-height:1.67;color:#5f4e3b;
+}
+.reader-open-book .reader-block,.reader-open-book .tool-section{
+  margin-top:10px;padding:15px 0 10px;border-top:1px solid #bba27d85;
+}
+.reader-open-book .reader-block h3,.reader-open-book .tool-section h3{
+  color:#433121;font-size:26px;
+}
+.reader-open-book .reader-heading{margin:0 0 16px}
+.reader-open-book .reader-heading h2{font-size:31px}
+.reader-open-book .game-choices{grid-template-columns:minmax(0,1fr)}
+.reader-open-book .game-choice,
+.reader-open-book .entry-list button{
+  border-radius:2px;background:#fff8e527;
+  border:1px solid #b99e775e;box-shadow:inset 0 1px #fff8e8a8;
+}
+.reader-open-book .game-choice:hover,
+.reader-open-book .entry-list button:hover{
+  background:#e5d3aa71;border-color:#a38963;
+}
+.reader-open-book .reader-block input,
+.reader-open-book .reader-block select,
+.reader-open-book .reader-block textarea,
+.reader-open-book .reader-details input,
+.reader-open-book .reader-details textarea,
+.reader-open-book .field-row input{
+  background:#fff8e7bb;border-color:#ac94746b;
+  border-radius:2px;box-shadow:inset 0 1px 2px #6b482011;
+}
+.reader-open-book :is(button,input,select,textarea,summary):focus-visible{
+  outline:2px solid #446f58;outline-offset:2px;
+}
+@media(max-width:700px){
+  .reader.reader-open-book.unified-tome{
+    width:calc(100vw - 13px);height:calc(100dvh - 44px);
+    max-height:calc(100dvh - 44px);
+  }
+  .reader-open-book .reader-cover-board{inset:14px 0 3px}
+  .reader-open-book .reader-page-stack{inset:34px 9px 8px}
+  .reader-open-book .reader-spread{
+    inset:38px 12px 19px;display:grid;
+    grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(144px,auto) 10px minmax(0,1fr);
+  }
+  .reader-open-book .reader-page-left{
+    border-radius:12px 12px 1px 1px;min-height:0;
+  }
+  .reader-open-book .reader-page-right{border-radius:1px 1px 12px 12px}
+  .reader-open-book .reader-spine-gutter{
+    margin:-3px 0;background:linear-gradient(#3824174d,#2b180cbc 50%,#d8b78666);
+    box-shadow:0 -3px 9px #36200e44,0 4px 8px #36200e44;
+  }
+  .reader-open-book .reader-spine-gutter::before{inset:4px 12px}
+  .reader-open-book .reader-page-topline{min-height:26px;padding:5px 15px;font-size:8px}
+  .reader-open-book .reader-header{padding:8px 16px 2px;gap:9px}
+  .reader-open-book .reader-header h1{font-size:33px}
+  .reader-open-book .reader-mark{width:28px;height:32px;font-size:21px}
+  .reader-open-book .reader-left-content{padding:2px 16px 8px;overflow:auto}
+  .reader-open-book .reader-left-kicker{font-size:8px!important;margin:2px 0!important}
+  .reader-open-book .reader-engraving,.reader-open-book .reader-lead,
+  .reader-open-book .reader-printed-rule,.reader-open-book .reader-seal{display:none}
+  .reader-open-book .reader-chapter-index h2{font-size:18px;margin:5px 0}
+  .reader-open-book .reader-chapter-index>button{
+    display:inline-flex;width:auto;gap:5px;padding:6px 10px 6px 0;
+    font-size:12px;
+  }
+  .reader-open-book .reader-index-dots{display:none}
+  .reader-open-book .reader-volume-navigation .book-tabs{
+    display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:4px;
+    padding-bottom:5px;
+  }
+  .reader-open-book .reader-volume-navigation .book-tabs button{
+    flex:none;width:auto;white-space:nowrap;font-size:13px;
+    padding:7px 9px;border:1px solid #bda17f6c;
+  }
+  .reader-open-book .reader-volume-navigation .book-tabs button::before{display:none}
+  .reader-open-book .reader-page-number{display:none}
+  .reader-open-book .reader-right-header{min-height:40px;padding:5px 15px}
+  .reader-open-book .reader-content{padding:14px 17px 26px}
+  .reader-open-book .reader-footer{min-height:29px;padding:7px 15px;font-size:8px}
+  .reader-open-book .unified-tome-tabs{left:5%;right:5%;height:38px}
+  .reader-open-book .unified-tome-tabs button{height:31px;padding:5px;font-size:11px}
+  .reader-open-book .unified-tome-tabs button.active{height:35px}
+}
+@media(prefers-reduced-motion:reduce){
+  .reader.reader-open-book.unified-tome{animation:none}
+}
