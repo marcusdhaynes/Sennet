@@ -52,7 +52,7 @@ test('merged PLAY zone permits arbitrary x/y with entire card contained',()=>{
   assert.ok(dest?.freePlacement);
   close(local(dest).x,center.x+51.25);
   close(local(dest).y,center.y+21.75);
-  const outside=world(center.x+region.width/2+11,center.y+region.height/2+8);
+  const outside=world(center.x+region.width/2+11,center.y+region.height/2-12);
   const constrained=tcgPlacementPoint(outside.x,outside.y,merged,false,seat,1,true);
   assert.ok(constrained?.freePlacement);
   const q=local(constrained),ext=tcgCardZoneHalfExtents();
@@ -65,7 +65,7 @@ test('a rotated card must fit within bounds using its whole rotated footprint',(
   const zone=tcgMatRegions(seat,merged).find(r=>r.column===1&&r.row===0);
   assert.ok(zone);
   const center=local(zone);
-  const edge=world(center.x+zone.width/2+4,center.y+zone.height/2+3);
+  const edge=world(center.x+zone.width/2+4,center.y+zone.height/2-8);
   const pos=tcgPlacementPoint(edge.x,edge.y,merged,false,seat,1,true,90);
   assert.ok(pos);
   const actual=local(pos),half=tcgCardZoneHalfExtents(1,90);

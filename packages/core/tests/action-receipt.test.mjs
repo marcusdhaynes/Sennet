@@ -12,7 +12,7 @@ test('receipt date and exact 12-hour time use YYYYMMDD and HHMMSSTT',()=>{
   assert.equal(receiptTimestamp(new Date(2026,9,22,23,59,59).getTime()).time,'115959PM');
 });
 
-test('move receipt shows the exact old and new coordinates',()=>{
+test('move Action Log cites the old and new playmat zones and snap positions',()=>{
   const initial=createGame('tcg');
   const target=initial.objects.find(x=>x.id==='hero-a');
   assert.ok(target);
@@ -23,11 +23,10 @@ test('move receipt shows the exact old and new coordinates',()=>{
   const row=receiptForCommand(event,initial,moved);
   assert.equal(row.type,'Move');
   assert.match(row.location, / → /);
-  assert.ok(row.location.includes(Math.round(target.x)+','+Math.round(target.y)));
-  const committed=moved.objects.find(x=>x.id===target.id);
-  assert.ok(committed);
-  assert.ok(row.location.includes(Math.round(committed.x)+','+Math.round(committed.y)),
-    'the receipt uses the actual grid-snapped destination, not pointer coords');
+  assert.match(row.location,/P1 · PLAY 01/);
+  assert.match(row.location,/\\([0-9.]+, [0-9.]+\\)/);
+  assert.doesNotMatch(row.location,/P1 · [0-9]{3,4},[0-9]{3,4}/,
+    'locations must use zone slots rather than absolute table pixels');
   assert.ok(row.description.length>0);
   assert.equal(row.commandId,event.id);
 });
