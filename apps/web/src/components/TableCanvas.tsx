@@ -2961,7 +2961,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       }
     };
     const onCardMenu=(target:EventTarget|null)=>target instanceof Element&&
-      !!target.closest('.tcg-card-action-menu, .sennet-coin-radial-layer, .sennet-dice-selection, .sennet-dice-engine-error, .sennet-action-lcd');
+      !!target.closest('.tcg-card-action-menu, .sennet-coin-radial-layer, .sennet-dice-selection, .sennet-dice-engine-error, .sennet-action-lcd, .card-radial-wheel, .sennet-radial-overlay');
     const selectOpponent=(event:PointerEvent)=>{
       if(onCardMenu(event.target)||viewRef.current.kind!=='targeting'||event.button!==0)return;
       const current=session.current;

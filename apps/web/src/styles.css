@@ -1859,3 +1859,18 @@ body>.reader-backdrop{
 }
 .sennet-action-lcd{transition:none!important;will-change:transform,left,top}
 .pixi-host>.sennet-dice-source-count{z-index:90}
+
+
+/* Hold-to-collapse must leave a visible, complete gold circle (or semicircle)
+   and cannot turn the center into a camera-drag handle after the hold. */
+.card-radial-wheel.is-collapsed .sennet-radial-center>circle{
+  stroke:#ffe4a1!important;stroke-width:8px!important;
+  filter:drop-shadow(0 0 5px #efc371aa);
+}
+.card-radial-wheel.is-half.is-collapsed{
+  clip-path:circle(33% at 50% 0%);
+}
+.card-radial-wheel .sennet-radial-center{cursor:pointer!important}
+.card-radial-wheel .sennet-radial-center:active{cursor:pointer!important}
+/* The first white coin's number field must render ABOVE its DOM coin face. */
+.pixi-host>.sennet-coin-editor{z-index:145}

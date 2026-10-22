@@ -122,16 +122,21 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     </g>;
    }))}
    </g>
-   <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Drag or hold to expand wheel':'Drag or hold to collapse wheel'}
+   <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Hold to expand the action radial':'Hold to collapse the action radial'}
      onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
        e.preventDefault();
-       centerTimer.current=window.setTimeout(()=>{setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;},450);
-       let moved=false;
+       // After a stationary hold collapses the wheel, movement of the
+       // same held pointer must NOT start a drag or pan the table.
+       let moved=false,longHeld=false;
+       centerTimer.current=window.setTimeout(()=>{
+         longHeld=true;setCollapsed(v=>!v);clearHighlight();centerTimer.current=null;
+       },450);
        const bound=(value:number,min:number,max:number)=>Math.max(min,Math.min(max,value));
        const bounds=()=>({x:Math.max(size/2,window.innerWidth-size/2),y:Math.max(size/2,window.innerHeight-size/2)});
        const move=(ev:PointerEvent)=>{
          if(ev.pointerId!==e.pointerId)return;
          ev.stopImmediatePropagation();ev.preventDefault();
+         if(longHeld)return; // Collapse consumes the pointer until release.
          const dx=ev.clientX-startX,dy=ev.clientY-startY;
          if(Math.hypot(dx,dy)>6)moved=true;
          if(moved){
@@ -151,7 +156,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
          if(ev.pointerId!==e.pointerId)return;
          ev.stopImmediatePropagation();ev.preventDefault();
          clearCenterTimer();cleanup();
-         if(docked&&!half&&moved){
+         if(!longHeld&&docked&&!half&&moved){
            const max=bounds();
            const position={x:bound(x+ev.clientX-startX,size/2,max.x),y:bound(y+ev.clientY-startY,size/2,max.y)};
            const home={x:bound(window.innerWidth-88,size/2,max.x),y:bound(window.innerHeight-88,size/2,max.y)};
@@ -166,7 +171,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
        window.addEventListener('pointercancel',finish,{capture:true,passive:false});
      }}
      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
-   <circle cx="200" cy="200" r="64" fill="#1c142c" stroke={collapsed?"#f2d7a3":"#baa2d2"} strokeWidth={collapsed?5:2}/>
+   <circle cx="200" cy="200" r="64" fill="#1c142c" stroke={collapsed?"#ffe3a0":"#baa2d2"} strokeWidth={collapsed?8:2}/>
    <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800" fontSize={half?21:22} textAnchor="middle">{count} Selected</text>
    </g>
   </svg>
