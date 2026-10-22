@@ -29,6 +29,7 @@ const coinSector=(index:number)=>{
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
+import {roll3DDice} from '../lib/Dice3D';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
@@ -1283,9 +1284,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const selectedRef=useRef(selected);selectedRef.current=selected;
   const mount=useRef<HTMLDivElement>(null);
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
-  const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const eyeHitTarget=useRef<Container|null>(null);
-  const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
@@ -1555,7 +1554,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     setDice3DError(null);dice3DActive.current=true;
     // Independent 3D viewport: no WebGL physics/rendering overhead while
     // playing cards or editing Sennet's 2D tabletop.
-    import('../lib/Dice3D').then(({roll3DDice})=>{
+    Promise.resolve().then(()=>{
       if(session.current?.app!==app){dice3DActive.current=false;return;}
       try{
         const beforePaint=staticDice3D.current?.getRenderedRevision()??0;
@@ -1634,7 +1633,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     };
     dice3DActive.current=true;setDice3DError(null);
     // Hide the old mesh only once airborne physics is initialized.
-    import('../lib/Dice3D').then(({roll3DDice})=>{
+    Promise.resolve().then(()=>{
       if(session.current?.app!==app){dice3DActive.current=false;return;}
       try{
         visual.visible=false;
@@ -1735,14 +1734,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           // accessory. Panning/zooming/1v1/Castle only changes world objects,
           // not its position, diameter, or hit targets.
           const next=fixedRadialDock(w,h);
-          dockedWheelGeometry.current=next;
-          const dock=dockedWheelRef.current;
-          if(dock){
-            // Wheel size is fixed in screen pixels. Only exceptionally
-            // small viewports shrink it to keep every expanded action visible.
-            const factor=next.size/180;
-            dock.style.transform=`translate3d(${next.x-90*factor}px,${next.y}px,0) scale(${factor})`;
-          }
           // LCD remains attached to its playmat border. Its screen-right
           // edge does not control or resize the fixed action wheel.
           const parent=duelLayers.current?.get(seatRef.current)??board;
@@ -3419,17 +3410,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     </div>}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
-      <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
-        ref={node=>{
-          dockedWheelRef.current=wheelMode==='docked'?node:null;
-          if(node&&wheelMode==='docked'){
-            const geometry=dockedWheelGeometry.current;
-            const factor=geometry.size/180;
-            node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
-          }
-        }}>
+      <div className={wheelMode==='docked'?'sennet-radial-fixed-anchor':'sennet-radial-free-anchor'}
+        style={wheelMode==='docked'?{
+          width:fixedRadialDock(viewport.width,viewport.height).size,
+          height:fixedRadialDock(viewport.width,viewport.height).size/2
+        }:undefined}>
       <CardRadialWheel
-        x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?fixedRadialDock(viewport.width,viewport.height).size/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?fixedRadialDock(viewport.width,viewport.height).size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}

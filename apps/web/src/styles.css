@@ -1965,3 +1965,13 @@ body>.reader-backdrop{
  .sennet-receipt-table{font-size:10px}
  .sennet-receipt-actions button{padding:8px}
 }
+
+/* Fixed-screen radial: no camera transform may resize or shift this HUD. */
+.pixi-host>.sennet-radial-overlay>.sennet-radial-fixed-anchor{
+  position:absolute!important;right:14px!important;bottom:14px!important;
+  top:auto!important;left:auto!important;transform:none!important;
+  pointer-events:none;
+}
+.sennet-radial-fixed-anchor .card-radial-wheel{
+  transition:none!important;animation:none!important;
+}
