@@ -52,7 +52,7 @@ export function createStaticDice3D(
   renderer.setClearColor(0,0);
   renderer.domElement.className='sennet-static-dice-3d';
   renderer.domElement.style.cssText='position:absolute;inset:0;width:100%;height:100%;'+
-    'pointer-events:none;z-index:9;display:block';
+    'pointer-events:none;z-index:88;display:block';
   host.appendChild(renderer.domElement);
   const scene=new THREE.Scene();
   installDiceLighting(scene);

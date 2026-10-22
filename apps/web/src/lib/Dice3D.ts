@@ -63,7 +63,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const canvas=renderer.domElement;
   canvas.className='sennet-dice-3d-layer';canvas.style.cssText=
     'position:absolute;left:0;top:0;width:100%;height:100%;'+
-    'pointer-events:none;z-index:12;display:block';
+    'pointer-events:none;z-index:89;display:block';
   host.appendChild(canvas);
   const scene=new THREE.Scene();
   const camera=new THREE.OrthographicCamera(-w/2,w/2,h/2,-h/2,.1,1600);

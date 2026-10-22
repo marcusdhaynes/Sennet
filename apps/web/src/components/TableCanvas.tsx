@@ -2077,7 +2077,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           img.draggable=false;img.decoding='async';img.loading='eager';
           img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
             'display:none;pointer-events:none;user-select:none;object-fit:fill;'+
-            'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:5';
+            'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:85';
           img.onload=()=>{if(img.isConnected)img.style.display='block';};
           img.onerror=()=>{img.style.display='none';};
           imagesRoot.appendChild(img);

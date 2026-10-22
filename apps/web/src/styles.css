@@ -1840,3 +1840,9 @@ body>.reader-backdrop{
 .pixi-host>.sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
   background:linear-gradient(165deg,#25493e,#172e29);
 }
+
+/* Object visuals are above HTML accessories (LCD and card-action radial).
+   Browser image artwork, physical coin faces and WebGL dice must agree with
+   Pixi's objects > buttons > mats > accessories > seat labels hierarchy. */
+.pixi-host>.sennet-coin-above-card{z-index:86}
+.pixi-host>.sennet-rolled-die-above-card{z-index:87}
