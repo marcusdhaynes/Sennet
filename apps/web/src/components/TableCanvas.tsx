@@ -1483,6 +1483,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   throwDiceNow.current=(pressed,dx,dy,elapsed)=>{
     const current=session.current,host=mount.current;
     if(!current||!host||currentState.current.kind!=='tcg'||dice3DActive.current)return;
+    // The last roll may still be showing its final static/3D handoff.
+    // Close that old renderer before allocating a new WebGL context.
+    dice3DStop.current?.();dice3DStop.current=null;
     const selected={...diceQuantitiesRef.current};
     if(!selected[pressed])selected[pressed]=1;
     const types=DICE_TYPES.filter(sides=>(selected[sides]??0)>0);
@@ -1528,7 +1531,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     let thrown=false;
     const commitResults=(results:RollFallbackResult[])=>{
       if(thrown)return;thrown=true;
-      dice3DActive.current=false;dice3DStop.current=null;
+      dice3DActive.current=false;
+      // Retain the stop handler through the short 3D→static paint handoff.
+      // The next roll may explicitly release it, preventing GPU overlap.
       if(session.current?.app!==app)return;
       const parent=duelLayers.current?.get(seatRef.current)??board;
       const throws=results.map(result=>{
@@ -1573,6 +1578,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const die=currentState.current.objects.find(o=>o.id===id);
     const visual=visuals.current.get(id);
     if(!current||!host||!die?.throwDice||!visual||die.locked)return;
+    dice3DStop.current?.();dice3DStop.current=null;
     const {app,board}=current,rect=app.canvas.getBoundingClientRect();
     if(rect.width<=0||rect.height<=0)return;
     const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
@@ -1608,7 +1614,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     let rerollCommitted=false;
     const commitReroll=(results:RollFallbackResult[])=>{
       if(rerollCommitted)return;rerollCommitted=true;
-      dice3DActive.current=false;dice3DStop.current=null;
+      dice3DActive.current=false;
+      // Retain the stop handler through the short 3D→static paint handoff.
+      // The next roll may explicitly release it, preventing GPU overlap.
       if(session.current?.app!==app)return;
       const result=results[0];if(!result)return;
       dieShownAt.current.set(id,{fingerprint:'reroll-in-progress',at:Date.now()});
