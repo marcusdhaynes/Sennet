@@ -43,7 +43,8 @@ const at=(o:TableObject|null|undefined,merged:readonly number[],
     if(candidate&&best<Math.max(TCG_MAT.snapOutside,6)){
       const r=candidate,center=tcgMatLocal(r.x,r.y,o.matSeat);
       const zone=tcgRegionLabel(r.row,r.column,r.lastRow);
-      const free=freePlacement&&r.column===1||
+      const free=!(o.kind==='card'||o.kind==='deck'||o.kind==='tile')||
+        freePlacement&&r.column===1||
         r.column===1&&r.lastRow>r.row&&!snapMerged;
       const coord=free?(()=>{
         const x=100*(point.x-(center.x-r.width/2))/r.width;
@@ -153,7 +154,9 @@ export function receiptForCommand(
       ' ×'+(updated.throwQuantity??1)+' = '+(updated.throwTotal??updated.value??0)
     :(description||'Die')+' · Reroll';
   if(event.type==='SET_CENTER_MERGE'){
-    location='P'+(Number(p.seat??0)+1)+' · PLAY '+(Number(p.boundary??0)+1);
+    const targetSeat=Number(p.seat??0),boundary=Number(p.boundary??0);
+    location='P'+(targetSeat+1)+' · '+
+      tcgRegionLabel(boundary,1)+' + '+tcgRegionLabel(boundary+1,1);
     type=p.merged?'Merge':'Split';
     description=p.merged?'Join zones':'Separate zones';
   }
@@ -162,7 +165,15 @@ export function receiptForCommand(
   }
   if(event.type==='SHUFFLE'){location='Deck';description='Shuffle deck';}
   if(event.type==='SET_MODE'){location='Table';description=string(p.mode)||'Mode';}
-  if(event.type==='DRAW'){location='P'+(Number(p.matSeat??0)+1)+' · Deck → Hand';description='Draw card';}
+  if(event.type==='DRAW'){
+    const drawn=after.objects.find(o=>o.zone==='HAND'&&
+      before.objects.some(previous=>previous.id===o.id&&previous.zone==='DECK'));
+    const origin=drawn?before.objects.find(o=>o.id===drawn.id):null;
+    location=drawn?locOf(origin,drawn,before.centerMerges??[],
+      after.centerMerges??[],false,false):
+      'P'+(Number(p.matSeat??0)+1)+' · DECK → HAND';
+    description='Draw card';
+  }
   if(event.type==='ROTATE'&&num(p.degrees)!==null)
     description=(description?description+' · ':'')+p.degrees+'°';
   if(event.type==='ADJUST_COUNTER'||event.type==='TOKEN_ADJUST'){
