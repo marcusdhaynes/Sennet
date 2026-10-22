@@ -1242,18 +1242,20 @@ export function validateCommand(state: GameState, command: Command): string | nu
     if(state.players.length&&state.players.find(player=>player.id===command.actor)?.seat!==seat)
       return 'You can only throw dice from your own tray';
     const throws=command.payload.throws;
-    if(!Array.isArray(throws)||throws.length<1||throws.length>8)return 'Select 1–8 dice types';
+    if(!Array.isArray(throws)||throws.length<1||throws.length>20)return 'Select 1–20 physical dice';
     const seen=new Set<number>();
+    let totalDice=0;
     for(const entry of throws){
       if(!entry||typeof entry!=='object'||Array.isArray(entry))return 'Invalid dice throw';
       const t=entry as Record<string,unknown>,sides=t.sides;
-      if(typeof sides!=='number'||![2,4,6,8,10,12,20,100].includes(sides)||seen.has(sides))
-        return 'Invalid or duplicate die';
+      if(typeof sides!=='number'||![2,4,6,8,10,12,20,100].includes(sides))
+        return 'Invalid die';
       seen.add(sides);
       const rolls=t.rolls;
       if(!Array.isArray(rolls)||rolls.length<1||rolls.length>20||
          rolls.some(v=>!Number.isInteger(v)||Number(v)<1||Number(v)>sides))
         return 'Invalid dice result';
+      totalDice+=rolls.length;
       if(typeof t.x!=='number'||typeof t.y!=='number'||
          !Number.isFinite(t.x)||!Number.isFinite(t.y)||
          t.x<0||t.y<0||t.x>BOARD_W||t.y>BOARD_H)
@@ -1265,6 +1267,13 @@ export function validateCommand(state: GameState, command: Command): string | nu
          (typeof t.altitude!=='number'||!Number.isFinite(t.altitude)||t.altitude<0||t.altitude>500))
         return 'Invalid die resting height';
     }
+    // Up to twenty dice are separate physical objects, one result per die.
+    // Larger throws stay grouped by denomination, as in the old format.
+    if(totalDice<=20&&throws.some((t:Record<string,unknown>)=>
+      (t.rolls as unknown[]).length!==1))
+      return 'Individual dice rolls must be recorded separately';
+    if(totalDice>20&&(throws.length>8||seen.size!==throws.length))
+      return 'Large throws must group by die type';
     if(state.objects.length+throws.length>1000)return 'Maximum objects reached';
   }
   if(command.type==='TOKEN_PLACE'||command.type==='TOKEN_ADJUST'){
