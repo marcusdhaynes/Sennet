@@ -9,6 +9,7 @@ import {createDie3DModel,radiusFor} from './Dice3DGeometry';
 import {diceToCssTransform,DICE_SOURCE_RACK_SCALE} from './diceCoordinates';
 import type {DiceThemeId} from './diceThemes';
 import {looseDieOpacity} from './diceCoordinates';
+import {TCG_MAT_WIDTH} from '@sennet/core';
 
 export interface StaticDiePlacement {
   id:string;
@@ -32,6 +33,7 @@ interface DieVisual {
   piece:Container;
   group:THREE.Group;
   shadow:THREE.Mesh;
+  revealPlane?:THREE.Plane;
   result?:HTMLElement;
   hidden:{piece:Container;visible:boolean}[];
 }
@@ -50,6 +52,8 @@ export function createStaticDice3D(
     powerPreference:'low-power',premultipliedAlpha:false});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.8));
   renderer.setClearColor(0,0);
+  // Independent 3D drawer solids respect the moving Pixi playmat edge.
+  renderer.localClippingEnabled=true;
   renderer.domElement.className='sennet-static-dice-3d';
   renderer.domElement.style.cssText='position:absolute;inset:0;width:100%;height:100%;'+
     'pointer-events:none;z-index:88;display:block';
@@ -148,6 +152,19 @@ export function createStaticDice3D(
         visual={id:e.id,sides:e.sides,themeId:e.themeId,piece:e.piece,
           group,shadow,hidden};
       }
+      if(e.source){
+        // Each mesh and its shadow share a plane updated with the drawer.
+        // Unlike a visibility toggle this progressively clips the geometry.
+        const plane=visual.revealPlane??new THREE.Plane();
+        visual.revealPlane=plane;
+        visual.group.traverse(part=>{
+          if(part instanceof THREE.Mesh||part instanceof THREE.LineSegments){
+            const materials=Array.isArray(part.material)?part.material:[part.material];
+            for(const material of materials)material.clippingPlanes=[plane];
+          }
+        });
+        (visual.shadow.material as THREE.Material).clippingPlanes=[plane];
+      }
       const q=e.quaternion??[0,0,0,1];
       visual.group.quaternion.set(...q);
       // A selected source's tiny count belongs DIRECTLY on the center of
@@ -158,7 +175,7 @@ export function createStaticDice3D(
           host.appendChild(visual.result);
         }
         visual.result.className='sennet-dice-source-count';
-        visual.result.textContent=String(e.quantity);
+        visual.result.textContent='×'+String(e.quantity);
       }else{
         visual.result?.remove();
         visual.result=undefined;
@@ -218,6 +235,22 @@ export function createStaticDice3D(
       const edge=visual.piece.toGlobal({x:1,y:0});
       const scale=Math.hypot(edge.x-p.x,edge.y-p.y)*Math.max(xScale,yScale);
       const x=p.x*xScale,y=p.y*yScale;
+      let exposed=true;
+      if(entry.source&&visual.revealPlane){
+        const playmat=visual.piece.parent?.parent;
+        if(playmat){
+          // Three uses upward-positive Y, whereas Pixi points down.
+          // Compute the plane from the mat's actual camera transform.
+          const pivot=playmat.toGlobal({x:TCG_MAT_WIDTH/2+4,y:0});
+          const outward=playmat.toGlobal({x:TCG_MAT_WIDTH/2+5,y:0});
+          const normal=new THREE.Vector3(
+            (outward.x-pivot.x)*xScale,(pivot.y-outward.y)*yScale,0
+          ).normalize();
+          const edgePoint=new THREE.Vector3(pivot.x*xScale,h-pivot.y*yScale,0);
+          visual.revealPlane.setFromNormalAndCoplanarPoint(normal,edgePoint);
+          exposed=normal.dot(new THREE.Vector3(x,h-y,0).sub(edgePoint))>0;
+        }
+      }
       // Source dice match the right-drawer coins; Pixi fallbacks, hit
       // targets and 3D meshes all use the same scale at any camera zoom.
       const rackScale=entry.source?DICE_SOURCE_RACK_SCALE:1;
@@ -253,14 +286,16 @@ export function createStaticDice3D(
       (visual.shadow.material as THREE.MeshBasicMaterial).opacity=.44*opacity;
       visual.shadow.visible=opacity>0;
       if(visual.result){
-        visual.result.style.display=opacity>0?'block':'none';
+        visual.result.style.display=opacity>0&&(!entry.source||exposed)?'flex':'none';
         visual.result.style.opacity=String(opacity);
-        visual.result.style.left=x+'px';
-        visual.result.style.top=y+'px';
-        const counterSize=Math.max(10,Math.min(18,15*sf));
+        // Contrast-rich ×N marker floats above-right of the mesh instead
+        // of obscuring its number and follows source scaling/camera zoom.
+        visual.result.style.left=x+12*sf+'px';
+        visual.result.style.top=y-14*sf+'px';
+        const counterSize=Math.max(19,Math.min(27,24*sf));
         visual.result.style.width=counterSize+'px';
-        visual.result.style.height=counterSize+'px';
-        visual.result.style.fontSize=Math.max(8,Math.min(11,9.5*sf))+'px';
+        visual.result.style.height=Math.max(16,Math.min(21,18*sf))+'px';
+        visual.result.style.fontSize=Math.max(10,Math.min(13,11*sf))+'px';
       }
     }
     renderer.render(scene,camera);
