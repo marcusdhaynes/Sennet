@@ -270,21 +270,20 @@ test('3D tabletop dice stay precisely anchored across high-DPI render targets',a
   assert.deepEqual(diceToCssTransform(1280,720,0,0),{x:1,y:1},
     'invalid resize must not create infinity-sized dice');
 });
-test('the original 8 dice source models stay in the two-column wooden drawer',async()=>{
-  const {diceRackLocations}=await import('../../../apps/web/src/lib/diceCoordinates.ts');
-  const from=diceRackLocations(-250,-95);
+test('all 8 larger dice sources retain individual slots in the right drawer',()=>{
+  const from=diceRackLocations(250,-95);
   assert.equal(from.length,8);
-  assert.deepEqual([...new Set(from.map(p=>p.x))],[-262,-238]);
+  assert.deepEqual([...new Set(from.map(p=>p.x))],[235,265]);
+  const radius=13.7*DICE_SOURCE_RACK_SCALE;
   for(let i=0;i<from.length;i++){
     const p=from[i];
-    assert.equal(p.y,-70+Math.floor(i/2)*39);
-    // The largest rack object has <10 tabletop-unit projected radius:
-    // its model cannot cross the drawer's 62-unit outside boundary.
-    assert.ok(Math.abs(p.x+250)+10<=31);
+    assert.equal(p.y,-10+Math.floor(i/2)*31);
+    // The full projected 3D mesh fits the original 62-unit felt well.
+    assert.ok(Math.abs(p.x-250)+radius<31);
     for(let j=i+1;j<from.length;j++){
       const other=from[j];
-      assert.ok(Math.hypot(p.x-other.x,p.y-other.y)>20,
-        'two source dice must never overlap or swap slots');
+      assert.ok(Math.hypot(p.x-other.x,p.y-other.y)>2*radius,
+        'larger source dice never overlap or swap their drawer slots');
     }
   }
 });
