@@ -1,4 +1,5 @@
-import {applyCommand,replay,type EventRecord,type GameState,type TableObject} from '@sennet/core';
+import {applyCommand,replay,tcgMatLocal,tcgMatRegions,tcgRegionLabel,TCG_MAT,
+  type TcgMatRegion,type EventRecord,type GameState,type TableObject} from '@sennet/core';
 
 /** Human-readable audit rows are presentation only. The authoritative replay
  * always uses initial + ordered EventRecord commands, never these summaries. */
@@ -24,12 +25,57 @@ const cap=(s:string)=>s.replace(/[_-]/g,' ').replace(/\b\w/g,c=>c.toUpperCase())
 const num=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)?v:null;
 const string=(v:unknown)=>typeof v==='string'?v:'';
 const obj=(s:GameState,id:string)=>s.objects.find(o=>o.id===id);
-const at=(o:TableObject|null|undefined)=>o
-  ?(o.zone!=='TABLE'?o.zone+' · ':'')+
-    (typeof o.matSeat==='number'?'P'+(o.matSeat+1)+' · ':'')+
-    Math.round(o.x)+','+Math.round(o.y):'';
-const locOf=(before:TableObject|null|undefined,after:TableObject|null|undefined)=>{
-  const from=at(before),to=at(after);
+const at=(o:TableObject|null|undefined,merged:readonly number[],
+  freePlacement:boolean,snapMerged:boolean):string=>{
+  if(!o)return '';
+  // Snap position or % is local to the ACTUAL owning mat, never a world
+  // coordinate. Merged regions use the entire combined zone footprint.
+  if(typeof o.matSeat==='number'&&o.matSeat>=0&&o.matSeat<12){
+    const point=tcgMatLocal(o.x,o.y,o.matSeat);
+    const regions=tcgMatRegions(o.matSeat,merged);
+    let candidate:TcgMatRegion|null=null,best=Infinity;
+    for(const region of regions){
+      const anchor=tcgMatLocal(region.x,region.y,o.matSeat);
+      const d=Math.hypot(Math.max(0,Math.abs(point.x-anchor.x)-region.width/2),
+        Math.max(0,Math.abs(point.y-anchor.y)-region.height/2));
+      if(d<best){best=d;candidate=region;}
+    }
+    if(candidate&&best<Math.max(TCG_MAT.snapOutside,6)){
+      const r=candidate,center=tcgMatLocal(r.x,r.y,o.matSeat);
+      const zone=tcgRegionLabel(r.row,r.column,r.lastRow);
+      const free=freePlacement&&r.column===1||
+        r.column===1&&r.lastRow>r.row&&!snapMerged;
+      const coord=free?(()=>{
+        const x=100*(point.x-(center.x-r.width/2))/r.width;
+        const y=100*(point.y-(center.y-r.height/2))/r.height;
+        return '('+Math.round(Math.max(0,Math.min(100,x)))+'%, '+
+          Math.round(Math.max(0,Math.min(100,y)))+'%)';
+      })():(()=>{
+        // Original card slots are x=1..7, half slots use .5.
+        const rawX=r.column===1?
+          1+(point.x-center.x)/(r.width/TCG_MAT.centerCards)+
+            (TCG_MAT.centerCards-1)/2:1;
+        const x=Math.max(1,Math.min(TCG_MAT.centerCards,
+          Math.round(rawX*2)/2));
+        // Within a merged zone the row and half-row are expressed
+        // relative to that zone's first original row.
+        const topRow=center.y-(r.lastRow-r.row)*(TCG_MAT.rowHeight+TCG_MAT.gap)/2;
+        const rawY=1+(point.y-topRow)/(TCG_MAT.rowHeight+TCG_MAT.gap);
+        const y=Math.max(1,Math.min(r.lastRow-r.row+1,
+          Math.round(rawY*2)/2));
+        return '('+x+', '+y+')';
+      })();
+      return 'P'+(o.matSeat+1)+' · '+zone+' '+coord;
+    }
+  }
+  return (o.zone!=='TABLE'?o.zone:'Table')+
+    (typeof o.matSeat==='number'?' · P'+(o.matSeat+1):'');
+};
+const locOf=(before:TableObject|null|undefined,after:TableObject|null|undefined,
+  mergedBefore:readonly number[],mergedAfter:readonly number[],
+  freePlacement:boolean,snapMerged:boolean)=>{
+  const from=at(before,mergedBefore,freePlacement,snapMerged);
+  const to=at(after,mergedAfter,freePlacement,snapMerged);
   if(from&&to&&from!==to)return from+' → '+to;
   return to||from||'Table';
 };
@@ -69,13 +115,23 @@ export function receiptForCommand(
       remove:'Delete',tap:'Rotate',untap:'Rotate'};
     type=named[action]??cap(action);
   }
-  let location=locOf(original,updated);
+  const freePlacement=p.freePlacement===true;
+  const snapMerged=p.snapMerged===true;
+  let location=locOf(original,updated,before.centerMerges??[],
+    after.centerMerges??[],freePlacement,snapMerged);
+  if(ids.length>1&&event.type==='BATCH_CARD_ACTION'&&action==='move'){
+    const from=[...new Set(old.map(o=>at(o,before.centerMerges??[],
+      freePlacement,snapMerged)))].filter(Boolean).join(' + ');
+    const to=[...new Set(now.map(o=>at(o,after.centerMerges??[],
+      freePlacement,snapMerged)))].filter(Boolean).join(' + ');
+    location=from&&to&&from!==to?from+' → '+to:to||from||location;
+  }
   let description=names(now.length?now:old);
   if(event.type==='ADD'&&created)description=created.name||created.kind||'Object';
   if(event.type==='MOVE_STACK')description=(description||'Stack')+' · Stack';
   if(event.type==='TOKEN_PLACE'){
-    location=[typeof p.seat==='number'?'P'+(Number(p.seat)+1):'Table',
-      num(p.x)===null?'':Math.round(Number(p.x))+','+Math.round(Number(p.y))].filter(Boolean).join(' · ');
+    location=now.length?at(now[0],after.centerMerges??[],freePlacement,snapMerged):
+      'P'+(Number(p.seat??0)+1)+' · Table';
     description='Coin '+(num(p.value)??'');
   }
   if(event.type==='THROW_TRAY'){
