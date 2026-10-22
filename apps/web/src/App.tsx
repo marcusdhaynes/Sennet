@@ -556,7 +556,8 @@ export default function App(){
         }}
         onMoveSelection={(ids,anchorId,x,y)=>{
           takeAction('BATCH_CARD_ACTION',{action:'move',ids,anchorId,x,y,
-            snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+            snapMerged:playmat.snapMerged,snapMergedSeat:seat,
+            freePlacement:playmat.freePlacement});
         }}
         mergeOpacity={mergeOpacity} mergeHoverMs={mergeHoverMs} playmat={playmat}
         diceAppearance={diceAppearance} diceHoldMs={diceHoldMs} diceFadeMs={diceFadeMs}
@@ -575,7 +576,8 @@ export default function App(){
         onMoveStack={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
           if(old&&Math.hypot(old.x-x,old.y-y)>=2)
-            takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+            takeAction('MOVE_STACK',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat,
+            freePlacement:playmat.freePlacement});
         }}
         onMove={(id,x,y)=>{
           const old=game.objects.find(o=>o.id===id);
@@ -594,18 +596,19 @@ export default function App(){
                 takeAction('DELETE',{id});return;
               }
             }
-            takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat});
+            takeAction('MOVE',{id,x,y,snapMerged:playmat.snapMerged,snapMergedSeat:seat,
+            freePlacement:playmat.freePlacement});
           }
         }} readonly={replayAt!==null}/>
     </div>
     {actionLogOpen&&createPortal(<div className="sennet-receipt-backdrop"
       onPointerDown={event=>{if(event.target===event.currentTarget)setActionLogOpen(false);}}>
       <section className="sennet-receipt" role="dialog" aria-modal="true"
-        aria-label="Sennet action receipt">
+        aria-label="Sennet action log">
         <header className="sennet-receipt-header">
           <div className="sennet-receipt-insignia">S</div>
           <div><span className="sennet-receipt-eyebrow">SENNET · TABLE ACTIVITY</span>
-            <h2>Action Receipt</h2><small>{orderedReceipt.length} actions · Full session</small></div>
+            <h2>Action Log</h2><small>{orderedReceipt.length} actions · Full session</small></div>
           <button type="button" className="sennet-receipt-close"
             aria-label="Close receipt" onClick={()=>setActionLogOpen(false)}>×</button>
         </header>
@@ -821,7 +824,7 @@ export default function App(){
                 merges={viewedGame.centerMerges??[]} seat={seat} inform={inform}/>
               <div className="reader-block">
                 <h3>TCG center-section controls</h3>
-                <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into a larger, freely usable area. Snapping inside merged sections is off by default and can be enabled under Playmat → Card placement. Hover and click − to separate the sections again.</p>
+                <p>On your playmat, hover over a small circular + button between the four middle sections. After the hover delay, click to combine neighboring sections into a larger, freely usable area. Use Playmat → Card placement to switch between precise snap slots and boundary-contained free placement. Hover and click − to separate the sections again.</p>
                 <label htmlFor="merge-control-opacity">Button transparency — <strong>{Math.round((1-mergeOpacity)*100)}% transparent</strong>
                   <input id="merge-control-opacity" aria-label="Center merge button transparency" type="range"
                     min={.05} max={.5} step={.01} value={mergeOpacity}
