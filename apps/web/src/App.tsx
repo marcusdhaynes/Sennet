@@ -648,26 +648,62 @@ export default function App(){
       onSnapMerged={value=>setPlaymat(p=>({...p,snapMerged:value}))}
       mergeHoverMs={mergeHoverMs} onMergeHoverMs={setMergeHoverMs}/>}
     {book&&createPortal(<div className="reader-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setBook(null);}}>
-      <section className={"reader unified-tome tome-"+bookDesign} role="dialog" aria-modal="true" aria-label={book+' book'}>
+      <section className={"reader unified-tome reader-open-book tome-"+bookDesign} role="dialog" aria-modal="true" aria-label={book+' book'}>
+        <div className="reader-cover-board" aria-hidden="true"/>
+        <div className="reader-page-stack" aria-hidden="true"/>
         <div className="unified-tome-tabs" role="tablist" aria-label="Tome sections">{(['sennet','games','settings'] as const).map(tab=><button key={tab} type="button" role="tab" aria-selected={book===tab} className={book===tab?'active':''} onClick={()=>setBook(tab)}>{tab==='sennet'?'Sennet':tab==='games'?'Games':'Settings'}</button>)}</div>
-        <header className="reader-header"><span className="reader-mark">S</span><div><span className="reader-eyebrow">SENNET · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
-          <button className="reader-close" onClick={()=>setBook(null)} aria-label="Close book"><X size={22}/></button>
-        </header>
-        <div className="reader-content">
+        <div className="reader-spread">
+          <section className="reader-page reader-page-left" aria-label="Left page">
+            <div className="reader-page-topline"><span>✦ &nbsp; SENNET &nbsp; ✦</span><span>VOL. {book==='sennet'?'I':book==='games'?'II':'III'}</span></div>
+            <header className="reader-header">
+              <span className="reader-mark">S</span>
+              <div><span className="reader-eyebrow">THE SENNET LIBRARY · VOLUME {book==='sennet'?'01':book==='games'?'02':'03'}</span><h1>{book==='sennet'?'Sennet':book==='games'?'Games':'Settings'}</h1></div>
+            </header>
+            <div className="reader-left-content">
+              <div className="reader-engraving" aria-hidden="true"><span>❧</span><i/><span>❧</span></div>
+              <p className="reader-left-kicker">{book==='sennet'?'The tabletop companion':book==='games'?'The games collection':'The settings folio'}</p>
+              <p className="reader-lead">{book==='sennet'?'Your tabletop. Your rules. A living guide to the world of Sennet.':
+                book==='games'?'Every tabletop begins with a choice. Open a game, resume a session, or shape your own.':
+                'The finer details of your table, carefully bound in one place.'}</p>
+              <div className="reader-printed-rule" aria-hidden="true"><span>✦</span></div>
+              {book==='sennet'&&<nav className="reader-chapter-index" aria-label="Manual chapters">
+                <h2>Contents</h2>
+                {['Start with Games','Move & zoom','Your seat & books','Individual TCG mats','Bring your own games','Multiplayer'].map((chapter,i)=>
+                  <button type="button" key={chapter} onClick={()=>document.getElementById('sennet-guide-'+(i+1))?.scrollIntoView({behavior:'smooth',block:'start'})}>
+                    <span>{String(i+1).padStart(2,'0')}</span><span>{chapter}</span><span className="reader-index-dots" aria-hidden="true"/></button>)}
+              </nav>}
+              {book==='games'&&<nav className="reader-chapter-index reader-volume-navigation" aria-label="Game chapters">
+                <h2>Browse the collection</h2>
+                <Tabs items={[{id:'all',label:'All Games'},{id:'recent',label:'Recent'},{id:'library',label:'Library'},{id:'tools',label:'Table Tools'}]} active={gamesPage} change={v=>setGamesPage(v as GamePage)}/>
+              </nav>}
+              {book==='settings'&&<nav className="reader-chapter-index reader-volume-navigation" aria-label="Settings chapters">
+                <h2>Chapters</h2>
+                <Tabs items={[{id:'general',label:'General'},{id:'playmat',label:'Playmat'},{id:'deckbuilder',label:'Deckbuilder'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
+              </nav>}
+              <div className="reader-seal" aria-hidden="true"><span>✧</span><strong>S</strong><span>✧</span></div>
+            </div>
+            <footer className="reader-page-number"><span>SENNET · YOUR TABLETOP, YOUR RULES</span><span>— {book==='sennet'?'1':book==='games'?'3':'5'} —</span></footer>
+          </section>
+          <div className="reader-spine-gutter" aria-hidden="true"/>
+          <section className="reader-page reader-page-right" aria-label="Right page">
+            <header className="reader-right-header">
+              <span>{book==='sennet'?'THE TABLETOP MANUAL':book==='games'?'GAMES & SESSIONS':'CUSTOMIZATION & CONTROLS'}</span>
+              <button className="reader-close" onClick={()=>setBook(null)} aria-label="Close book"><X size={20}/></button>
+            </header>
+            <div className="reader-content">
           {book==='sennet'&&<div className="guide">
             <p className="intro">Your tabletop. Your rules. Your player name and seat tab contains three books.</p>
             <div className="guide-grid">
-              <article><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
-              <article><span>02</span><h3>Move &amp; zoom</h3><p>Drag pieces across the felt. Mouse-wheel scroll or two-finger touchpad scrolling zooms around the pointer. Pinch on a touchscreen to zoom. Click and drag empty table space to move the camera; grab a card to move only that card. Double-click the table (or press 0) to reset the view.</p></article>
-              <article><span>03</span><h3>Your seat &amp; books</h3><p>The compact gold Player ## tab tucks against the bottom of the screen. Clicking it expands the drawer upward and outward: the gold tag stays on top, with the books below. The green section and any custom display name appear only when expanded; the extra word Player is omitted from that green name label. Click the tag again to collapse it. Hovering does nothing. Choose your seat in Settings.</p></article>
-              <article><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven original horizontal card slots in each PLAY and HAND row plus six in-between positions, for 13 selectable positions per row. Tap the Eye centered on the top line of your Play 03 zone to focus it. Hold it for 0.25 seconds, then select any opponent to bring both mats together in a full-height opposing view: theirs above, yours below, separated by the battlefield divider. Other players have a small retractable name/seat tag. Your own gold Player ## tab rises when clicked, revealing Sennet, Games, and Settings underneath it. The green book section stays concealed when collapsed. There is no caret, hover activation, auto-close timer, or separate bookshelf. In Opponent Mode, every other visible player's mat has a Sword and Shield pair whose circle centers sit directly on the Play 03 zone's top boundary from that player's perspective. Tap that player's Sword to mark them as an Enemy across the divider, or their Shield to place them beside you facing your direction. The Eye and Castle sit side by side, evenly centered on the top line of your Play 03 zone, with each circle straddling that line. The Eye keeps its original tap-and-hold controls and shows a one-on-one view with exactly one selected opponent always across from you; Castle defaults to All View: every marked Ally is placed in an optimally scaled grid to the right of your full-size mat, which stays anchored on the left. Hold Castle for 0.25 seconds to toggle BOTH groups to Single View: one Ally beside you and one Enemy across the divider. Both have left/right arrows that cycle independently through their own teammates or opponents. Hold Castle again to return BOTH groups to All View. In Castle All View, click an Ally mat to focus just that Ally while all Enemies remain in their unchanged All grid; click an Enemy mat to focus just that Enemy while all Allies remain as they were. You may focus both sides independently, leaving exactly three mats: yours, one Ally, and one Enemy. Each focused mat has its Sword/Shield and same-role left/right arrows. Focus is neither Single nor All; tap Castle to leave or hold Castle to resume toggling from the previous broad mode. Marked Enemies remain opposite you above the divider in both modes, and unclassified players stay hidden. Tap Castle to enter or leave the battlefield. Only one of Sword or Shield can be selected; tap the active icon again to clear it. Each opponent keeps their own setting. Eye always places the one selected opponent across the divider, even when marked Ally; only Castle puts all marked allies beside you and all marked enemies across from you. Use the circular left/right arrows centered on the selected opponent mat’s left and right edges to cycle counter-clockwise or clockwise through the numbered seats. While facing an opponent the camera is fixed—dragging or zooming the view is disabled, but cards can still be moved. Tap the eye again for the full table, or hold it to return to your mat alone. Hover over + or − to join or separate center sections. All changes can be replayed. The mat retains the original LOCATIONS, RESERVE, WAIT, RESOURCE, LEADERS, DECK, DISCARD and REMOVE pockets, three PLAY rows and HAND. Use the DECK arrow or D to draw; select a card and press T to tap/untap or F to flip. Drop a card or token into your REMOVE pocket to remove it.</p></article>
-              <article><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
-              <article><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
+              <article id="sennet-guide-1"><span>01</span><h3>Start with Games</h3><p>Open the Games book to choose a game type, resume a recent table, or load a community game from your library.</p></article>
+              <article id="sennet-guide-2"><span>02</span><h3>Move &amp; zoom</h3><p>Drag pieces across the felt. Mouse-wheel scroll or two-finger touchpad scrolling zooms around the pointer. Pinch on a touchscreen to zoom. Click and drag empty table space to move the camera; grab a card to move only that card. Double-click the table (or press 0) to reset the view.</p></article>
+              <article id="sennet-guide-3"><span>03</span><h3>Your seat &amp; books</h3><p>The compact gold Player ## tab tucks against the bottom of the screen. Clicking it expands the drawer upward and outward: the gold tag stays on top, with the books below. The green section and any custom display name appear only when expanded; the extra word Player is omitted from that green name label. Click the tag again to collapse it. Hovering does nothing. Choose your seat in Settings.</p></article>
+              <article id="sennet-guide-4"><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven original horizontal card slots in each PLAY and HAND row plus six in-between positions, for 13 selectable positions per row. Tap the Eye centered on the top line of your Play 03 zone to focus it. Hold it for 0.25 seconds, then select any opponent to bring both mats together in a full-height opposing view: theirs above, yours below, separated by the battlefield divider. Other players have a small retractable name/seat tag. Your own gold Player ## tab rises when clicked, revealing Sennet, Games, and Settings underneath it. The green book section stays concealed when collapsed. There is no caret, hover activation, auto-close timer, or separate bookshelf. In Opponent Mode, every other visible player's mat has a Sword and Shield pair whose circle centers sit directly on the Play 03 zone's top boundary from that player's perspective. Tap that player's Sword to mark them as an Enemy across the divider, or their Shield to place them beside you facing your direction. The Eye and Castle sit side by side, evenly centered on the top line of your Play 03 zone, with each circle straddling that line. The Eye keeps its original tap-and-hold controls and shows a one-on-one view with exactly one selected opponent always across from you; Castle defaults to All View: every marked Ally is placed in an optimally scaled grid to the right of your full-size mat, which stays anchored on the left. Hold Castle for 0.25 seconds to toggle BOTH groups to Single View: one Ally beside you and one Enemy across the divider. Both have left/right arrows that cycle independently through their own teammates or opponents. Hold Castle again to return BOTH groups to All View. In Castle All View, click an Ally mat to focus just that Ally while all Enemies remain in their unchanged All grid; click an Enemy mat to focus just that Enemy while all Allies remain as they were. You may focus both sides independently, leaving exactly three mats: yours, one Ally, and one Enemy. Each focused mat has its Sword/Shield and same-role left/right arrows. Focus is neither Single nor All; tap Castle to leave or hold Castle to resume toggling from the previous broad mode. Marked Enemies remain opposite you above the divider in both modes, and unclassified players stay hidden. Tap Castle to enter or leave the battlefield. Only one of Sword or Shield can be selected; tap the active icon again to clear it. Each opponent keeps their own setting. Eye always places the one selected opponent across the divider, even when marked Ally; only Castle puts all marked allies beside you and all marked enemies across from you. Use the circular left/right arrows centered on the selected opponent mat’s left and right edges to cycle counter-clockwise or clockwise through the numbered seats. While facing an opponent the camera is fixed—dragging or zooming the view is disabled, but cards can still be moved. Tap the eye again for the full table, or hold it to return to your mat alone. Hover over + or − to join or separate center sections. All changes can be replayed. The mat retains the original LOCATIONS, RESERVE, WAIT, RESOURCE, LEADERS, DECK, DISCARD and REMOVE pockets, three PLAY rows and HAND. Use the DECK arrow or D to draw; select a card and press T to tap/untap or F to flip. Drop a card or token into your REMOVE pocket to remove it.</p></article>
+              <article id="sennet-guide-5"><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
+              <article id="sennet-guide-6"><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
             </div>
             <button className="reader-primary" onClick={()=>{setBook('games');setGamesPage('all');}}>Open Games <ChevronRight size={17}/></button>
           </div>}
           {book==='games'&&<>
-            <Tabs items={[{id:'all',label:'All Games'},{id:'recent',label:'Recent'},{id:'library',label:'Library'},{id:'tools',label:'Table Tools'}]} active={gamesPage} change={v=>setGamesPage(v as GamePage)}/>
             {gamesPage==='all'&&<><div className="reader-heading"><div><h2>Choose a game</h2><p>Make the table yours. Your selection loads directly onto the felt.</p></div><label className="book-search"><Search size={15}/><input placeholder="Search games…" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
               <div className="game-choices">{KINDS.filter(k=>(k.label+k.description).toLowerCase().includes(search.toLowerCase())).map(k=><button className="game-choice" key={k.id} onClick={()=>startGame(k.id)}>
                 <span className="game-symbol">{k.symbol}</span><span><strong>{k.label}</strong><small>{k.description}</small></span><ChevronRight size={18}/></button>)}</div>
@@ -705,7 +741,6 @@ export default function App(){
             </>}
           </>}
           {book==='settings'&&<>
-            <Tabs items={[{id:'general',label:'General'},{id:'playmat',label:'Playmat'},{id:'deckbuilder',label:'Deckbuilder'},{id:'multiplayer',label:'Multiplayer'},{id:'scripting',label:'Lua Scripting'}]} active={settingsPage} change={v=>setSettingsPage(v as SettingsPage)}/>
             {settingsPage==='general'&&<div className="reader-block"><h3>Customization</h3>
               <label>Book Design<select value={bookDesign} onChange={e=>setBookDesign(e.target.value as typeof bookDesign)}>
                 <option value="tiny">Tiny Tome · Leather & Brass</option><option value="dragon">Dragon Codex · Azure Enamel</option><option value="journal">Campaign Journal · Crimson</option><option value="arcane">Arcane Notebook · Gold Sigil</option><option value="strapped">Strapped Journal · Aged Hide</option>
@@ -849,8 +884,10 @@ export default function App(){
               <p className="reader-footnote"><ShieldCheck size={15}/> Untrusted public scripts need stricter per-game limits before production multiplayer.</p>
             </>}
           </>}
+            </div>
+            <footer className="reader-footer"><span>✧ &nbsp; SENNET LIBRARY &nbsp; ✧</span><span>— {book==='sennet'?'2':book==='games'?'4':'6'} —</span></footer>
+          </section>
         </div>
-        <footer className="reader-footer"><span>SENNET · YOUR TABLETOP, YOUR RULES</span><span>ESC TO CLOSE</span></footer>
       </section>
     </div>,document.body)}
     {replayAt!==null&&!book&&<button className="replay-return" onClick={()=>setReplayAt(null)}>Replay · Return to live table <X size={16}/></button>}
