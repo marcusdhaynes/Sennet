@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {createGame,applyCommand,replay,isTcgSideBoxDrop,tcgMatWorld,validThrowQuaternion} from '../src/index.ts';
 import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
+import {DICE_SOURCE_RACK_SCALE,diceRackLocations}
+  from '../../../apps/web/src/lib/diceCoordinates.ts';
 import {dieGeometry,convexShape}
   from '../../../apps/web/src/lib/Dice3D.ts';
 import * as CANNON from 'cannon-es';
@@ -335,4 +337,30 @@ test('the exact rigid-body resting height survives initial throw, reroll and rep
   assert.throws(()=>applyCommand(first,command('bad-height',[
     {sides:6,rolls:[4],x:2100,y:2100,rotation:0,altitude:Infinity}
   ])),/Invalid die resting height/);
+});
+
+test('right-drawer rack fits all eight larger dice between coins and book',()=>{
+  const center=320,top=-96;
+  const slots=diceRackLocations(center,top);
+  assert.equal(slots.length,8);
+  assert.deepEqual(slots.slice(0,2),[
+    {x:center-15,y:top+85},{x:center+15,y:top+85}
+  ]);
+  assert.equal(slots[7].y,top+85+3*31);
+  const coinRowY=top+25;
+  const bookTop=115;
+  const diceRadius=13.7*DICE_SOURCE_RACK_SCALE;
+  for(const {x,y} of slots){
+    assert.ok(Math.abs(x-center)+diceRadius<29,
+      'each 3D die remains inside the felt side walls');
+    assert.ok(y-diceRadius>coinRowY+18,
+      'dice clear the top coin labels');
+    assert.ok(y+15+5<bookTop,
+      'last dice label clears the wider book');
+  }
+});
+test('right-drawer source dice match the two smaller source coins',()=>{
+  const coinRadius=16*1.08*.9*.72;
+  const dieRadius=13.7*DICE_SOURCE_RACK_SCALE;
+  assert.ok(Math.abs(coinRadius-dieRadius)<.35);
 });

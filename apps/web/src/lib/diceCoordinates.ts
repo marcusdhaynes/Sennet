@@ -10,14 +10,16 @@ export function diceToCssTransform(
     return {x:1,y:1};
   return {x:cssWidth/pixiWidth,y:cssHeight/pixiHeight};
 }
+/** Dice display at the compact source coin diameter, including flipcoins. */
+export const DICE_SOURCE_RACK_SCALE=.82;
 export function diceRackLocations(
   boxX:number,top:number
 ):{x:number;y:number}[]{
-  // The narrow side drawer is 62 units wide. Keep centers 24 units
-  // apart; four closely spaced rows keep the entire rack near its top.
+  // Two columns, four rows below the coin pair, above the book.
+  // 31 units between rows leaves enough room for each 8px label.
   return Array.from({length:8},(_,i)=>({
-    x:boxX+(i%2===0?-12:12),
-    y:top+25+Math.floor(i/2)*39
+    x:boxX+(i%2===0?-15:15),
+    y:top+85+Math.floor(i/2)*31
   }));
 }
 

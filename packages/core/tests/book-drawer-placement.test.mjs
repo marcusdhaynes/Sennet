@@ -55,3 +55,11 @@ test('right-drawer snap resets previous free offset to the home coordinate',()=>
   const saved=bookSavedOffset(previousOffsetX,right.x,start);
   assert.equal(originalBaseX+saved,right.x);
 });
+
+test('widened right-drawer book fits and spans the top-row coin pair',()=>{
+  const well=drawerInnerWell(320,49,62,290);
+  const width=62-8,height=width/.76;
+  const y=194-height*.44-10;
+  assert.equal(isBookWithinDrawer(320,y,width*1.06,height*1.06,well),true);
+  assert.ok(width>=2*15+2*(16*1.08*.9*.72)-.5);
+});

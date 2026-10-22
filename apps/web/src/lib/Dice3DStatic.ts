@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {installDiceLighting} from './Dice3DLighting.ts';
 import type {Container} from 'pixi.js';
 import {createDie3DModel,radiusFor} from './Dice3DGeometry';
-import {diceToCssTransform} from './diceCoordinates';
+import {diceToCssTransform,DICE_SOURCE_RACK_SCALE} from './diceCoordinates';
 import type {DiceThemeId} from './diceThemes';
 import {looseDieOpacity} from './diceCoordinates';
 
@@ -218,11 +218,9 @@ export function createStaticDice3D(
       const edge=visual.piece.toGlobal({x:1,y:0});
       const scale=Math.hypot(edge.x-p.x,edge.y-p.y)*Math.max(xScale,yScale);
       const x=p.x*xScale,y=p.y*yScale;
-      // One unchanging size in physical TABLE units for each tray die;
-      // the Pixi camera provides the ONLY view-dependent scaling.
-      // The compact rack copy is smaller than a die resting on the board,
-      // so two polyhedra fit comfortably in the original narrow drawer.
-      const rackScale=entry.source?.62:1;
+      // Source dice match the right-drawer coins; Pixi fallbacks, hit
+      // targets and 3D meshes all use the same scale at any camera zoom.
+      const rackScale=entry.source?DICE_SOURCE_RACK_SCALE:1;
       const sf=scale*rackScale;
       // A die's resting height is the support point of its actual convex
       // hull, not its bounding-sphere radius. Keep the height sampled from

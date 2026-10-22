@@ -30,7 +30,7 @@ const coinSector=(index:number)=>{
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
-import {diceRackLocations} from '../lib/diceCoordinates';
+import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
@@ -304,7 +304,8 @@ function drawTcgMats(
       const side=bookDock==='left'?-1:1;
       // A closed hardcover's natural portrait ratio, projected onto the
       // tabletop. Its 3D footprint uses practically all of the tray width.
-      const bw=TCG_MAT.cardWidth-18;
+      // Book matches the full outer span of the two compact coins.
+      const bw=TCG_MAT.cardWidth-8;
       const bh=bw/.76;
       const trayBottom=TCG_MAT_HEIGHT/2;
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
@@ -1188,7 +1189,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   }));
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
-  const leftTrayMat=useRef<Container|null>(null);
+  const diceTrayMat=useRef<Container|null>(null);
   const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number}|null>(null);
   const diceThrowAnimation=useRef<number|null>(null);
   const staticDice3D=useRef<StaticDice3DRenderer|null>(null);
@@ -1447,7 +1448,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const selected={...diceQuantitiesRef.current};
     if(!selected[pressed])selected[pressed]=1;
     const types=DICE_TYPES.filter(sides=>(selected[sides]??0)>0);
-    const mat=leftTrayMat.current;
+    const mat=diceTrayMat.current;
     if(!mat||!types.length)return;
     const {app,board}=current;
     const rect=app.canvas.getBoundingClientRect();
@@ -1459,15 +1460,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const distance=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
     const trays=[-1,1].map(side=>{
       const x=side*distance,w=TCG_MAT.cardWidth/2+4;
+      // Model each sliding drawer in its own transform, even if the
+      // left drawer is closed while the right dice rack is opened.
+      const drawer=drawerGroups.current.get(side)??mat;
       const corners=[new Point(x-w,top-5),new Point(x+w,top-5),
         new Point(x+w,TCG_MAT_HEIGHT/2+5),new Point(x-w,TCG_MAT_HEIGHT/2+5)]
-        .map(p=>convert(mat.toGlobal(p)));
+        .map(p=>convert(drawer.toGlobal(p)));
       return {left:Math.min(...corners.map(p=>p.x)),top:Math.min(...corners.map(p=>p.y)),
         right:Math.max(...corners.map(p=>p.x)),bottom:Math.max(...corners.map(p=>p.y))};
     });
     const sources=types.map(sides=>{
       const p=diceSources.current.get(sides)?.toGlobal(new Point(0,0))??
-        mat.toGlobal(new Point(-distance,top+40));
+        mat.toGlobal(new Point(distance,top+85));
       const origin=diceSources.current.get(sides);
       const edge=origin?.toGlobal(new Point(1,0))??new Point(p.x+1,p.y);
       const scale=Math.hypot(edge.x-p.x,edge.y-p.y)*Math.max(sx,sy);
@@ -1540,12 +1544,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const mat=new Container();
     mat.position.set(origin.x,origin.y);mat.rotation=origin.angle;
     // Source tray geometry must use the same transformed seat mat.
-    const cameraMat=leftTrayMat.current;
+    const cameraMat=diceTrayMat.current;
     const trays=[-1,1].map(side=>{
       const x=side*distance,w=TCG_MAT.cardWidth/2+4;
+      const drawer=drawerGroups.current.get(side)??cameraMat??board;
       const corners=[new Point(x-w,trayTop-5),new Point(x+w,trayTop-5),
         new Point(x+w,TCG_MAT_HEIGHT/2+5),new Point(x-w,TCG_MAT_HEIGHT/2+5)]
-        .map(p=>toScreen((cameraMat??board).toGlobal(p)));
+        .map(p=>toScreen(drawer.toGlobal(p)));
       return {left:Math.min(...corners.map(p=>p.x)),
         right:Math.max(...corners.map(p=>p.x)),
         top:Math.min(...corners.map(p=>p.y)),bottom:Math.max(...corners.map(p=>p.y))};
@@ -1607,8 +1612,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     }
     if(next===20){
       const source=diceSources.current.get(sides);
-      const mat=leftTrayMat.current,from=source?.toGlobal(new Point(0,0));
-      const into=mat?.toGlobal(new Point(-TCG_MAT_WIDTH/2+115,-TCG_MAT_HEIGHT/2+125));
+      const mat=diceTrayMat.current,from=source?.toGlobal(new Point(0,0));
+      const into=mat?.toGlobal(new Point(TCG_MAT_WIDTH/2-115,-TCG_MAT_HEIGHT/2+125));
       throwDiceNow.current(sides,(into?.x??0)-(from?.x??-100),
         (into?.y??0)-(from?.y??0),220);
     }
@@ -1754,7 +1759,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     for(const timer of hoverTimers.current)window.clearTimeout(timer);
     hoverTimers.current.clear();
     board.removeChildren().forEach(child=>child.destroy({children:true}));
-    diceSources.current.clear();diceBadges.current.clear();leftTrayMat.current=null;
+    diceSources.current.clear();diceBadges.current.clear();diceTrayMat.current=null;
     drawerGroups.current.clear();drawerTabs.current.clear();
     visuals.current.clear();
     snapHighlight.current=null;
@@ -1847,29 +1852,30 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       coinLayers.push({piece,el,displayScale});
       return el;
     };
-    // The LEFT box is a permanent dice/coin rack. The first gesture on a
-    // source counts it; dragging a source instead throws ALL selected types.
-    // Quantities update without rebuilding the Pixi scene or disturbing cards.
+    // All eight permanent die and flipcoin generators share the RIGHT
+    // drawer with the two coins and the book. Four paired rows preserve
+    // the same 20-count, selection, throw and reroll interactions.
     if(state.kind==='tcg'){
-      const mat=drawerGroups.current.get(-1);
-      if(!mat)throw new Error('Left drawer is missing');
-      leftTrayMat.current=mat;
-      const boxX=-(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3);
+      const mat=drawerGroups.current.get(1);
+      if(!mat)throw new Error('Right drawer is missing');
+      diceTrayMat.current=mat;
+      const boxX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       const slots=diceRackLocations(boxX,top);
       DICE_TYPES.forEach((sides,index)=>{
         const source=new Container();
         // The source belongs inside this drawer; a closed drawer never
         // leaks an unattached high-priority object through the playmat.
-        source.visible=!boxClosed.left;
-        // Fixed, real drawer-relative coordinates. Zooming and changing
-        // the camera never edits these physical positions.
+        source.visible=!boxClosed.right;
+        // Fixed, real right-drawer coordinates. Zoom and camera changes
+        // never edit their physical slot positions.
         source.position.set(slots[index].x,slots[index].y);
         const badge=diceQuantitiesRef.current[sides]??0;
         const face=makeDie(sides,undefined,badge);
+        face.scale.set(DICE_SOURCE_RACK_SCALE);
         source.addChild(face);
         const name=label(diceLabel(sides),8,0xffedbe,'bold');
-        name.position.set(0,18);
+        name.position.set(0,15);
         source.addChild(name);
         // Live-updated badge is a separate child so click counting does
         // not create a new scene or interrupt another piece's drag.
@@ -1889,11 +1895,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         mat.addChild(source);paintLayers.objects.attach(source);
         diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
-          drawerClosed:boxClosed.left,
+          drawerClosed:boxClosed.right,
           quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
-        source.hitArea=new Circle(0,0,11);
+        // Click diameter agrees with larger 3D die while remaining clear
+        // of its adjacent column's click target.
+        source.hitArea=new Circle(0,0,13*DICE_SOURCE_RACK_SCALE+2);
         // A die's physical size must never change just because the pointer
         // enters its hit area. Use the native cursor, not hover zoom.
         source.on('pointerover',()=>{source.cursor='grab';});
