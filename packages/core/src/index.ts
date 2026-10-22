@@ -1267,11 +1267,17 @@ export function validateCommand(state: GameState, command: Command): string | nu
          (typeof t.altitude!=='number'||!Number.isFinite(t.altitude)||t.altitude<0||t.altitude>500))
         return 'Invalid die resting height';
     }
-    // Up to twenty dice are separate physical objects, one result per die.
-    // Larger throws stay grouped by denomination, as in the old format.
-    if(totalDice<=20&&throws.some((t:Record<string,unknown>)=>
-      (t.rolls as unknown[]).length!==1))
-      return 'Individual dice rolls must be recorded separately';
+    // New throws use one entry per die through 20; historical recordings
+    // stored small quantities grouped. Both MUST stay replayable.
+    // Repeated denominations are valid only when all those entries
+    // represent single physical dice; reject duplicate aggregate entries.
+    const byType=new Map<number,number[]>();
+    for(const entry of throws){
+      const t=entry as {sides:number;rolls:number[]};
+      byType.set(t.sides,[...(byType.get(t.sides)??[]),t.rolls.length]);
+    }
+    if([...byType.values()].some(group=>group.length>1&&group.some(n=>n!==1)))
+      return 'Invalid or duplicate die';
     if(totalDice>20&&(throws.length>8||seen.size!==throws.length))
       return 'Large throws must group by die type';
     if(state.objects.length+throws.length>1000)return 'Maximum objects reached';
