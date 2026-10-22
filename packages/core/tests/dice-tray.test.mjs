@@ -95,7 +95,8 @@ test('faster throws travel farther before friction and collisions',()=>{
   const slow=throwVelocity(50,20,280);
   const fast=throwVelocity(350,150,280);
   assert.ok(fast.speed>slow.speed);
-  assert.ok(fast.speed<=1120);
+  assert.ok(fast.speed<=1540);
+  assert.ok(fast.speed>slow.speed*1.5,'larger flicks should feel substantially stronger');
 });
 
 test('moving dice rebound from settled dice while settled pieces stay fixed',()=>{

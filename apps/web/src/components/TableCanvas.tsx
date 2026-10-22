@@ -467,7 +467,11 @@ function drawTcgMats(
       }
       const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
-      text.alpha=merged?1:.6;text.eventMode='none';
+      // A small dark etched outline separates zone words from any mat
+      // texture, color or imported artwork without changing their layout.
+      text.style.stroke={color:0x091a18,width:2.8,join:'round'};
+      text.style.dropShadow={color:0x020b09,alpha:.77,blur:1.5,distance:1.4,angle:Math.PI/2};
+      text.alpha=merged?1:.94;text.eventMode='none';
       // Center EVERY center-column label. Side labels face toward the
       // middle: left reads one way, right reads the opposite way.
       text.position.set(x+w/2,y+h/2);
@@ -1174,6 +1178,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const selectionReadout=formatDiceSelection(diceQuantities);
   const diceQuantitiesRef=useRef<Record<number,number>>({});
+  const clearDiceQueueRef=useRef<()=>void>(()=>{});
   const [boxClosed,setBoxClosed]=useState<{left:boolean;right:boolean}>(()=>{
     try{
       const saved=JSON.parse(localStorage.getItem('sennet.box.closed.v1')||'null');
@@ -1600,6 +1605,19 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     });
   };
 
+  /** Deselecting dice discards pending throw quantities and their
+   * visible 3D badges, not the permanent drawer source models. */
+  const clearDiceQueue=()=>{
+    if(!Object.values(diceQuantitiesRef.current).some(n=>n>0))return;
+    diceQuantitiesRef.current={};
+    setDiceQuantities({});
+    for(const sides of DICE_TYPES)staticDice3D.current?.setSourceQuantity(sides,0);
+    for(const {body,count} of diceBadges.current.values()){
+      if(body.children[0])body.children[0].visible=false;
+      count.text='';
+    }
+  };
+  clearDiceQueueRef.current=clearDiceQueue;
   const addDiceCount=(sides:number)=>{
     if(diceThrowAnimation.current!==null||dice3DActive.current)return;
     const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
@@ -1845,11 +1863,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     for(const id of [...dieShownAt.current.keys()]){
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
-    const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number}[]=[];
+    const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number;source:boolean}[]=[];
     const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1)=>{
       const el=coinDomVisual(value,sign,source,coinAppearance,color,editable);
       mount.current?.appendChild(el);
-      coinLayers.push({piece,el,displayScale});
+      coinLayers.push({piece,el,displayScale,source});
       return el;
     };
     // All eight permanent die and flipcoin generators share the RIGHT
@@ -1866,7 +1884,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const source=new Container();
         // The source belongs inside this drawer; a closed drawer never
         // leaks an unattached high-priority object through the playmat.
-        source.visible=!boxClosed.right;
+        // Never hide a whole source when the drawer starts moving.
+        // Pixi's stencil reveals it incrementally past the felt edge.
+        source.visible=true;
         // Fixed, real right-drawer coordinates. Zoom and camera changes
         // never edit their physical slot positions.
         source.position.set(slots[index].x,slots[index].y);
@@ -1895,7 +1915,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         mat.addChild(source);paintLayers.objects.attach(source);
         diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
-          drawerClosed:boxClosed.right,
           quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
@@ -1928,7 +1947,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
       values.forEach((value,index)=>{
         const source=new Container();
-        source.visible=!boxClosed.right;
+        // Its metal face is clipped against the moving playmat edge,
+        // not made visible all at once after the drawer finishes sliding.
+        source.visible=true;
         // Match the LEFT dice rack's 25-unit top row and 18-unit label
         // offset. Small physical coins share one row inside the narrow felt.
         source.position.set(boxX+(index===0?-15:15),top+25);
@@ -2015,9 +2036,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!body)continue;
       const closed=side===-1?boxClosed.left:boxClosed.right;
       const wasClosed=side===-1?lastBoxClosed.current.left:lastBoxClosed.current.right;
-      // Drawer artwork is trayW + 24 wide, starts 3 units off the mat,
-      // and extends 77 units out. Retract 67 => a 10-unit wooden lip.
-      const shift=-side*(TCG_MAT.cardWidth+5);
+      // Travel only 90% of the original retraction: a visible, graspable
+      // wooden sidewall remains outside the mat even when shut.
+      const shift=-side*(TCG_MAT.cardWidth+5)*.90;
       if(closed===wasClosed){
         body.position.x=closed?shift:0;
       }else{
@@ -2062,13 +2083,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       }
       // A separate DOM layer at z-index 6 keeps every coin above every
       // imported card image (z-index 5), even during camera or card motion.
-      for(const {piece,el,displayScale} of coinLayers){
+      for(const {piece,el,displayScale,source} of coinLayers){
         if(piece.destroyed||!el.isConnected)continue;
         let visible=true,ancestor:Container|null=piece;
         while(ancestor){
-          if(!ancestor.visible||
-            ancestor===drawerGroups.current.get(-1)&&boxClosed.left||
-            ancestor===drawerGroups.current.get(1)&&boxClosed.right){
+          if(!ancestor.visible){
             visible=false;break;
           }
           ancestor=ancestor.parent;
@@ -2085,6 +2104,16 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const tx=p.x*sx-18*ax-18*cx;
         const ty=p.y*sy-18*bx-18*dy;
         el.style.transform=`matrix(${ax},${bx},${cx},${dy},${tx},${ty})`;
+        // HTML coin art is above Pixi's stencil, so impose that SAME
+        // clipping edge in its own 36px local image coordinates.
+        // As the drawer slides, the coin is uncovered one pixel at a time.
+        if(source&&piece.parent){
+          const drawer=piece.parent;
+          const edge=TCG_MAT_WIDTH/2+4;
+          const x=piece.position.x+drawer.position.x;
+          const clipLeft=Math.max(0,Math.min(36,18+(edge-x)/displayScale));
+          el.style.clipPath=`inset(0 0 0 ${clipLeft}px)`;
+        }else el.style.clipPath='none';
       }
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
@@ -3046,6 +3075,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const down=(event:PointerEvent)=>{
       if(activeBookPointer===event.pointerId)return; // Book dragging never pans or clears the table.
       if(onCardMenu(event.target))return; // Menu taps never initiate tabletop pan.
+      // A click anywhere else on the tabletop discards a pending roll.
+      // Pixi receives source-die pointerdown first and marks dicePointer,
+      // so tapping another die adds to the queue rather than clearing it.
+      if(event.button===0&&dicePointer.current?.pointerId!==event.pointerId)
+        clearDiceQueueRef.current();
       // Pixi targets live on the canvas. A selected card's pointerdown
       // sets drag.current before this host handler executes: it must not
       // be misclassified as an empty-space click.

@@ -90,7 +90,7 @@ export function stepDicePhysics(bodies:DiceBody[],dt:number,width:number,height:
 export function throwVelocity(deltaX:number,deltaY:number,elapsedMs:number){
   const distance=Math.hypot(deltaX,deltaY);
   const duration=Math.max(.07,Math.min(.8,elapsedMs/1000));
-  const speed=clamp(distance/(duration+.18)*1.4,180,1120);
+  const speed=clamp(distance/(duration+.12)*1.95,280,1540);
   const dx=distance>0?deltaX/distance:1;
   const dy=distance>0?deltaY/distance:-.24;
   return {x:dx*speed,y:dy*speed,speed};

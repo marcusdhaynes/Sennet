@@ -1705,11 +1705,12 @@ body>.reader-backdrop{
   display:flex;align-items:center;justify-content:center;
   width:18px;height:18px;pointer-events:none;
   transform:translate(-50%,-50%);
-  border-radius:50%;border:1px solid #f9e6b3;
-  background:#0b322be9;color:#fff6c9;
+  border-radius:7px;border:1.4px solid #dfc395;
+  background:linear-gradient(145deg,#254d46,#0f2825);
+  color:#fff4d8;
   font:900 11px/1 ui-monospace,monospace;
-  box-shadow:0 0 4px #9bf8c77a,0 1px 2px #001812;
-  text-shadow:0 1px #061d18;
+  box-shadow:0 2px 3px #001812ba,inset 0 1px #ffffff30;
+  text-shadow:0 1px 1px #071713;
 }
 
 /* Precision-machined brass action keys. Icons are actual vectors, never
@@ -1868,8 +1869,8 @@ body>.reader-backdrop{
 /* Hold-to-collapse must leave a visible, complete gold circle (or semicircle)
    and cannot turn the center into a camera-drag handle after the hold. */
 .card-radial-wheel.is-collapsed .sennet-radial-center>circle{
-  stroke:#ffe4a1!important;stroke-width:8px!important;
-  filter:drop-shadow(0 0 5px #efc371aa);
+  stroke:#ad94cf!important;stroke-width:5px!important;
+  filter:none!important;
 }
 .card-radial-wheel.is-half.is-collapsed{
   clip-path:circle(33% at 50% 0%);
@@ -1878,3 +1879,8 @@ body>.reader-backdrop{
 .card-radial-wheel .sennet-radial-center:active{cursor:pointer!important}
 /* The first white coin's number field must render ABOVE its DOM coin face. */
 .pixi-host>.sennet-coin-editor{z-index:145}
+
+/* A subtle violet edge belongs to the wheel, not an unrelated gold halo. */
+.card-radial-wheel .sennet-radial-center>circle{
+  stroke:#ad94cf!important;filter:none!important;
+}

@@ -171,7 +171,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
        window.addEventListener('pointercancel',finish,{capture:true,passive:false});
      }}
      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setCollapsed(v=>!v);clearHighlight();}}}>
-   <circle cx="200" cy="200" r="64" fill="#1c142c" stroke={collapsed?"#ffe3a0":"#baa2d2"} strokeWidth={collapsed?8:2}/>
+   <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#ad94cf" strokeWidth={collapsed?5:3}/>
    <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800" fontSize={half?21:22} textAnchor="middle">{count} Selected</text>
    </g>
   </svg>

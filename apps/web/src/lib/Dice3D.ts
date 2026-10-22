@@ -99,8 +99,9 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     fixed.position.set(p.x,h-p.y,12);world.addBody(fixed);
   }
   const aimLength=Math.hypot(opts.aimX,opts.aimY);
+  // Make hand throws respond with more power, especially on short flicks.
   const throwSpeed=THREE.MathUtils.clamp(
-    aimLength/Math.max(.15,Math.min(.8,opts.durationMs/1000))*.95,210,950);
+    aimLength/Math.max(.105,Math.min(.75,opts.durationMs/1000))*1.42,330,1420);
   const vx=aimLength>5?opts.aimX/aimLength:1,
     vy=aimLength>5?-opts.aimY/aimLength:.19;
   const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
@@ -145,9 +146,9 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       THREE.MathUtils.clamp(startY,r+2,h-r-2),Math.max(r+6,42*(source.scale??1))+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
-    body.velocity.set(Math.cos(theta)*throwSpeed*(.85+Math.random()*.26),
-      Math.sin(theta)*throwSpeed*(.85+Math.random()*.26),
-      215+throwSpeed*.2);
+    body.velocity.set(Math.cos(theta)*throwSpeed*(.94+Math.random()*.22),
+      Math.sin(theta)*throwSpeed*(.94+Math.random()*.22),
+      235+throwSpeed*.22);
     body.angularVelocity.set((Math.random()-.5)*24,(Math.random()-.5)*24,
       (Math.random()-.5)*23);
     world.addBody(body);scene.add(mesh);
