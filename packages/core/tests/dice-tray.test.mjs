@@ -5,7 +5,7 @@ import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations}
   from '../../../apps/web/src/lib/diceCoordinates.ts';
-import {dieGeometry,convexShape}
+import {dieGeometry,convexShape,spawnOutsideTray}
   from '../../../apps/web/src/lib/Dice3D.ts';
 import * as CANNON from 'cannon-es';
 const command=(id,throws,seat=0)=>({id,actor:'local',
@@ -363,4 +363,18 @@ test('right-drawer source dice match the two smaller source coins',()=>{
   const coinRadius=16*1.08*.9*.72;
   const dieRadius=13.7*DICE_SOURCE_RACK_SCALE;
   assert.ok(Math.abs(coinRadius-dieRadius)<.35);
+});
+
+test('right drawer throws toward the playmat rather than away from it',()=>{
+  const tray={left:680,right:750,top:120,bottom:420};
+  const source={x:705,y:210},r=12;
+  const inward=spawnOutsideTray(source.x,source.y,r,[tray],-160,4);
+  assert.equal(inward.x,tray.left-r-13);
+  assert.equal(inward.y,source.y);
+  const outward=spawnOutsideTray(source.x,source.y,r,[tray],160,4);
+  assert.equal(outward.x,tray.right+r+13);
+  const upward=spawnOutsideTray(source.x,source.y,r,[tray],4,-160);
+  assert.equal(upward.y,tray.top-r-13);
+  const outside=spawnOutsideTray(500,210,r,[tray],-160,0);
+  assert.deepEqual(outside,{x:500,y:210});
 });
