@@ -32,3 +32,19 @@ test('fallback face sampling never goes outside legal dice faces',()=>{
       assert.ok(value>=1&&value<=sides);
     }
 });
+
+test('fallback keeps scaled dice silhouettes inside actual screen margins',()=>{
+  const result=fallbackDiceResults([
+    {sides:20,quantity:1,x:2000,y:2000,scale:3},
+    {sides:6,quantity:1,x:-150,y:-150,scale:.2}
+  ],400,300,1000,-800);
+  assert.ok(result[0].x>=81&&result[0].x<=319);
+  assert.ok(result[0].y>=81&&result[0].y<=219);
+  assert.ok(result[1].x>=32&&result[1].x<=368);
+  assert.ok(result[1].y>=32&&result[1].y<=268);
+});
+test('fallback never manufactures a larger viewport on very small screens',()=>{
+  const result=fallbackDiceResults([{sides:6,quantity:1,x:0,y:0}],40,30,0,0);
+  assert.equal(result[0].x,20);
+  assert.equal(result[0].y,15);
+});

@@ -2,7 +2,7 @@
  * its GPU context mid-roll. Results are committed as normal THROW_TRAY and
  * REROLL_DIE commands, including the exact sampled faces. */
 export interface RollFallbackSource {
-  sides:number;quantity:number;x:number;y:number
+  sides:number;quantity:number;x:number;y:number;scale?:number
 }
 export interface RollFallbackResult {
   sides:number;rolls:number[];x:number;y:number;rotation:number;
@@ -25,7 +25,8 @@ export function fallbackDiceResults(
   sources:readonly RollFallbackSource[],width:number,height:number,
   aimX:number,aimY:number
 ):RollFallbackResult[]{
-  const w=Math.max(80,width||80),h=Math.max(80,height||80);
+  const w=Math.max(1,Number.isFinite(width)?width:1),
+    h=Math.max(1,Number.isFinite(height)?height:1);
   const magnitude=Math.hypot(aimX,aimY);
   const vector=magnitude>5?{x:aimX/magnitude,y:aimY/magnitude}:{x:-.9,y:-.35};
   const centerX=w/2,centerY=h/2;
@@ -33,16 +34,20 @@ export function fallbackDiceResults(
     const sides=Number.isFinite(source.sides)?Math.max(2,Math.min(100,Math.trunc(source.sides))):6;
     const quantity=between(Math.trunc(source.quantity)||1,1,20);
     const throws=Array.from({length:quantity},()=>fairFace(sides));
+    // An airborne model extends beyond its center. Use a minimum 32px
+    // outline (including shadow), scaled up for large source dice.
+    const footprint=Math.max(32,27*Math.max(.08,Math.min(4,source.scale??1)));
+    const mx=Math.min(w/2,footprint),my=Math.min(h/2,footprint);
     // Land inside the visible tabletop, not back inside the closed drawer.
     const offset=(i-(sources.length-1)/2)*45;
     const projectedX=source.x+vector.x*125;
     const projectedY=source.y+vector.y*125;
     const x=between(
       Math.abs(projectedX-centerX)>w*.43?centerX+offset:projectedX+offset,
-      28,w-28);
+      mx,w-mx);
     const y=between(
       Math.abs(projectedY-centerY)>h*.43?centerY+offset*.5:projectedY+offset*.5,
-      28,h-28);
+      my,h-my);
     return {sides,rolls:throws,x,y,rotation:0,
       quaternion:[0,0,0,1],altitude:0};
   });
