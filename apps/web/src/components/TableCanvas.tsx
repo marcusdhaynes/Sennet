@@ -26,6 +26,7 @@ import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {diceRackLocations} from '../lib/diceCoordinates';
+import {bookOpenPoseX,drawerInnerWell,isBookWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -305,6 +306,38 @@ function drawTcgMats(
       const by=trayBottom-bh*.44-10+bookOffset.y;
       const book=makePseudo3DBook(bookDesign,bw,bh);
       book.position.set(bx,by);
+      // A physical book can be loose on the felt OR stowed in EITHER
+      // drawer. Test its footprint against the actual inner wooden walls;
+      // do not infer attachment merely from the Book Design/Dock setting.
+      const trayW=TCG_MAT.cardWidth;
+      const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+      const trayH=trayBottom-trayTop;
+      const wellFor=(drawerSide:-1|1)=>drawerInnerWell(
+        drawerSide*(TCG_MAT_WIDTH/2+trayW/2+3),
+        (trayTop+trayBottom)/2,trayW,trayH);
+      const fits=(drawerSide:-1|1,x:number,y:number,shift=0)=>
+        isBookWithinDrawer(x,y,bw*1.06,bh*1.06,wellFor(drawerSide),shift);
+      let stowedIn:-1|1|null=null;
+      const stow=(drawerSide:-1|1,openX:number,y:number)=>{
+        const drawer=drawerGroups.get(drawerSide);
+        if(!drawer)return;
+        layers.objects.detach(book);
+        // Child of the wooden tray: inherits its 245ms slide, stencil and
+        // draw order beneath the felt while remaining above the tray floor.
+        drawer.addChild(book);
+        book.position.set(openX,y);
+        stowedIn=drawerSide;
+      };
+      const free=(x:number,y:number)=>{
+        mat.addChild(book);
+        book.position.set(x,y);
+        layers.objects.attach(book);
+        stowedIn=null;
+      };
+      const initialStow=([-1,1] as const).find(s=>fits(s,bx,by));
+      if(initialStow!==undefined)stow(initialStow,bx,by);
+      else free(bx,by);
+
       let release:((event:PointerEvent)=>void)|null=null;
       book.on('pointerdown',e=>{
         if(e.button!==0)return;
@@ -314,16 +347,18 @@ function drawTcgMats(
         if(!stage){activeBookPointer=null;return;}
         const rect=stage.getBoundingClientRect();
         const startX=e.global.x,startY=e.global.y;
-        const originalX=book.position.x,originalY=book.position.y;
-        const initialOffset={...bookOffset};
+        const previouslyStowed=stowedIn;
+        const homeDrawer=previouslyStowed!==null?drawerGroups.get(previouslyStowed):null;
+        // Lift out of the clipped drawer BEFORE dragging. The book now
+        // remains selectable across the drawer wall and entire playmat.
+        const originalX=book.position.x+(homeDrawer?.position.x??0);
+        const originalY=book.position.y;
+        if(previouslyStowed!==null)free(originalX,originalY);
         let moved=false;
         const onMove=(event:PointerEvent)=>{
           if(event.pointerId!==e.pointerId)return;
           event.stopPropagation();
           if(event.cancelable)event.preventDefault();
-          // Use the original Pixi pointer position as the coordinate
-          // origin. DOM motion is scaled into the SAME canvas units, so
-          // zooming or dragging outside the drawer never makes the book jump.
           const global=new Point(
             startX+(event.clientX-e.clientX)*stage.clientWidth/rect.width,
             startY+(event.clientY-e.clientY)*stage.clientHeight/rect.height);
@@ -331,10 +366,7 @@ function drawTcgMats(
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
           if(Math.hypot(dx,dy)>4)moved=true;
-          // A book moves independently from the table and passes through
-          // wooden tray walls without friction, snapping, or pushback.
-          const x=originalX+dx,y=originalY+dy;
-          book.position.set(x,y);
+          book.position.set(originalX+dx,originalY+dy);
         };
         const onUp=(event:PointerEvent)=>{
           if(event.pointerId!==e.pointerId)return;
@@ -344,9 +376,26 @@ function drawTcgMats(
           window.removeEventListener('pointercancel',onUp,true);
           activeBookPointer=null;
           release=null;
-          if(moved)onBookMove({x:initialOffset.x+book.position.x-originalX,
-            y:initialOffset.y+book.position.y-originalY});
-          else if(event.type!=='pointercancel')onBookOpen();
+          if(event.type==='pointercancel'||!moved){
+            free(originalX,originalY);
+            if(previouslyStowed!==null&&homeDrawer)
+              stow(previouslyStowed,bookOpenPoseX(originalX,homeDrawer.position.x),originalY);
+            if(event.type!=='pointercancel')onBookOpen();
+            return;
+          }
+          // A drop wholly inside an OPEN drawer becomes part of that
+          // drawer, whichever side it is. Outside either well the book
+          // remains a freely draggable top-layer physical object.
+          const target=([-1,1] as const).find(s=>{
+            const drawer=drawerGroups.get(s);
+            return drawer&&!(s===-1?drawerState.left:drawerState.right)&&
+              fits(s,book.position.x,book.position.y,drawer.position.x);
+          });
+          const visibleX=book.position.x,visibleY=book.position.y;
+          const openX=target===undefined?visibleX:
+            bookOpenPoseX(visibleX,drawerGroups.get(target)?.position.x??0);
+          if(target!==undefined)stow(target,openX,visibleY);
+          onBookMove({x:openX-bx,y:visibleY-by});
         };
         release=onUp;
         window.addEventListener('pointermove',onMove,true);
@@ -354,11 +403,7 @@ function drawTcgMats(
         window.addEventListener('pointercancel',onUp,true);
       });
       book.on('destroyed',()=>{if(release)activeBookPointer=null;});
-      // The book must remain movable even after leaving the drawer.
-      // Never place its hit target under the drawer's clipping mask.
-      mat.addChild(book);
-      layers.objects.attach(book);
-      // Capture the drag before the table background can initiate camera pan.
+      // A stored book shares the moving drawer; a lifted book is free.
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
     // Joined center rows are rendered as ONE pocket. The side columns
