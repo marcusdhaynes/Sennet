@@ -967,6 +967,23 @@ export function tcgPlacementPoint(
     const d=Math.hypot(dx,dy);
     if(d<dist-1e-8){closest=region;dist=d;}
   }
+  // If the card still overlaps a PLAY/HAND center region, prefer that
+  // zone to the adjacent outer column. This lets a release a few pixels
+  // beyond its edge settle fully back inside instead of jumping columns.
+  const centerOverlap=tcgMatRegions(seat,merged).filter(r=>r.column===1)
+    .map(region=>{
+      const anchor=tcgMatLocal(region.x,region.y,seat);
+      const dx=Math.max(0,Math.abs(local.x-anchor.x)-region.width/2);
+      const dy=Math.max(0,Math.abs(local.y-anchor.y)-region.height/2);
+      return {region,dx,dy,d:Math.hypot(dx,dy)};
+    }).filter(hit=>hit.dx<=ext.x&&hit.dy<=ext.y)
+    .sort((a,b)=>a.d-b.d)[0];
+  if(centerOverlap&&closest?.column!==1&&
+    // Do not steal intentional drops in the center of outer pockets.
+    centerOverlap.dx<=Math.max(4,ext.x*.65)&&
+    centerOverlap.dy<=Math.max(4,ext.y*.65)){
+    closest=centerOverlap.region;dist=centerOverlap.d;
+  }
   if(!closest||dist>Math.max(TCG_MAT.snapOutside,ext.x,ext.y))
     return tcgSnapPoint(x,y,merged,snapMerged,preferredSeat,cardScale);
   if(closest.column!==1)return tcgSnapPoint(x,y,merged,snapMerged,preferredSeat,cardScale);
