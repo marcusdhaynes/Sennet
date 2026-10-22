@@ -1884,3 +1884,84 @@ body>.reader-backdrop{
 .card-radial-wheel .sennet-radial-center>circle{
   stroke:#ad94cf!important;filter:none!important;
 }
+
+/* Screen box scrolls invisibly; keyboard/mouse/touch can still pan its text. */
+.sennet-action-lcd-display{
+  scrollbar-width:none!important;-ms-overflow-style:none;
+  cursor:pointer;user-select:none;
+}
+.sennet-action-lcd-display::-webkit-scrollbar{display:none!important;width:0;height:0}
+.sennet-action-lcd-display:focus-visible{
+  outline:1px solid #b8e6c9;outline-offset:-2px;
+}
+/* Sennet receipt: a full-width green CRT under one machined brass casing.
+   Monotype/tabular clock, no gridlines or row rules whatsoever. */
+.sennet-receipt-backdrop{
+  position:fixed;inset:0;z-index:900;display:flex;align-items:center;
+  justify-content:center;padding:clamp(8px,3vw,30px);background:#020c0bd9;
+  backdrop-filter:blur(5px);
+}
+.sennet-receipt{
+  box-sizing:border-box;width:min(1060px,100%);max-height:min(820px,94dvh);
+  display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;
+  border:3px solid #a17a45;border-radius:11px;
+  background:linear-gradient(150deg,#6c5031,#39291e 37%,#241d17 83%,#755837);
+  box-shadow:0 25px 100px #000e,inset 0 1px 1px #f6dda46b;
+  color:#ddf6dd;font-family:'Cascadia Code','SFMono-Regular',Consolas,'Courier New',monospace;
+  font-variant-numeric:tabular-nums;
+}
+.sennet-receipt-header{display:flex;gap:14px;align-items:center;flex:none;
+  padding:16px 19px 13px;background:linear-gradient(180deg,#5e452e,#38291e);
+  border-bottom:2px solid #957244}
+.sennet-receipt-insignia{display:grid;place-items:center;flex:none;
+  width:45px;height:45px;border:2px solid #bd9d65;border-radius:8px;
+  background:#102e27;color:#b7f5d0;font:900 26px/1 Georgia,serif;
+  box-shadow:inset 0 2px 6px #000b,0 1px #edd1a344}
+.sennet-receipt-header h2{margin:3px 0;color:#e8dbb5;font-size:clamp(16px,2.6vw,24px);
+  letter-spacing:.02em;font-weight:800}
+.sennet-receipt-header small{color:#cbb18a;font-size:10px}
+.sennet-receipt-eyebrow{font-size:10px;letter-spacing:2px;color:#a3e9bd}
+.sennet-receipt-close{margin-left:auto;align-self:flex-start;width:30px;height:30px;
+  padding:0;border:1px solid #bd985e;border-radius:6px;color:#eedcb8;
+  background:#3c2a1f;font-size:24px;line-height:1}
+.sennet-receipt-scroll{
+  flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;
+  background:linear-gradient(165deg,#071915,#0a2823 65%,#071e1b);
+  box-shadow:inset 0 10px 22px #0008,inset 0 -8px 22px #0008;
+  scrollbar-width:thin;scrollbar-color:#618e72 transparent;
+}
+.sennet-receipt-table{border-collapse:separate;border-spacing:0;width:100%;
+  table-layout:fixed;text-align:left;font-size:clamp(10px,1.2vw,13px);line-height:1.42}
+.sennet-receipt-time-column{width:125px}
+.sennet-receipt-type-column{width:125px}
+.sennet-receipt-location-column{width:32%}
+.sennet-receipt-table th{position:sticky;top:0;z-index:1;
+  padding:13px 11px 11px;color:#f0daa6;
+  background:#102922;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;
+  white-space:nowrap;border:0}
+.sennet-receipt-table td{padding:11px;vertical-align:top;border:0;
+  color:#c6e8d3;overflow-wrap:anywhere}
+.sennet-receipt-table tbody tr:nth-child(2n){background:#ffffff05}
+.sennet-receipt-table tbody tr:hover{background:#b9ffca0b}
+.sennet-receipt-table td strong{color:#a6f5c5;font-weight:800}
+.sennet-receipt-timestamp{color:#f0d7a3!important;white-space:nowrap}
+.sennet-receipt-timestamp span{display:block;letter-spacing:.15px}
+.sennet-receipt-empty{padding:35px 22px;color:#b5d4c2;text-align:center}
+.sennet-receipt-footer{display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:12px;flex:none;padding:12px 18px;color:#e3d0a7;
+  border-top:2px solid #81603c;background:linear-gradient(#38271d,#4b3524)}
+.sennet-receipt-footer small{font:600 10px/1.5 ui-monospace,monospace;opacity:.85}
+.sennet-receipt-actions{display:flex;gap:9px;align-items:center}
+.sennet-receipt-actions button{border:1px solid #b99a61;border-radius:5px;
+  background:linear-gradient(#796045,#4b3726);color:#fff0c5;
+  padding:9px 12px;font:700 11px ui-monospace,monospace}
+.sennet-receipt-actions button:hover{background:#916e47}
+@media(max-width:620px){
+ .sennet-receipt-header{padding:12px;gap:9px}
+ .sennet-receipt-time-column{width:98px}
+ .sennet-receipt-type-column{width:78px}
+ .sennet-receipt-location-column{width:29%}
+ .sennet-receipt-table th,.sennet-receipt-table td{padding:8px 5px}
+ .sennet-receipt-table{font-size:10px}
+ .sennet-receipt-actions button{padding:8px}
+}

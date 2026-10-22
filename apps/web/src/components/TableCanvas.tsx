@@ -33,6 +33,7 @@ import {formatDiceSelection} from '../lib/actionDisplay';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
+import {fitDockedRadial} from '../lib/actionRadialFit';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -40,7 +41,7 @@ import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,THROWN_DIE_LIFETIME_MS,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition,coinNumericValue,validCoinText} from '@sennet/core';
-interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
+interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;onOpenReceipt:()=>void;onInterfaceAction:(type:string,location:string,description:string)=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number],altitude?:number)=>void;readonly?:boolean}
 /** Draw ordering is global across all seats, even when Castle mats overlap.
  * Separate opponent backings from the viewer's mat and every interactable:
@@ -1178,7 +1179,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,onOpenReceipt,onInterfaceAction,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const selectionReadout=formatDiceSelection(diceQuantities);
@@ -1194,9 +1195,16 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const drawerGroups=useRef(new Map<number,Container>());
   const drawerTabs=useRef(new Map<number,Container>());
   const lastBoxClosed=useRef(boxClosed);
-  const toggleBox=(side:-1|1)=>setBoxClosed(previous=>({
-    ...previous,[side===-1?'left':'right']:!previous[side===-1?'left':'right']
-  }));
+  const interfaceAction=useRef(onInterfaceAction);interfaceAction.current=onInterfaceAction;
+  const toggleBox=(side:-1|1)=>setBoxClosed(previous=>{
+    const key=side===-1?'left':'right';
+    const opening=previous[key];
+    // One physical drawer change is one receipt row.
+    interfaceAction.current(opening?'Expand':'Collapse',
+      key==='left'?'Left drawer':'Right drawer',
+      opening?'Open drawer':'Close drawer');
+    return {...previous,[key]:!previous[key]};
+  });
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
   const diceTrayMat=useRef<Container|null>(null);
@@ -1238,7 +1246,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       encodeURIComponent(actorId),JSON.stringify(relations));}
     catch{/* Local storage unavailable: the current session still works. */}
   },[actorId,relations]);
-  const selectView=(next:EyeView)=>{viewRef.current=next;setEyeView(next);};
+  const selectView=(next:EyeView)=>{
+    const prior=viewRef.current;
+    if(prior.kind!==next.kind||prior.opponent!==next.opponent||
+      prior.castleMode!==next.castleMode||
+      prior.castleFocusedAlly!==next.castleFocusedAlly||
+      prior.castleFocusedEnemy!==next.castleFocusedEnemy){
+      interfaceAction.current('View','Table',prior.kind+' → '+next.kind+
+        (next.castleMode?' · '+next.castleMode:'')+
+        (next.opponent!==null?' · P'+(next.opponent+1):''));
+    }
+    viewRef.current=next;setEyeView(next);
+  };
   const eyeTapHandler=useRef<()=>void>(()=>{});
   const eyeHoldHandler=useRef<()=>void>(()=>{});
   const castleTapHandler=useRef<()=>void>(()=>{});
@@ -1678,7 +1697,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             hand.y+Math.cos(hand.angle)*hand.height/2
           );
           const projected=(duelLayers.current?.get(seatRef.current)??board).toGlobal(bottom);
-          const next={x:projected.x,y:projected.y,size:TCG_MAT_WIDTH*.30*scale};
+          // In 1v1/Castle the mat can reach the screen boundary; fit the
+          // entire expanded half-wheel without clipping it against any edge.
+          const next=fitDockedRadial(projected.x,projected.y,
+            TCG_MAT_WIDTH*.30*scale,w,h);
           dockedWheelGeometry.current=next;
           const dock=dockedWheelRef.current;
           if(dock){
@@ -1702,7 +1724,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           const matScreenWidth=Math.hypot(
             projectedRight.x-projectedLeft.x,projectedRight.y-projectedLeft.y);
           const display=fitActionScreenToWheel(
-            projectedLeft.x,projectedRight.x,projected.x,next.size,
+            projectedLeft.x,projectedRight.x,next.x,next.size,
             screen.y,matScreenWidth/TCG_MAT_WIDTH);
           actionScreenLatest.current=display;
           if(actionLcdRef.current){
@@ -3261,8 +3283,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
           </svg>
         </button>
-        <div className="sennet-action-lcd-display" role="status"
-          aria-live="polite" title={selectionReadout||latestAction}>
+        <div className="sennet-action-lcd-display" role="button"
+          tabIndex={0} aria-label="Open complete action receipt"
+          onClick={onOpenReceipt}
+          onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onOpenReceipt();}}}
+          title="Open complete action receipt">
           <span>{selectionReadout||latestAction}</span>
         </div>
         {selectionReadout&&<button type="button" className="sennet-action-lcd-roll" title="Throw selected dice"

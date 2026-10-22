@@ -2,6 +2,10 @@ import {Container, Graphics, Rectangle, Sprite, Text, Texture} from 'pixi.js';
 
 export type TomeDesign = 'tiny'|'dragon'|'journal'|'arcane'|'strapped';
 
+/** Cache the real 3D artwork across Pixi scene rebuilds. Without a
+ * synchronous image, dice rolls and drawer toggles briefly display the
+ * procedural fallback cover while an already-cached promise resolves. */
+const bookCoverTextures=new Map<TomeDesign,Texture>();
 const palettes: Record<TomeDesign, {leather:number;shadow:number;foil:number;edge:number;paper:number}> = {
   tiny:{leather:0x84383b,shadow:0x321c21,foil:0xe4b970,edge:0xb15d5a,paper:0xead7b6},
   dragon:{leather:0x15536c,shadow:0x081e2b,foil:0x9de7ee,edge:0x246980,paper:0xe8d9b8},
@@ -132,21 +136,27 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   caption.anchor.set(.5);caption.position.set(captionPoint.x,captionPoint.y);
   caption.rotation=.025;
   book.addChild(caption);
-  // True Three.js geometry is rendered once per cover style and cached as
-  // transparent artwork. Keep the procedural Pixi model as a no-WebGL
-  // fallback, and keep the *same* pointer-owning book container throughout.
-  void import('./Book3D').then(({getBookCanvas})=>getBookCanvas(design)).then(canvas=>{
+  // Reuse the exact SAME GPU-ready texture in every table rebuild.
+  // This prevents placeholder-to-3D swaps when cards, dice or drawers change.
+  const showCover=(texture:Texture)=>{
     if(book.destroyed)return;
-    const art=new Sprite(Texture.from(canvas));
+    const art=new Sprite(texture);
     art.anchor.set(.5);
-    // Match the model's actual portrait ratio; avoid skewed, stretched foil.
-    art.width=width*1.06;
-    art.height=height*1.06;
-    art.position.set(0,0);
-    art.eventMode='none';
+    art.width=width*1.06;art.height=height*1.06;
+    art.position.set(0,0);art.eventMode='none';
     body.visible=false;mark.visible=false;caption.visible=false;
     book.addChildAt(art,0);
-  }).catch(()=>{/* No WebGL / restricted device: leave the existing book. */});
+  };
+  const cachedTexture=bookCoverTextures.get(design);
+  if(cachedTexture)showCover(cachedTexture);
+  else void import('./Book3D').then(({getBookCanvas})=>getBookCanvas(design)).then(canvas=>{
+    let texture=bookCoverTextures.get(design);
+    if(!texture){
+      texture=Texture.from(canvas);
+      bookCoverTextures.set(design,texture);
+    }
+    showCover(texture);
+  }).catch(()=>{/* WebGL disabled: keep procedural fallback cover. */});
   // Collision-free hit rectangle is exclusively for selecting this object.
   book.eventMode='static';book.cursor='grab';
   book.hitArea=new Rectangle(-width*.56,-height*.54,width*1.12,height*1.08);
