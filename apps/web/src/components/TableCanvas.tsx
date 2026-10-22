@@ -33,7 +33,7 @@ import {formatDiceSelection} from '../lib/actionDisplay';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
-import {fitDockedRadial} from '../lib/actionRadialFit';
+import {fixedRadialDock} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
@@ -1718,22 +1718,20 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             hand.y+Math.cos(hand.angle)*hand.height/2
           );
           const projected=(duelLayers.current?.get(seatRef.current)??board).toGlobal(bottom);
-          // In 1v1/Castle the mat can reach the screen boundary; fit the
-          // entire expanded half-wheel without clipping it against any edge.
-          const next=fitDockedRadial(projected.x,projected.y,
-            TCG_MAT_WIDTH*.30*scale,w,h);
+          // The action wheel is a SCREEN-DOCKED HUD, never a playmat
+          // accessory. Panning/zooming/1v1/Castle only changes world objects,
+          // not its position, diameter, or hit targets.
+          const next=fixedRadialDock(w,h);
           dockedWheelGeometry.current=next;
           const dock=dockedWheelRef.current;
           if(dock){
-            // Constant 180-unit wheel; a single CSS transform applies the
-            // same camera scale and translation as the Pixi playmat.
+            // Wheel size is fixed in screen pixels. Only exceptionally
+            // small viewports shrink it to keep every expanded action visible.
             const factor=next.size/180;
             dock.style.transform=`translate3d(${next.x-90*factor}px,${next.y}px,0) scale(${factor})`;
           }
-          // Keep the LCD immediately below the playmat. Its LEFT edge
-          // projects from the real playmat edge; its RIGHT edge meets the
-          // leftmost point of the docked half-radial. Recalculate both using
-          // the same Pixi camera transform on every zoom/pan/seat change.
+          // LCD remains attached to its playmat border. Its screen-right
+          // edge does not control or resize the fixed action wheel.
           const parent=duelLayers.current?.get(seatRef.current)??board;
           const panelY=actionScreenContactCenter(TCG_MAT_HEIGHT);
           const matLeft=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
