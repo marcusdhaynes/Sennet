@@ -9,18 +9,23 @@ const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
 const COIN_RADIAL_LABELS=['⧉','+I','+X','+C','+M','◉','−I','−X','−C','−M'] as const;
 const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
   '#9e8dd2','#f2c27c','#f1a6cb','#dde4ea','#657da2','#44464a'];
-// Ten real, independently clickable buttons sit over a compact scalloped
-// ring; the empty middle is reserved for the miniature physical coin.
-const COIN_RADIAL_SIZE=116;
+// Ten accessible, borderless controls: the larger annulus gives each Roman
+// numeral room to breathe while every clickable label stays inside its wedge.
+const COIN_RADIAL_SIZE=152;
+const COIN_RADIAL_OUTER_RADIUS=72;
+const COIN_RADIAL_INNER_RADIUS=27;
+const COIN_RADIAL_LABEL_RADIUS=52;
 const coinSector=(index:number)=>{
   const center=COIN_RADIAL_SIZE/2;
   const coord=(angle:number,r:number)=>({x:center+r*Math.cos(angle*Math.PI/180),
     y:center-r*Math.sin(angle*Math.PI/180)});
-  const a=180-index*36,p=coord(a+17.5,55),q=coord(a-17.5,55);
-  const innerStart=coord(a+17.5,21),innerEnd=coord(a-17.5,21);
-  const t=coord(a,40);
-  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A55 55 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A21 21 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
-    x:t.x,y:t.y};
+  const a=180-index*36,half=17.5;
+  const p=coord(a+half,COIN_RADIAL_OUTER_RADIUS),q=coord(a-half,COIN_RADIAL_OUTER_RADIUS);
+  const innerStart=coord(a+half,COIN_RADIAL_INNER_RADIUS);
+  const innerEnd=coord(a-half,COIN_RADIAL_INNER_RADIUS);
+  const labelPosition=coord(a,COIN_RADIAL_LABEL_RADIUS);
+  return {d:`M${innerStart.x} ${innerStart.y} L${p.x} ${p.y} A${COIN_RADIAL_OUTER_RADIUS} ${COIN_RADIAL_OUTER_RADIUS} 0 0 1 ${q.x} ${q.y} L${innerEnd.x} ${innerEnd.y} A${COIN_RADIAL_INNER_RADIUS} ${COIN_RADIAL_INNER_RADIUS} 0 0 0 ${innerStart.x} ${innerStart.y} Z`,
+    x:labelPosition.x,y:labelPosition.y};
 };
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
@@ -3229,7 +3234,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       e.stopPropagation();
     }}>
       <div className="sennet-coin-radial" style={{left:coinMenu.x,top:coinMenu.y}}>
-        <svg viewBox="0 0 116 116" aria-hidden="true" focusable="false" className="sennet-coin-ring">
+        <svg viewBox={`0 0 ${COIN_RADIAL_SIZE} ${COIN_RADIAL_SIZE}`} aria-hidden="true" focusable="false" className="sennet-coin-ring">
           {COIN_ACTIONS.map((_,i)=><path key={i} d={coinSector(i).d}
             className="sennet-coin-sector"/>)}
         </svg>
@@ -3238,7 +3243,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           const shown=COIN_RADIAL_LABELS[i];
           return <button type="button" key={i}
             className="sennet-coin-action-button"
-            aria-label={'Position '+(i+1)+': '+action}
+            aria-label={action}
             title={action}
             style={{left:p.x,top:p.y}}
             onPointerDown={e=>{e.stopPropagation();}}
