@@ -3282,6 +3282,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     window.addEventListener('keydown',key);
     function preventMenu(event:MouseEvent){event.preventDefault();}
     return()=>{
+      if(wheelSettleTimer!==null)window.clearTimeout(wheelSettleTimer);
       interruptFocus();focusMyMat.current=()=>{};focusOpponent.current=()=>{};resetCamera.current=()=>{};eyeTapHandler.current=()=>{};eyeHoldHandler.current=()=>{};castleTapHandler.current=()=>{};castleHoldHandler.current=()=>{};castleFocusHandler.current=()=>{};cycleOpponentHandler.current=()=>{};toggleRelationHandler.current=()=>{};
       host.removeEventListener('wheel',wheel);
       host.removeEventListener('pointerdown',selectOpponent,true);
