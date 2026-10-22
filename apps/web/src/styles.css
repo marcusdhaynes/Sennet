@@ -2373,3 +2373,170 @@ body>.reader-backdrop{
 @media(prefers-reduced-motion:reduce){
   .reader.reader-open-book.unified-tome{animation:none}
 }
+
+/* The physical coin color instrument: hue/saturation disk + precise value
+   slider, RGB/HSV/hex instruments, clear accept/cancel affordances.
+   Portaled to body, never clipped by the tabletop or a drawer. */
+.coin-color-backdrop{
+  position:fixed;inset:0;z-index:16000;
+  display:grid;place-items:center;padding:clamp(8px,3vw,24px);
+  background:#09101bbc;backdrop-filter:blur(7px);
+  overscroll-behavior:contain;
+}
+.coin-color-dialog{
+  width:min(460px,100%);max-height:calc(100dvh - 22px);
+  overflow:auto;border:1px solid #393d53;border-radius:18px;
+  background:#171820;color:#f4f6fe;
+  box-shadow:0 24px 90px #000c,0 0 0 2px #e1e4f117,inset 0 1px #ffffff18;
+  font-family:Inter,system-ui,-apple-system,sans-serif;
+  font-variant-numeric:tabular-nums;
+}
+.coin-color-title{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:11px 14px 10px;
+  background:#12131c;border-bottom:1px solid #232530;
+}
+.coin-color-title strong{
+  font:600 clamp(22px,4vw,26px)/1.1 Inter,system-ui,sans-serif;
+  letter-spacing:-.04em;
+}
+.coin-color-title button{
+  background:none;border:0;color:#c8ccda;
+  font:300 25px/1 Inter,system-ui,sans-serif;
+  cursor:pointer;width:34px;height:30px;border-radius:7px;
+}
+.coin-color-title button:hover{background:#30313e;color:#fff}
+.coin-color-main{
+  display:flex;justify-content:space-around;align-items:center;
+  gap:clamp(12px,4vw,28px);
+  padding:25px clamp(17px,6vw,30px) 18px;
+}
+.coin-color-wheel{
+  position:relative;flex:none;width:min(256px,65vw);height:min(256px,65vw);
+  max-width:calc(100% - 59px);aspect-ratio:1;
+  border-radius:50%;overflow:hidden;cursor:crosshair;
+  touch-action:none;user-select:none;
+  background:
+    radial-gradient(circle closest-side,#fff 0%,#ffffffdb 12%,#ffffff00 100%),
+    conic-gradient(from 270deg,
+      #f00 0deg,#f0f 60deg,#00f 120deg,#0ff 180deg,
+      #0f0 240deg,#ff0 300deg,#f00 360deg);
+  box-shadow:0 0 0 1px #ffffff29,0 2px 12px #0008;
+}
+.coin-color-wheel-dark{
+  position:absolute;inset:0;background:#000;pointer-events:none;
+}
+.coin-color-wheel-target{
+  position:absolute;z-index:2;width:21px;height:21px;
+  border-radius:50%;transform:translate(-50%,-50%);
+  border:2px solid #080d17;box-shadow:0 0 0 2px #ffffffde,0 2px 5px #0009;
+  pointer-events:none;
+}
+.coin-color-wheel:focus-visible{outline:3px solid #81ddff;outline-offset:5px}
+.coin-color-value-wrap{
+  flex:none;display:flex;align-items:center;justify-content:center;
+  height:256px;width:38px;
+}
+.coin-color-value{
+  appearance:slider-vertical;-webkit-appearance:slider-vertical;
+  writing-mode:vertical-lr;direction:rtl;
+  width:32px;height:256px;margin:0;accent-color:#e3f3ff;
+  border:0;cursor:pointer;touch-action:none;
+}
+.coin-color-value::-webkit-slider-runnable-track{
+  background:transparent;border:1px solid #e6ebff22;
+  width:32px;
+}
+.coin-color-value::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;
+  width:42px;height:12px;border:2px solid #fff;border-radius:7px;
+  background:#1a1d24;box-shadow:0 0 0 1px #000,0 1px 4px #000a;
+}
+.coin-color-value::-moz-range-thumb{
+  width:38px;height:10px;border:2px solid #fff;border-radius:6px;
+  background:#1a1d24;box-shadow:0 0 0 1px #000;
+}
+.coin-color-actions{
+  display:flex;align-items:center;gap:14px;
+  padding:12px 14px 15px;border-bottom:1px solid #333441;
+}
+.coin-color-sample{
+  flex:none;width:46px;height:46px;border-radius:12px;
+  border:1px solid #ffffff49;
+  box-shadow:inset 0 1px #fff6,0 2px 4px #0007;
+}
+.coin-color-confirm,.coin-color-cancel{
+  flex:none;border:0;background:transparent;
+  font:400 38px/1 Inter,system-ui,sans-serif;
+  width:43px;height:43px;color:#f3f5ff;cursor:pointer;
+  border-radius:10px;
+}
+.coin-color-confirm:hover{background:#345547;color:#c5ffd9}
+.coin-color-cancel:hover{background:#66373f;color:#ffe4ea}
+.coin-color-hex{
+  width:135px;max-width:36%;min-width:0;margin-left:auto;
+  padding:8px 9px;border:1px solid #303341;border-radius:11px;
+  text-align:center;background:#22232e;color:#fbfbff;
+  font:600 15px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+.coin-color-values{background:#14151e;padding:8px 12px 12px}
+.coin-color-channel-row{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;padding:7px 2px;
+}
+.coin-color-channel-row+.coin-color-channel-row{
+  border-top:1px solid #343541;
+}
+.coin-color-channel-row label{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  font:600 20px/1 Inter,system-ui,sans-serif;
+}
+.coin-color-channel-row label span{min-width:22px;text-align:center}
+.coin-color-channel-row input{
+  width:100%;min-width:0;max-width:92px;
+  border:1px solid #30313e;border-radius:10px;
+  background:#242531;color:#f6f6ff;
+  padding:9px 4px;text-align:center;
+  font:600 17px/1.1 ui-monospace,SFMono-Regular,Consolas,monospace;
+  appearance:textfield;-moz-appearance:textfield;
+}
+.coin-color-channel-row input::-webkit-inner-spin-button,
+.coin-color-channel-row input::-webkit-outer-spin-button{
+  -webkit-appearance:none;margin:0;
+}
+.coin-color-dialog input:focus-visible,.coin-color-dialog button:focus-visible{
+  outline:2px solid #8addff;outline-offset:2px;
+}
+@media(max-width:430px){
+  .coin-color-main{padding:18px 14px 10px;gap:10px}
+  .coin-color-wheel{width:min(240px,67vw);height:min(240px,67vw)}
+  .coin-color-value-wrap,.coin-color-value{height:min(240px,67vw)}
+  .coin-color-actions{gap:7px}
+  .coin-color-hex{width:102px;max-width:33%;font-size:12px}
+  .coin-color-channel-row label{font-size:15px}
+  .coin-color-channel-row input{font-size:13px}
+}
+/* Coin color must drive the ENTIRE surface, including DOM overlays above
+   externally loaded card art. High-specificity overrides remove old
+   finish-specific fixed red/silver/gold fills. */
+.sennet-coin-above-card .sennet-coin-above-card-face,
+.sennet-coin-above-card[data-finish="enamel"] .sennet-coin-above-card-face,
+.sennet-coin-above-card[data-finish="matte"] .sennet-coin-above-card-face,
+.sennet-coin-above-card[data-finish="brushed"] .sennet-coin-above-card-face{
+  border-color:color-mix(in srgb,var(--coin-accent,#d8b979) 45%,white);
+  background:
+    linear-gradient(to bottom,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 77%,white) 0%,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 93%,#17212b) 44%,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 33%,#101014) 48%,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 38%,#151013) 52%,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 65%,white) 55%,
+      color-mix(in srgb,var(--coin-accent,#d8b979) 82%,#e1e4e6) 100%);
+}
+.sennet-coin-above-card .sennet-coin-above-card-number{
+  background:radial-gradient(circle at 30% 25%,
+    color-mix(in srgb,var(--coin-accent,#d8b979) 45%,white),
+    color-mix(in srgb,var(--coin-accent,#d8b979) 72%,#d9d9d9) 85%);
+  box-shadow:0 0 0 1.5px #25292d,
+    0 0 0 2.7px color-mix(in srgb,var(--coin-accent,#d8b979) 52%,white);
+}
