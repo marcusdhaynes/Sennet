@@ -35,7 +35,7 @@ import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
-import {fixedRadialDock} from '../lib/actionRadialFit';
+import {fitMatAttachedRadial} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
@@ -1284,6 +1284,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const selectedRef=useRef(selected);selectedRef.current=selected;
   const mount=useRef<HTMLDivElement>(null);
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
+  const dockedWheelRef=useRef<HTMLDivElement|null>(null);
+  const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const eyeHitTarget=useRef<Container|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -1733,18 +1735,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         }
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
+          const parent=duelLayers.current?.get(seatRef.current)??board;
+          // Restore the original HAND-edge attachment: the semicircle
+          // starts exactly at the middle of the bottom of the player's mat.
           const bottom=new Point(
             hand.x-Math.sin(hand.angle)*hand.height/2,
             hand.y+Math.cos(hand.angle)*hand.height/2
           );
-          const projected=(duelLayers.current?.get(seatRef.current)??board).toGlobal(bottom);
-          // The action wheel is a SCREEN-DOCKED HUD, never a playmat
-          // accessory. Panning/zooming/1v1/Castle only changes world objects,
-          // not its position, diameter, or hit targets.
-          const next=fixedRadialDock(w,h);
-          // LCD remains attached to its playmat border. Its screen-right
-          // edge does not control or resize the fixed action wheel.
-          const parent=duelLayers.current?.get(seatRef.current)??board;
+          const projected=parent.toGlobal(bottom);
           const panelY=actionScreenContactCenter(TCG_MAT_HEIGHT);
           const matLeft=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
           const matRight=tcgMatWorld(TCG_MAT_WIDTH/2,panelY,seatRef.current);
@@ -1754,6 +1752,19 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           const projectedRight=parent.toGlobal(new Point(matRight.x,matRight.y));
           const matScreenWidth=Math.hypot(
             projectedRight.x-projectedLeft.x,projectedRight.y-projectedLeft.y);
+          // Original radial diameter = 30% of the visible playmat width.
+          // Measure the real transformed mat, so 1v1/Castle use the same
+          // relationship even when the seat has a separate view transform.
+          const next=fitMatAttachedRadial(
+            projected.x,projected.y,matScreenWidth,w,h);
+          dockedWheelGeometry.current=next;
+          const dock=dockedWheelRef.current;
+          if(dock){
+            const factor=next.size/180;
+            dock.style.transform=`translate3d(${next.x-90*factor}px,${next.y}px,0) scale(${factor})`;
+          }
+          // Keep the action display alongside this same playmat, not
+          // beside a floating screen-corner radial.
           const display=fitActionScreenToWheel(
             projectedLeft.x,projectedRight.x,next.x,next.size,
             screen.y,matScreenWidth/TCG_MAT_WIDTH);
@@ -3418,13 +3429,17 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     </div>}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
-      <div className={wheelMode==='docked'?'sennet-radial-fixed-anchor':'sennet-radial-free-anchor'}
-        style={wheelMode==='docked'?{
-          width:fixedRadialDock(viewport.width,viewport.height).size,
-          height:fixedRadialDock(viewport.width,viewport.height).size/2
-        }:undefined}>
+      <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
+        ref={node=>{
+          dockedWheelRef.current=wheelMode==='docked'?node:null;
+          if(node&&wheelMode==='docked'){
+            const geometry=dockedWheelGeometry.current;
+            const factor=geometry.size/180;
+            node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
+          }
+        }}>
       <CardRadialWheel
-        x={wheelMode==='docked'?fixedRadialDock(viewport.width,viewport.height).size/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?fixedRadialDock(viewport.width,viewport.height).size:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}

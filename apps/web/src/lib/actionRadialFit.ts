@@ -16,14 +16,14 @@ export function fitDockedRadial(
   return {x:cx,y:cy,size};
 }
 
-/** Fixed-size, lower-right half-wheel HUD. Neither tabletop camera zoom nor
- * seat-specific projected mat coordinates appear in this calculation.
- * The entire 180px semicircle is visible except on exceptionally small
- * viewports, where it scales uniformly to fit. */
-export function fixedRadialDock(width:number,height:number,padding=14):
-  {x:number;y:number;size:number}{
-  const w=Math.max(1,width),h=Math.max(1,height);
-  const safe=Math.max(0,Math.min(padding,w/4,h/4));
-  const size=Math.max(1,Math.min(180,w-2*safe,2*(h-2*safe)));
-  return {x:w-safe-size/2,y:h-safe-size/2,size};
+/** The radial is physically attached to the bottom center of the mat.
+ * Original diameter: 30% of the on-screen mat width, including any
+ * 1v1/Castle seat transform; no fixed corner docking or independent size.
+ * Fit only when needed to keep the expanded semicircle visible. */
+export function fitMatAttachedRadial(
+  handCenterX:number,handBottomY:number,visibleMatWidth:number,
+  viewportWidth:number,viewportHeight:number
+):{x:number;y:number;size:number}{
+  const diameter=Math.max(1,Number.isFinite(visibleMatWidth)?visibleMatWidth*.30:1);
+  return fitDockedRadial(handCenterX,handBottomY,diameter,viewportWidth,viewportHeight);
 }

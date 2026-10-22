@@ -1,20 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fixedRadialDock} from '../../../apps/web/src/lib/actionRadialFit.ts';
+import {fitMatAttachedRadial} from '../../../apps/web/src/lib/actionRadialFit.ts';
 
-test('action wheel stays constant-size and screen-docked regardless of camera or seat',()=>{
-  const initial=fixedRadialDock(1440,900);
-  assert.deepEqual(initial,{x:1336,y:796,size:180});
-  for(let seat=0;seat<12;seat++)for(const zoom of [.2,1,5,10]){
-    void seat;void zoom;
-    assert.deepEqual(fixedRadialDock(1440,900),initial);
-  }
+test('radial attaches to HAND bottom midpoint at original 30% mat size',()=>{
+  const fit=fitMatAttachedRadial(420,580,600,1200,800);
+  assert.deepEqual(fit,{x:420,y:580,size:180});
 });
-test('half-wheel is entirely visible on smaller mobile screens',()=>{
-  for(const [w,h] of [[320,600],[200,150],[110,120],[390,844]]){
-    const {x,y,size}=fixedRadialDock(w,h);
-    assert.ok(x-size/2>=0&&x+size/2<=w,'horizontal');
-    assert.ok(y>=0&&y+size/2<=h,'vertical');
-    assert.ok(size<=180);
-  }
+test('radial follows the playmat as camera pans, unlike a fixed corner HUD',()=>{
+  const first=fitMatAttachedRadial(320,380,300,1200,800);
+  const second=fitMatAttachedRadial(500,560,300,1200,800);
+  assert.deepEqual(first,{x:320,y:380,size:90});
+  assert.deepEqual(second,{x:500,y:560,size:90});
+});
+test('radial uses actual zoomed/castle transformed mat width',()=>{
+  const close=fitMatAttachedRadial(400,400,200,1200,800);
+  const zoomed=fitMatAttachedRadial(400,400,400,1200,800);
+  assert.equal(close.size,60);
+  assert.equal(zoomed.size,120);
+});
+test('expanded semicircle fits fully in a tight viewport',()=>{
+  const fit=fitMatAttachedRadial(600,800,800,600,640);
+  assert.ok(fit.x-fit.size/2>=8);
+  assert.ok(fit.x+fit.size/2<=592);
+  assert.ok(fit.y>=8&&fit.y+fit.size/2<=632);
 });
