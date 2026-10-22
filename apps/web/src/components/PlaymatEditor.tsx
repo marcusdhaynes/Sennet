@@ -320,12 +320,22 @@ export default function PlaymatEditor({appearance,setAppearance,merges,seat,info
           </div>
         </section>
         <section className="mat-editor-pane mat-editor-snapping">
+          <h3>Card placement</h3>
+          <label className="mat-compact-check">
+            <input type="checkbox" checked={appearance.freePlacement}
+              onChange={e=>setAppearance(prev=>({...prev,freePlacement:e.target.checked}))}/>
+            Disable Snapping in PLAY and HAND
+          </label>
+          <span>Place cards anywhere horizontally in separate zones, or freely
+            in both directions inside merged zones. Cards stay within the
+            zone's boundaries; dropping near the edge gently fits them inside.</span>
           <label className="mat-compact-check">
             <input type="checkbox" checked={appearance.snapMerged}
+              disabled={appearance.freePlacement}
               onChange={e=>setAppearance(prev=>({...prev,snapMerged:e.target.checked}))}/>
             Snap Merged Sections
           </label>
-          <span>Off By Default · Unmerged Spaces Always Snap</span>
+          {appearance.freePlacement&&<span>Unavailable while free placement is on.</span>}
         </section>
       </div>
     </div>
