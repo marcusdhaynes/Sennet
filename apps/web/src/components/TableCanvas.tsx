@@ -1,4 +1,6 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {createPortal} from 'react-dom';
+import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
@@ -7,8 +9,6 @@ const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 // Display numerals are deliberately separate from the numeric action values.
 const COIN_RADIAL_LABELS=['⧉','+I','+X','+C','+M','◉','−I','−X','−C','−M'] as const;
-const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
-  '#9e8dd2','#f2c27c','#f1a6cb','#dde4ea','#657da2','#44464a'];
 // Ten accessible, borderless controls: the larger annulus gives each Roman
 // numeral room to breathe while every clickable label stays inside its wedge.
 const COIN_RADIAL_SIZE=152;
@@ -2036,7 +2036,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         face.scale.set(face.scale.x*sourceScale);
         source.addChild(face);
         // Both markings use exactly the dice-label font size and baseline.
-        const symbol=label(isEditable?'∞':'∑',8,0xffedbe,'bold');
+        const symbol=label(isEditable?'∞':'∑',isEditable?16:8,0xffedbe,'bold');
         symbol.position.set(0,18);symbol.eventMode='none';
         source.addChild(symbol);
         const highlight=new Graphics();
@@ -3416,21 +3416,17 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           onPointerUp={e=>{e.stopPropagation();clearRadialCenterHold();}}
           onPointerCancel={e=>{e.stopPropagation();clearRadialCenterHold();}}
           onPointerLeave={e=>{e.stopPropagation();clearRadialCenterHold();}}/>
-        {coinColorsOpen&&<div className="sennet-coin-palette">
-          <strong>Coin color</strong>
-          <div className="sennet-coin-palette-swatches">
-            {COIN_PALETTE.map(color=><button key={color} type="button"
-              aria-label={'Choose '+color} style={{background:color}}
-              onClick={()=>applyCoinColor(color)}/>)}
-          </div>
-          <label>Custom <input aria-label="Custom coin color" type="color"
-            defaultValue={coinMenu.type==='copy'?
-              state.objects.find(o=>o.id===coinMenu.id)?.color??'#d8b979':
-              coinSources.colors[coinMenu.index===1?0:1]??'#d8b979'}
-            onChange={e=>applyCoinColor(e.target.value)}/></label>
-        </div>}
+
       </div>
     </div>}
+    {coinColorsOpen&&coinMenu&&createPortal(<CoinColorPicker
+      key={coinMenu.type+'-'+(coinMenu.id??coinMenu.index??'')}
+      initial={coinMenu.type==='copy'?
+        state.objects.find(o=>o.id===coinMenu.id)?.color??'#d8b979':
+        coinSources.colors[coinMenu.index===1?0:1]??
+          (coinMenu.index===0?'#c4d8d9':'#d8b979')}
+      onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
+    />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
