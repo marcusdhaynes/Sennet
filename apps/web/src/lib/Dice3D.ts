@@ -6,6 +6,7 @@ import {createDie3DModel,dieGeometry,radiusFor,type NumberedFace} from './Dice3D
 import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
 export {dieGeometry,createDie3DModel} from './Dice3DGeometry.ts';
 import * as CANNON from 'cannon-es';
+import {containDiceInView,safeDiceFootprint,visibleDiceBounds,type DiceScreenBounds,type ScreenRect} from './diceScreenWalls.ts';
 
 export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;scale?:number;themeId?:DiceThemeId}
 const rand=(max:number)=>{
@@ -67,10 +68,11 @@ export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
   return new CANNON.ConvexPolyhedron({vertices,faces});
 }
 function boxAt(world:CANNON.World,x:number,y:number,z:number,
-  wx:number,wy:number,wz:number,friction:CANNON.Material){
+  wx:number,wy:number,wz:number,friction:CANNON.Material):CANNON.Body{
   const body=new CANNON.Body({mass:0,material:friction,
     shape:new CANNON.Box(new CANNON.Vec3(wx/2,wy/2,wz/2))});
   body.position.set(x,y,z);world.addBody(body);
+  return body;
 }
 export function roll3DDice(opts:Dice3DOptions):()=>void{
   const {host,width:w,height:h}=opts;
@@ -98,11 +100,48 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     {friction:.30,restitution:.56}));
   const floor=new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:wallMat});
   world.addBody(floor);
-  const z=78,wall=17;
-  boxAt(world,-wall/2,h/2,z,wall,h,2*z,wallMat);
-  boxAt(world,w+wall/2,h/2,z,wall,h,2*z,wallMat);
-  boxAt(world,w/2,-wall/2,z,w,wall,2*z,wallMat);
-  boxAt(world,w/2,h+wall/2,z,w,wall,2*z,wallMat);
+  // The original 156-unit-high walls allowed powerful throws to vault
+  // straight over the screen edge. Tall rigid walls give real rebounds;
+  // a post-step sphere constraint guarantees no high-speed tunnelling.
+  const wall=22,wallHeight=1600,wallCenterZ=wallHeight/2;
+  const screenWalls=[
+    boxAt(world,-wall/2,h/2,wallCenterZ,wall,h+wall*2,wallHeight,wallMat),
+    boxAt(world,w+wall/2,h/2,wallCenterZ,wall,h+wall*2,wallHeight,wallMat),
+    boxAt(world,w/2,h+wall/2,wallCenterZ,w+wall*2,wall,wallHeight,wallMat),
+    boxAt(world,w/2,-wall/2,wallCenterZ,w+wall*2,wall,wallHeight,wallMat)
+  ];
+  const visibleViewport=():DiceScreenBounds=>{
+    const screen=host.getBoundingClientRect();
+    const clips:ScreenRect[]=[];
+    // The browser screen and every genuinely clipped parent are physical
+    // boundaries too (e.g., when the app lives in a smaller embedded pane).
+    for(let parent=host.parentElement;parent;parent=parent.parentElement){
+      const style=window.getComputedStyle(parent);
+      if(['hidden','clip','auto','scroll'].includes(style.overflowX)||
+         ['hidden','clip','auto','scroll'].includes(style.overflowY)){
+        const area=parent.getBoundingClientRect();
+        clips.push({left:area.left,top:area.top,width:area.width,height:area.height});
+      }
+    }
+    const vv=window.visualViewport;
+    if(vv)clips.push({left:vv.offsetLeft,top:vv.offsetTop,
+      width:vv.width,height:vv.height});
+    return visibleDiceBounds({left:screen.left,top:screen.top,
+      width:screen.width,height:screen.height},
+      window.innerWidth,window.innerHeight,w,h,clips);
+  };
+  const moveScreenWalls=(bounds:DiceScreenBounds)=>{
+    screenWalls[0].position.x=bounds.left-wall/2;
+    screenWalls[1].position.x=bounds.right+wall/2;
+    screenWalls[2].position.y=h-bounds.top+wall/2;
+    screenWalls[3].position.y=h-bounds.bottom-wall/2;
+    for(const barrier of screenWalls){
+      barrier.aabbNeedsUpdate=true;
+      barrier.wakeUp();
+    }
+  };
+  let currentScreenBounds=visibleViewport();
+  moveScreenWalls(currentScreenBounds);
   for(const tray of opts.trays){
     const left=Math.min(tray.left,tray.right),right=Math.max(tray.left,tray.right),
       top=Math.min(tray.top,tray.bottom),bottom=Math.max(tray.top,tray.bottom);
@@ -125,7 +164,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const vx=aimLength>5?opts.aimX/aimLength:1,
     vy=aimLength>5?-opts.aimY/aimLength:.19;
   const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
-    body:CANNON.Body;faces:NumberedFace[];shadow:THREE.Mesh}[]=[];
+    body:CANNON.Body;faces:NumberedFace[];shadow:THREE.Mesh;screenRadius:number}[]=[];
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=64;shadowCanvas.height=64;
   const ctx=shadowCanvas.getContext('2d');
   if(ctx){const g=ctx.createRadialGradient(32,32,2,32,32,31);
@@ -136,6 +175,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     const source=opts.sources[i],side=source.sides,
       r=radiusFor(side)*Math.max(.08,Math.min(4,source.scale??1));
     const {group:mesh,geometry:geom,faces}=createDie3DModel(side,r,source.themeId??DEFAULT_DICE_THEME);
+    geom.computeBoundingSphere();
+    const screenRadius=Math.max(32,safeDiceFootprint(r,geom.boundingSphere?.radius??r));
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
       material:dieMat,linearDamping:.13,angularDamping:.14,
       allowSleep:true,sleepSpeedLimit:.22,sleepTimeLimit:.7});
@@ -170,11 +211,13 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       235+throwSpeed*.22);
     body.angularVelocity.set((Math.random()-.5)*24,(Math.random()-.5)*24,
       (Math.random()-.5)*23);
+    containDiceInView(body,currentScreenBounds,screenRadius,h);
     world.addBody(body);scene.add(mesh);
     const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
       new THREE.MeshBasicMaterial({map:shadowTex,transparent:true,opacity:.44,depthWrite:false}));
     shadow.position.z=.4;scene.add(shadow);
-    objects.push({sides:side,quantity:source.quantity,scale:source.scale??1,mesh,body,faces,shadow});
+    objects.push({sides:side,quantity:source.quantity,scale:source.scale??1,
+      mesh,body,faces,shadow,screenRadius});
   }
   let stopped=false,frame=0,started=performance.now(),previous=started;
   const cleanup=()=>{
@@ -205,9 +248,11 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
         new THREE.Vector3(0,0,1).applyQuaternion(q).z>=0?1:2:
         obj.sides===100?rand(100):winning.value;
       const rolls=Array.from({length:obj.quantity},(_,i)=>i===0?visible:rand(obj.sides));
+      // Clamp once more before saving, with the full model's footprint.
+      containDiceInView(obj.body,currentScreenBounds,obj.screenRadius,h);
       return {sides:obj.sides,rolls,
-        x:THREE.MathUtils.clamp(obj.body.position.x,0,w),
-        y:THREE.MathUtils.clamp(h-obj.body.position.y,0,h),
+        x:obj.body.position.x,
+        y:h-obj.body.position.y,
         rotation:Math.atan2(2*(q.w*q.z+q.x*q.y),
           1-2*(q.y*q.y+q.z*q.z))*180/Math.PI,
         quaternion:[q.x,q.y,q.z,q.w] as [number,number,number,number],
@@ -233,9 +278,18 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     if(stopped)return;
     try{
       const elapsed=(now-started)/1000,dt=Math.min(.05,(now-previous)/1000);
-      previous=now;world.step(1/60,dt,4);
+      previous=now;
+      currentScreenBounds=visibleViewport();
+      moveScreenWalls(currentScreenBounds);
+      world.step(1/60,dt,4);
       for(const obj of objects){
         const b=obj.body,m=obj.mesh;
+        // Apply to every integration, BEFORE painting; at no point can the
+        // die's full visible geometry escape any edge of the player's screen.
+        if(containDiceInView(b,currentScreenBounds,obj.screenRadius,h)){
+          b.aabbNeedsUpdate=true;
+          b.wakeUp();
+        }
         m.position.set(b.position.x,b.position.y,b.position.z);
         m.quaternion.set(b.quaternion.x,b.quaternion.y,b.quaternion.z,b.quaternion.w);
         obj.shadow.position.set(b.position.x,b.position.y,.4);
