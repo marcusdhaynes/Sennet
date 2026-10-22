@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
+import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
@@ -35,6 +35,15 @@ import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOL
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition,coinNumericValue,validCoinText} from '@sennet/core';
 interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number],altitude?:number)=>void;readonly?:boolean}
+/** Bottom -> top: player names, accessories, playmat, buttons, objects.
+ * RenderLayer keeps logical parent transforms intact across all seat views. */
+type TablePaintLayers={labels:RenderLayer;accessories:RenderLayer;
+  playmats:RenderLayer;buttons:RenderLayer;objects:RenderLayer};
+function createTablePaintLayers():TablePaintLayers{
+  return {labels:new RenderLayer(),accessories:new RenderLayer(),
+    playmats:new RenderLayer(),buttons:new RenderLayer(),
+    objects:new RenderLayer()};
+}
 const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 // Pixi book gestures and DOM camera gestures must share one pointer guard.
 let activeBookPointer:number|null=null;
@@ -156,7 +165,7 @@ function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,
 /** Recessed, bevel-edged TCG playing mat. Cards use exactly the same
  * cell coordinates on every client; drag release is snapped in core. */
 function drawTcgMats(
-  board:Container,state:GameState,viewerSeat:number,readonly:boolean,
+  board:Container,layers:TablePaintLayers,state:GameState,viewerSeat:number,readonly:boolean,
   opacity:number,hoverMs:number,playmat:PlaymatAppearance,
   bookDesign:Props['bookDesign'],bookDock:Props['bookDock'],bookOffset:Props['bookOffset'],onBookOpen:()=>void,onBookMove:Props['onBookMove'],
   onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,
@@ -183,6 +192,7 @@ function drawTcgMats(
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
     parent.addChild(mat);
+    layers.playmats.attach(mat);
     if(castleActive&&seat!==viewerSeat){
       // The actual playmat surface focuses a classified Castle opponent.
       // Child controls and draggable cards retain their own pointer input.
@@ -247,6 +257,7 @@ function drawTcgMats(
         drawerGroup.eventMode='auto';
         drawerGroup.addChild(tray);
         mat.addChild(drawerGroup);
+        layers.accessories.attach(drawerGroup);
         drawerGroups.set(side,drawerGroup);
         // The drawer slides UNDER the mat. Only the genuine outer wooden
         // sidewall remains uncovered (~10 tabletop units) when fully shut.
@@ -258,6 +269,7 @@ function drawTcgMats(
           .fill(0xffffff);
         mask.eventMode='none';
         mat.addChild(mask);
+        layers.accessories.attach(mask);
         drawerGroup.mask=mask;
         const bodyOuterX=cx+side*(trayW+24)/2;
         const wallX=side===1?bodyOuterX-12:bodyOuterX;
@@ -335,6 +347,7 @@ function drawTcgMats(
       });
       book.on('destroyed',()=>{if(release)activeBookPointer=null;});
       (drawerGroups.get(side)??mat).addChild(book);
+      layers.objects.attach(book);
       // Capture the drag before the table background can initiate camera pan.
     }
     const cos=Math.cos(topLeft.angle),sin=Math.sin(topLeft.angle);
@@ -433,6 +446,7 @@ function drawTcgMats(
         });
       }
       mat.addChild(marker);
+      layers.buttons.attach(marker);
     }
 
     // These are visual-view controls, not game commands. On the opponent's
@@ -472,6 +486,7 @@ function drawTcgMats(
           onCycleOpponent(direction,seat);
         });
         mat.addChild(button);
+        layers.buttons.attach(button);
       }
     }
 
@@ -526,6 +541,7 @@ function drawTcgMats(
       eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
       eye.on('pointercancel',()=>{pressedPointer=null;clear();});
       mat.addChild(eye);
+      layers.buttons.attach(eye);
       // Same size as the eye and merge controls. Castle switches to the
       // classified-only battlefield, excluding every unmarked opponent.
       const castle=new Container();
@@ -595,6 +611,7 @@ function drawTcgMats(
       modeMark.position.set(11,11);modeMark.eventMode='none';
       castle.addChild(modeMark);
       mat.addChild(castle);
+      layers.buttons.attach(castle);
       // The gear circle is CENTERED on the exact bottom-right corner
       // where the viewer's HAND bottom border meets its right edge.
       // It stays on the mat in every view, with the same 32-unit diameter
@@ -630,6 +647,7 @@ function drawTcgMats(
         onOpenTcgSettings();
       });
       mat.addChild(settings);
+      layers.buttons.attach(settings);
     }
     // Every other mat in Opponent Mode owns its own centered Sword and
     // Shield controls. The Eye remains exclusive to the viewer's mat.
@@ -682,6 +700,7 @@ function drawTcgMats(
             onToggleRelation(seat,choice);
           });
           mat.addChild(button);
+          layers.buttons.attach(button);
         }
     }
   }
@@ -720,7 +739,7 @@ function makeDuelSeatLayers(
   }
   return layers;
 }
-function drawBackground(board:Container,state:GameState,seat:number,playerName:string,readonly:boolean,
+function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
   onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
   bookDesign:Props['bookDesign'],bookDock:Props['bookDock'],bookOffset:Props['bookOffset'],onBookOpen:()=>void,onBookMove:Props['onBookMove'],
@@ -730,7 +749,6 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
   selectedEnemy:number|null,
   drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void):Map<number,Container>|null{
-  const players=state.players;
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   if(duelOpponent!==null||castleActive){
@@ -772,7 +790,7 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
   const layers=duelOpponent===null&&!castleActive
     ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,
       castleMode,castleBaseMode,focused,viewport,selectedEnemy);
-  if(state.kind==='tcg')drawTcgMats(board,state,seat,readonly,opacity,hoverMs,playmat,
+  if(state.kind==='tcg')drawTcgMats(board,layers,state,seat,readonly,opacity,hoverMs,playmat,
     bookDesign,bookDock,bookOffset,onBookOpen,onBookMove,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
@@ -785,20 +803,19 @@ function drawBackground(board:Container,state:GameState,seat:number,playerName:s
     const angle=i*Math.PI/6-Math.PI/2;
     const x=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle);
     const y=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle);
-    const mine=i===seat;
-    // The local seat is represented by its interactive book-drawer tag.
-    if(mine)continue;
-    const player=players.find(p=>p.seat===i);
+    // Draw every seat, including the local one, as IDENTICAL plain text.
+    // A transparent HTML target over the local caption keeps its book
+    // shelf clickable without painting another visible nameplate.
     const chair=new Container();
     chair.position.set(x,y);
     chair.rotation=playerSeatRotation(i);
-    chair.addChild(new Graphics().roundRect(-78,-25,156,50,10)
-      .fill(0xc9a66a).stroke({color:0xf0d6a5,width:1.5}));
     const seatText=label('Player '+String(i+1).padStart(2,'0'),
-      22,0x263a32,'bold');
+      22,0xf5deb5,'bold');
+    seatText.style.stroke={color:0x10221d,width:3,join:'round'};
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);
+    layers.labels.attach(chair);
   }
   return layers;
 }
@@ -1671,7 +1688,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
-    const seatGroups=drawBackground(board,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
+    const paintLayers=createTablePaintLayers();
+    const seatGroups=drawBackground(board,paintLayers,state,seat,playerName,readonly,mergeOpacity,mergeHoverMs,
       (target,boundary,merged)=>callbacks.current.onMergeCenter(target,boundary,merged),
       ()=>eyeTapHandler.current(),()=>eyeHoldHandler.current(),
       ()=>castleTapHandler.current(),()=>castleHoldHandler.current(),
@@ -1689,7 +1707,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       boxClosed,drawerGroups.current,drawerTabs.current,toggleBox);
     duelLayers.current=seatGroups;
     updateView.current();
-    const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);snapHighlight.current=snapOverlay;
+    const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
+    paintLayers.objects.attach(snapOverlay);snapHighlight.current=snapOverlay;
     // Every TCG seat has its own physical DECK pocket; sending a card
     // to the top/bottom via gestures must not leave an extra visible card
     // because its source ID uses a different prefix than that deck.
@@ -1793,7 +1812,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         quantity.eventMode='none';
         source.addChild(quantity);
         diceBadges.current.set(sides,{body:quantity,count});
-        mat.addChild(source);diceSources.current.set(sides,source);
+        mat.addChild(source);paintLayers.objects.attach(source);
+        diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
           drawerClosed:boxClosed.left,
           quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
@@ -1834,6 +1854,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         highlight.scale.set(coinAppearance.size*1.08);
         highlight.eventMode='none';source.addChild(highlight);
         mat.addChild(source);
+        paintLayers.objects.attach(source);
         const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
@@ -1877,6 +1898,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           }
           const ghost=makeCoin(isEditable?faces[index]:value,coinAppearance,false,sign,color,isEditable);
           ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
+          paintLayers.objects.attach(ghost);
           const ghostEl=showCoinAboveArtwork(ghost,isEditable?faces[index]:value,sign,false,color,isEditable);
           tokenDrag.current={pointerId:e.pointerId,value,sign,
             ...(isEditable?{coinText:faces[index]}:{}),
@@ -1996,6 +2018,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       piece.rotation=playerSeatRotation(ownerSeat??seat)+obj.rotation*Math.PI/180;
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
+      paintLayers.objects.attach(piece);
       if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.coinText??obj.value??1,obj.tokenSign??1,false,obj.color,obj.coinText!==undefined);
       if(obj.throwDice){
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
@@ -2181,6 +2204,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       draw.on('pointerdown',e=>{e.stopPropagation();controlPointer.current=e.pointerId;});
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
+      paintLayers.buttons.attach(draw);
     }
     // Hide truly removed cards, but keep every unchanged decoded image.
     for(const [id,cached] of artworkCache.current){
@@ -2192,6 +2216,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     // Rendering on state change intentionally reconstructs a small scene. Large games will use
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
+    // Layers are appended last, after unlayered felt and table geometry.
+    // Render order applies globally, not just inside one player's mat.
+    board.addChild(paintLayers.labels,paintLayers.accessories,
+      paintLayers.playmats,paintLayers.buttons,paintLayers.objects);
     app.renderer.render(app.stage);
     staticDiceEntries.current=staticEntries;
     staticDice3D.current?.setEntries(staticEntries);

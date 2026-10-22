@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 export type CommandBook='sennet'|'games'|'settings';
 
 
-/** The name/number tag IS the book drawer. Click Player 01 (or the
+/** The invisible name/number hit target IS the book drawer. Click Player 01 (or the
  * corresponding seat number) to expand the tag upward and reveal its books.
  * Selection and outside-pointer interaction always dismiss the drawer.
  */

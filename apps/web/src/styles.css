@@ -1818,3 +1818,25 @@ body>.reader-backdrop{
 @media (prefers-reduced-motion:reduce){
   .sennet-coin-radial{animation:none}
 }
+
+/* All twelve player captions now use the same Pixi text underneath
+   tabletop accessories. The local HTML tag remains accessible and clickable,
+   but no longer paints a gold plate or duplicates its text. */
+.pixi-host>.sennet-player-tag-anchor .player-hub,
+.pixi-host>.sennet-player-tag-anchor .player-hub.is-open{
+  background:transparent!important;border:0!important;
+  box-shadow:none!important;border-radius:0!important;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub-tab{
+  background:transparent!important;border:0!important;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub-number{
+  color:transparent!important;text-shadow:none!important;
+  background:transparent!important;border:0!important;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub-tab:focus-visible{
+  outline:2px dotted #f5deb5;outline-offset:2px;
+}
+.pixi-host>.sennet-player-tag-anchor .player-hub.is-open .player-hub-content{
+  background:linear-gradient(165deg,#25493e,#172e29);
+}
