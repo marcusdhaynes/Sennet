@@ -1388,7 +1388,31 @@ export function applyCommand(state: GameState, command: Command): GameState {
   // one card, one stack or a multi-selection is dragged. Deck order and
   // orientation change atomically in the same replayable command.
   const applyPocketDrop=(cards:TableObject[],x:number,y:number,seat:number)=>{
-    const pocket=tcgDropZone(x,y,seat);
+    let pocket=tcgDropZone(x,y,seat);
+    // A merged PLAY/HAND region contains the former inter-row seams.
+    // Those seams are fully playable, but the old unmerged pocket test
+    // returns null there. Classify by the nearest original row so moving
+    // a card out of HAND (or into it) updates face-up/owner/zone correctly.
+    if(!pocket&&p.freePlacement===true){
+      const local=tcgMatLocal(x,y,seat);
+      const region=tcgMatRegions(seat,centerMerges).find(r=>{
+        if(r.column!==1||r.lastRow===r.row)return false;
+        const center=tcgMatLocal(r.x,r.y,seat);
+        return Math.abs(local.x-center.x)<=r.width/2+1e-6&&
+          Math.abs(local.y-center.y)<=r.height/2+1e-6;
+      });
+      if(region){
+        const rows=tcgMatCells(seat).filter(cell=>cell.column===1&&
+          cell.row>=region.row&&cell.row<=region.lastRow);
+        const closest=rows.reduce((best,cell)=>{
+          const y0=tcgMatLocal(best.x,best.y,seat).y;
+          const y1=tcgMatLocal(cell.x,cell.y,seat).y;
+          return Math.abs(local.y-y1)<Math.abs(local.y-y0)?cell:best;
+        },rows[0]);
+        pocket={zone:closest.row===3?'HAND':'TABLE',faceUp:true,
+          deckBottom:false,row:closest.row,column:1};
+      }
+    }
     if(!pocket){
       for(const card of cards)if(card.zone==='DECK'){
         card.zone='TABLE';card.faceUp=true;
