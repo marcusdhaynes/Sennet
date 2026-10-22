@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,expireThrownDice,thrownDieDeadlines,THROWN_DIE_LIFETIME_MS,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import {formatActionDisplay} from './lib/actionDisplay';
@@ -85,12 +85,26 @@ function storedMergeHoverMs():number{
 }
 function emptyTable():GameState{return {...createGame('sandbox'),objects:[],players:[],message:'A fresh table. Open a book to begin.'};}
 function localActor(){try{let id=localStorage.getItem(ACTOR_KEY);if(!id){id='player_'+createId();localStorage.setItem(ACTOR_KEY,id);}return id;}catch{return 'player-local';}}
-function recentGames():SavedSession[]{try{const value=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');return Array.isArray(value)?value.slice(0,8):[];}catch{return [];}}
+/** Every saved-session entrypoint must drop expired physical dice and
+ * flipcoins BEFORE they can reappear on the renderer. */
+function pruneSession(s:SavedSession):SavedSession{
+  const now=Date.now();
+  return {...s,game:expireThrownDice(s.game,now,s.history),
+    initial:expireThrownDice(s.initial,now,s.history)};
+}
+function recentGames():SavedSession[]{
+  try{
+    const value=JSON.parse(localStorage.getItem(RECENT_KEY)||'[]');
+    return Array.isArray(value)?value.filter((s):s is SavedSession=>
+      !!s&&s.game?.version===1&&Array.isArray(s.game.objects)&&Array.isArray(s.history))
+      .slice(0,8).map(pruneSession):[];
+  }catch{return [];}
+}
 function lastSession():SavedSession|null{
  try{
   const session=JSON.parse(localStorage.getItem(LAST_SESSION_KEY)||'null') as SavedSession|null;
   return session&&typeof session.id==='string'&&session.game?.version===1&&
-    Array.isArray(session.game.objects)&&Array.isArray(session.history)?session:null;
+    Array.isArray(session.game.objects)&&Array.isArray(session.history)?pruneSession(session):null;
  }catch{return null;}
 }
 const json=(value:unknown)=>JSON.stringify(value,null,2);
@@ -142,12 +156,9 @@ export default function App(){
     try{const n=Number(localStorage.getItem('sennet.dice.hold.ms'));
       return n>=100&&n<=1500?n:250;}catch{return 250;}
   });
-  const [diceFadeMs,setDiceFadeMs]=useState(()=>{
-    try{const raw=localStorage.getItem('sennet.dice.fade.ms');
-      if(raw===null)return 10000;
-      const n=Number(raw);return n===0||n>=2000&&n<=120000?n:10000;
-    }catch{return 10000;}
-  });
+  // Thrown pieces are removed permanently at exactly 10 seconds.
+  // The built-in dice/flipcoin generators in the tray are not disposable.
+  const diceFadeMs=THROWN_DIE_LIFETIME_MS;
   const [diceAppearance,setDiceAppearance]=useState<DiceAppearance>(()=>{
     try{return normalizeDiceAppearance(JSON.parse(localStorage.getItem('sennet.dice.appearance.v1')||'null'));}
     catch{return {...DEFAULT_DICE_APPEARANCE};}
@@ -187,19 +198,24 @@ export default function App(){
   const connection=useRef<RoomConnection|null>(null);
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
-  const viewedGame=replayAt===null?game:replay(initial,history.slice(0,replayIndex+1));
+  const viewedGame=replayAt===null?game:expireThrownDice(
+    replay(initial,history.slice(0,replayIndex+1)),Date.now(),
+    history.slice(0,replayIndex+1));
   function inform(message:string){setNotice(message);window.setTimeout(()=>setNotice(s=>s===message?'':s),4500);}
   function resetWith(next:GameState,id=createId(),past:EventRecord[]=[],origin:GameState=next){
     if(!connection.current&&(current.current.objects.length>0||history.length>0)){
-      const previous:SavedSession={
+      const previous:SavedSession=pruneSession({
         id:sessionId.current,title:nameFor(current.current.kind),
         updated:Date.now(),game:current.current,initial,history,seat
-      };
+      });
       try{localStorage.setItem(REWIND_SESSION_KEY,JSON.stringify(previous));}
       catch{/* Continue without persistence when browser storage is full. */}
     }
     if(connection.current)disconnect();
-    sessionId.current=id;current.current=next;setInitial(origin);setGame(next);setHistory(past);setRedoStack([]);setSelected(null);setReplayAt(null);setBook(null);
+    const cleanGame=expireThrownDice(next,Date.now(),past);
+    const cleanOrigin=expireThrownDice(origin,Date.now(),past);
+    sessionId.current=id;current.current=cleanGame;setInitial(cleanOrigin);
+    setGame(cleanGame);setHistory(past);setRedoStack([]);setSelected(null);setReplayAt(null);setBook(null);
   }
   function startGame(kind:GameKind){resetWith(createGame(kind));}
   function loadPack(pack:GamePack){resetWith(gameFromPack(pack));}
@@ -207,7 +223,9 @@ export default function App(){
   function returnToEmpty(){resetWith(emptyTable());}
   function takeAction(type:Command['type'],payload:Record<string,unknown>={}){
     if(replayAt!==null){inform('Exit replay mode before making a move.');return;}
-    const command:Command={id:createId(),actor:isConnected?actor:'local',type,payload};
+    const command:Command={id:createId(),actor:isConnected?actor:'local',type,
+      payload:type==='THROW_TRAY'||type==='REROLL_DIE'
+        ?{...payload,expiresAt:Date.now()+THROWN_DIE_LIFETIME_MS}:payload};
     if(isConnected){try{connection.current?.send(command);}catch(e){inform(String(e));}return;}
     try{
       const next=applyCommand(current.current,command);current.current=next;setGame(next);
@@ -227,21 +245,39 @@ export default function App(){
       setRoom(roomId);setOnlineStatus('Connecting…');
       const link=new URL(location.href);link.searchParams.set('room',roomId);window.history.replaceState({},'',link);
       connection.current=new RoomConnection(endpoint,roomId,game.kind,actor,seat,playerName,{
-        onState:state=>{current.current=state;setGame(state);setInitial(state);setHistory([]);setReplayAt(null);setConnected(true);setBook(null);},
-        onEvent:event=>{try{if(event.seq!==current.current.seq+1)throw new Error('Sequence gap');const next=applyCommand(current.current,event);current.current=next;setGame(next);setHistory(h=>[...h,event as EventRecord]);}catch{inform('Out of sync. Reconnect to resynchronize.');}},
+        onState:state=>{
+          const clean=expireThrownDice(state,Date.now());
+          current.current=clean;setGame(clean);setInitial(clean);
+          setHistory([]);setReplayAt(null);setConnected(true);setBook(null);
+        },
+        onEvent:event=>{try{if(event.seq!==current.current.seq+1)throw new Error('Sequence gap');const next=expireThrownDice(applyCommand(current.current,event),Date.now(),[event as EventRecord]);
+          current.current=next;setGame(next);setHistory(h=>[...h,event as EventRecord]);}catch{inform('Out of sync. Reconnect to resynchronize.');}},
         onPlayers:players=>{const next={...current.current,players};current.current=next;setGame(next);},
         onStatus:setOnlineStatus,onError:inform
       });
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
   useEffect(()=>()=>connection.current?.close(),[]);
+  useEffect(()=>{
+    const deadlines=thrownDieDeadlines(game,history);
+    if(!deadlines.size)return;
+    const next=Math.min(...deadlines.values());
+    const timeout=window.setTimeout(()=>{
+      const clean=expireThrownDice(current.current,Date.now(),history);
+      if(clean!==current.current){
+        current.current=clean;
+        setGame(clean);
+        setSelected(chosen=>chosen&&clean.objects.some(o=>o.id===chosen)?chosen:null);
+      }
+    },Math.max(0,next-Date.now()));
+    return()=>window.clearTimeout(timeout);
+  },[game,history]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.text.v1',customCoinText);}catch{}},[customCoinText]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.hold.ms',String(diceHoldMs));}catch{}},[diceHoldMs]);
-  useEffect(()=>{try{localStorage.setItem('sennet.dice.fade.ms',String(diceFadeMs));}catch{}},[diceFadeMs]);
   useEffect(()=>{try{localStorage.setItem(MERGE_DELAY_KEY,String(mergeHoverMs));}catch{/* Storage unavailable. */}},[mergeHoverMs]);
   useEffect(()=>{
     try{localStorage.setItem(scopedPlaymatKey(actor),JSON.stringify(playmat));}
@@ -309,7 +345,8 @@ export default function App(){
     if(isConnected){inform('Undo requires a server-approved action in an online game.');return;}
     if(!history.length)return;
     if(replayAt!==null){inform('Exit replay mode before undoing.');return;}
-    const previous=history.slice(0,-1);const next=replay(initial,previous);
+    const previous=history.slice(0,-1);const next=expireThrownDice(
+      replay(initial,previous),Date.now(),previous);
     setRedoStack(stack=>[...stack,history[history.length-1]]);
     current.current=next;setGame(next);setHistory(previous);setSelected(null);setReplayAt(null);
   }
@@ -321,7 +358,8 @@ export default function App(){
     try{
       // Replay from the initial snapshot guarantees redo is the exact
       // same state transition, with no newly randomized roll values.
-      const past=[...history,record],next=replay(initial,past);
+      const past=[...history,record],next=expireThrownDice(
+        replay(initial,past),Date.now(),past);
       current.current=next;setGame(next);setHistory(past);
       setRedoStack(items=>items.slice(0,-1));setSelected(null);
     }catch(error){inform(String(error));}
@@ -624,18 +662,10 @@ export default function App(){
                   <input type="range" min={100} max={1000} step={50} value={diceHoldMs}
                     onChange={e=>setDiceHoldMs(Number(e.target.value))}/>
                 </label>
-                <label>Loose die fade
-                  <select value={diceFadeMs} onChange={e=>setDiceFadeMs(Number(e.target.value))}>
-                    <option value={0}>Never</option>
-                    <option value={2000}>2 seconds</option>
-                    <option value={5000}>5 seconds</option>
-                    <option value={10000}>10 seconds</option>
-                    <option value={15000}>15 seconds</option>
-                    <option value={30000}>30 seconds</option>
-                    <option value={60000}>1 minute</option>
-                    <option value={120000}>2 minutes</option>
-                  </select>
-                </label>
+                <p><strong>Loose die &amp; flipcoin lifetime:</strong> 10 seconds.
+                  The result fades near the end, then is permanently removed.
+                  Use Undo or return it to the drawer before the deadline to
+                  remove or recover it. Source generators never disappear.</p>
               </div>
               <div className="reader-block sennet-dice-appearance-settings">
                 <h3>Dice Appearance</h3>
