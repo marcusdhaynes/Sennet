@@ -24,7 +24,7 @@ test('move Action Log cites the old and new playmat zones and snap positions',()
   assert.equal(row.type,'Move');
   assert.match(row.location, / → /);
   assert.match(row.location,/P1 · PLAY 01/);
-  assert.match(row.location,/\\([0-9.]+, [0-9.]+\\)/);
+  assert.match(row.location,/[(][0-9.]+, [0-9.]+[)]/);
   assert.doesNotMatch(row.location,/P1 · [0-9]{3,4},[0-9]{3,4}/,
     'locations must use zone slots rather than absolute table pixels');
   assert.ok(row.description.length>0);
