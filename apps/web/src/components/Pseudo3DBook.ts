@@ -1,4 +1,4 @@
-import {Container, Graphics, Rectangle, Text} from 'pixi.js';
+import {Container, Graphics, Rectangle, Sprite, Text, Texture} from 'pixi.js';
 
 export type TomeDesign = 'tiny'|'dragon'|'journal'|'arcane'|'strapped';
 
@@ -132,6 +132,20 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   caption.anchor.set(.5);caption.position.set(captionPoint.x,captionPoint.y);
   caption.rotation=.025;
   book.addChild(caption);
+  // True Three.js geometry is rendered once per cover style and cached as
+  // transparent artwork. Keep the procedural Pixi model as a no-WebGL
+  // fallback, and keep the *same* pointer-owning book container throughout.
+  void import('./Book3D').then(({getBookCanvas})=>getBookCanvas(design)).then(canvas=>{
+    if(book.destroyed)return;
+    const art=new Sprite(Texture.from(canvas));
+    art.anchor.set(.5);
+    art.width=width*1.38;
+    art.height=height*1.24;
+    art.position.set(0,-height*.015);
+    art.eventMode='none';
+    body.visible=false;mark.visible=false;caption.visible=false;
+    book.addChildAt(art,0);
+  }).catch(()=>{/* No WebGL / restricted device: leave the existing book. */});
   // Collision-free hit rectangle is exclusively for selecting this object.
   book.eventMode='static';book.cursor='grab';
   book.hitArea=new Rectangle(-width*.57,-height*.48,width*1.2,height*.98);

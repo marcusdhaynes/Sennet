@@ -1781,3 +1781,40 @@ body>.reader-backdrop{
   background:radial-gradient(circle at 35% 22%,#effefd,#b0cbcc 78%);
   box-shadow:0 0 0 1.5px #203e4b,0 0 0 2.8px #d9eced;
 }
+
+
+/* Sennet coin radial v3: short jewel-like annulus, Roman controls only.
+   No diameter or divider is drawn across the coin; its real numeral remains
+   visible in the transparent center. Physical coin and drag behavior unchanged. */
+.sennet-coin-radial{
+  width:116px;height:116px;
+  filter:drop-shadow(0 3px 6px #000a);
+  transform:translate(-50%,-50%);
+}
+.sennet-coin-radial .sennet-coin-ring{
+  width:116px;height:116px;
+}
+.sennet-coin-radial .sennet-coin-sector{
+  fill:#20342eee;stroke:#c4a06a;stroke-width:1.05;
+}
+.sennet-coin-radial .sennet-coin-ring path:nth-child(even){
+  fill:#364b3eed;
+}
+.sennet-coin-action-button{
+  min-width:20px;height:18px;padding:0 1px;
+  border:1px solid #d1af73b0;border-radius:7px;
+  background:linear-gradient(145deg,#3b5145f2,#172b27f8);
+  box-shadow:inset 0 1px 0 #f2dba526,0 2px 3px #0007;
+  font:800 10px/1 Georgia,'Times New Roman',serif;
+  color:#ffe8b6;letter-spacing:-.35px;
+}
+.sennet-coin-action-button:hover,
+.sennet-coin-action-button:focus-visible{
+  background:linear-gradient(145deg,#f1ddab,#b99460);
+  color:#182d27;border-color:#fff3ce;outline:1px solid #f4dfa7;
+}
+.sennet-coin-radial-center-hold{width:38px;height:38px}
+.sennet-coin-radial>.sennet-coin-palette{top:120px}
+@media (prefers-reduced-motion:reduce){
+  .sennet-coin-radial{animation:none}
+}
