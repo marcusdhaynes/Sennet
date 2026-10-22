@@ -2,7 +2,7 @@ import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
-import {createDrawerBody} from './RealisticSideDrawer';
+import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 const COIN_PALETTE=['#d8b979','#d77770','#83c4c7','#97b68d',
@@ -38,6 +38,18 @@ const FONT='Inter, ui-sans-serif, system-ui, sans-serif';
 let activeBookPointer:number|null=null;
 const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0xd6b681};
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
+/** Unified walnut/brass button casing, matching the actual wooden side drawers
+ * and the action-screen frame. Preserve original radii, hitboxes and gestures. */
+function woodenControl(radius:number,finish:string,active=false):Graphics{
+  const p=drawerPalette(finish);
+  return new Graphics()
+    .circle(0,1,radius+1).fill({color:p.deep,alpha:.98})
+    .circle(0,0,radius).fill({color:active?p.highlight:p.base,alpha:.99})
+    .circle(0,0,radius-.9).stroke({color:p.hardware,width:1.55,alpha:.98})
+    .circle(0,0,radius-3).stroke({color:p.deep,width:2,alpha:.82})
+    .circle(0,0,radius-5).stroke({color:p.highlight,width:.8,alpha:.62})
+    .arc(-2,-1,radius-5,3.85,5.35).stroke({color:p.hardware,width:1.2,alpha:.85});
+}
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
 }
@@ -386,9 +398,7 @@ function drawTcgMats(
       marker.eventMode=seat===viewerSeat&&!readonly?'static':'none';
       marker.hitArea=new Circle(0,0,19);
       marker.cursor='default';
-      marker.addChild(new Graphics().circle(0,0,16)
-        .fill({color:0x102b29,alpha:.9})
-        .stroke({color:0xe5d4ac,width:1.5,alpha:.95}));
+      marker.addChild(woodenControl(16,seatPlaymat.sideBoxStyle??'walnut',merged));
       const sign=label(merged?'−':'+',29,0xf4e1b9,'bold');
       sign.eventMode='none';sign.position.set(0,-1);marker.addChild(sign);
       if(seat===viewerSeat&&!readonly){
@@ -443,9 +453,7 @@ function drawTcgMats(
         button.eventMode='static';
         button.hitArea=new Circle(0,0,19);
         button.cursor='pointer';
-        button.addChild(new Graphics()
-          .circle(0,0,16).fill({color:0x102b29,alpha:.96})
-          .stroke({color:0xe5d4ac,alpha:.95,width:1.5}));
+        button.addChild(woodenControl(16,seatPlaymat.sideBoxStyle??'walnut'));
         // A 180-degree facing rotation makes a local right-arrow appear
         // as a LEFT arrow on screen, and vice-versa.
         const tip=allyHere?(left?-5:5):(left?5:-5);
@@ -476,10 +484,8 @@ function drawTcgMats(
       eye.eventMode='static';
       eye.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       eye.cursor='pointer';
-      eye.addChild(new Graphics()
-        .circle(0,0,VIEW_BUTTON_RADIUS).fill({color:0x183a33,alpha:.96})
-        .stroke({color:0xe4cf9d,alpha:1,width:1.5})
-        .ellipse(0,0,10,6).stroke({color:0xf4e4bd,width:1.8})
+      eye.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut'));
+      eye.addChild(new Graphics().ellipse(0,0,10,6).stroke({color:0xf4e4bd,width:1.8})
         .circle(0,0,3.3).fill({color:0xf6e4c1})
         .circle(1,-1,1.2).fill({color:0x3f5e53}));
       // The pointer must remain almost motionless for the 250 ms hold.
@@ -526,10 +532,7 @@ function drawTcgMats(
       castle.eventMode='static';
       castle.cursor='pointer';
       castle.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
-      castle.addChild(new Graphics().circle(0,0,VIEW_BUTTON_RADIUS)
-        .fill({color:castleActive?0x426750:0x183a33,alpha:.96})
-        .stroke({color:castleActive?0xf5d69a:0xe4cf9d,
-          width:castleActive?2.4:1.5,alpha:1}));
+      castle.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',castleActive));
       const castleMark=new Graphics();
       // Crenellated wall with two towers and a dark arched gate.
       castleMark
@@ -538,7 +541,7 @@ function drawTcgMats(
         .rect(-10,-3,20,12).fill(0xf4e4bd)
         .rect(-12,-10,7,5).rect(5,-10,7,5).fill(0xf4e4bd)
         .rect(-12,-6,7,15).rect(5,-6,7,15).fill(0xf4e4bd)
-        .roundRect(-3,2,6,8,3).fill(0x183a33)
+        .roundRect(-3,2,6,8,3).fill(rgb(drawerPalette(seatPlaymat.sideBoxStyle??'walnut').deep))
         .moveTo(-12,9).lineTo(12,9)
         .stroke({color:0xf4e4bd,width:1.4});
       castleMark.eventMode='none';
@@ -600,9 +603,7 @@ function drawTcgMats(
       settings.eventMode='static';
       settings.cursor='pointer';
       settings.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
-      settings.addChild(new Graphics()
-        .circle(0,0,VIEW_BUTTON_RADIUS).fill({color:0x183a33,alpha:.96})
-        .stroke({color:0xe4cf9d,alpha:1,width:1.5}));
+      settings.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut'));
       // Eight-tooth fine-line gear, centered on the same 32-unit disk.
       const gear=new Graphics();
       for(let i=0;i<32;i++){
@@ -612,7 +613,7 @@ function drawTcgMats(
         if(i===0)gear.moveTo(x,y);else gear.lineTo(x,y);
       }
       gear.closePath().fill({color:0xf4e4bd});
-      gear.circle(0,0,4).fill(0x183a33)
+      gear.circle(0,0,4).fill(rgb(drawerPalette(seatPlaymat.sideBoxStyle??'walnut').deep))
         .circle(0,0,2.8).stroke({color:0xf4e4bd,width:.85});
       gear.eventMode='none';
       settings.addChild(gear);
@@ -646,11 +647,7 @@ function drawTcgMats(
           button.eventMode='static';
           button.cursor='pointer';
           button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
-          button.addChild(new Graphics()
-            .circle(0,0,OPPONENT_RELATION_BUTTON_RADIUS)
-            .fill({color:active?palette.active:palette.idle,alpha:1})
-            .stroke({color:active?palette.outlineActive:palette.outlineIdle,
-              alpha:1,width:active?2.5:1.5}));
+          button.addChild(woodenControl(OPPONENT_RELATION_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',active));
           const glyph=new Graphics();
           if(isSword){
             // Single upright sword: blade, crossguard, grip, pommel.
