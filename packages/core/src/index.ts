@@ -8,7 +8,7 @@ export interface TableObject {
   rotation: number; faceUp: boolean; color: string; owner?: string;
   zone: Zone; order: number; sides?: number; value?: number;
   frameUrls?: string[]; faceUrl?: string; backUrl?: string;
-  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; coinText?: string; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number;
+  locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; coinText?: string; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number; throwExpiresAt?:number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
 export interface GameState {
@@ -16,6 +16,9 @@ export interface GameState {
   seq: number; turnSeat: number; round: number; objects: TableObject[];
   players: Player[]; message: string; centerMerges?: number[];
 }
+/** Loose thrown dice (including the two-sided flipcoin) are permanent
+ * deletions after 10 seconds; unlike the drawer generators themselves. */
+export const THROWN_DIE_LIFETIME_MS=10_000;
 export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY' | 'REROLL_DIE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
@@ -1027,7 +1030,9 @@ export function sanitizeObject(input: Record<string,unknown>): TableObject {
       throwTotal:clamp(Math.floor(finite(input.throwTotal,1)),0,2000),
       ...(validThrowQuaternion(input.throwQuaternion)?{throwQuaternion:input.throwQuaternion as [number,number,number,number]}:{}),
       ...(typeof input.throwAltitude==='number'&&Number.isFinite(input.throwAltitude)?
-        {throwAltitude:clamp(input.throwAltitude,0,500)}:{})
+        {throwAltitude:clamp(input.throwAltitude,0,500)}:{}),
+      ...(typeof input.throwExpiresAt==='number'&&Number.isFinite(input.throwExpiresAt)&&input.throwExpiresAt>0?
+        {throwExpiresAt:input.throwExpiresAt}:{})
     }:{}),
     ...(frameUrls?.length?{frameUrls}:{}),
     ...(safeUrl(input.faceUrl)?{faceUrl:safeUrl(input.faceUrl)}:{}),
@@ -1129,6 +1134,10 @@ export function validateCommand(state: GameState, command: Command): string | nu
       return 'Only card stacks can be shuffled';
   }
   if(command.type==='REROLL_DIE'){
+    if(command.payload.expiresAt!==undefined&&
+       (typeof command.payload.expiresAt!=='number'||!Number.isFinite(command.payload.expiresAt)||
+         command.payload.expiresAt<=0||command.payload.expiresAt>1e15))
+      return 'Invalid die expiration';
     if(!target?.throwDice||target.kind!=='die')return 'Only thrown dice can be rerolled';
     if(target.locked)return 'Die is locked';
     if(target.owner&&target.owner!==command.actor)return 'Die belongs to another player';
@@ -1160,6 +1169,10 @@ export function validateCommand(state: GameState, command: Command): string | nu
       return 'Invalid coin color';
   }
   if(command.type==='THROW_TRAY'){
+    if(command.payload.expiresAt!==undefined&&
+       (typeof command.payload.expiresAt!=='number'||!Number.isFinite(command.payload.expiresAt)||
+         command.payload.expiresAt<=0||command.payload.expiresAt>1e15))
+      return 'Invalid throw expiration';
     if(state.kind!=='tcg')return 'Dice tray is available for TCG tables';
     const seat=command.payload.seat;
     if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS)return 'Invalid dice seat';
@@ -1529,6 +1542,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
         objects.push(sanitizeObject({
           id:command.id+'-throw-'+i,kind:'die',throwDice:true,
           throwRolls:toss.rolls,throwQuantity:toss.rolls.length,throwTotal:total,
+          ...(typeof p.expiresAt==='number'?{throwExpiresAt:p.expiresAt}:{}),
           sides:toss.sides,value:isCoin?(heads?1:2):Math.min(100,total),
           ...(toss.quaternion?{throwQuaternion:toss.quaternion}:{}),
           ...(toss.altitude!==undefined?{throwAltitude:toss.altitude}:{}),
@@ -1547,6 +1561,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const heads=rolls.filter(v=>v===1).length;
       const total=obj.sides===2?heads:rolls.reduce((a,b)=>a+b,0);
       obj.throwRolls=rolls;obj.throwQuantity=rolls.length;obj.throwTotal=total;
+      if(typeof p.expiresAt==='number')obj.throwExpiresAt=p.expiresAt;
       obj.value=obj.sides===2?(heads?1:2):Math.min(100,total);
       obj.x=Number(p.x);obj.y=Number(p.y);
       obj.rotation=((Number(p.rotation)%360)+360)%360;
@@ -1803,6 +1818,40 @@ export function applyCommand(state: GameState, command: Command): GameState {
     if(piece.carrierId&&!objects.some(parent=>parent.id===piece.carrierId))
       delete piece.carrierId;
   return {...state,objects,turnSeat,round,mode,centerMerges,seq:state.seq+1,message};
+}
+/** Legacy saves did not timestamp thrown dice: recover their creation
+ * and most recent reroll from the persisted action log if available.
+ * An undatable legacy loose die is already expired: never resurrect it. */
+export function thrownDieDeadlines(state:GameState,events:readonly EventRecord[]=[]):Map<string,number>{
+  const legacy=new Map<string,number>();
+  for(const event of events){
+    const expires=typeof event.payload.expiresAt==='number'&&Number.isFinite(event.payload.expiresAt)
+      ?event.payload.expiresAt
+      :Number.isFinite(event.at)?event.at+THROWN_DIE_LIFETIME_MS:0;
+    if(event.type==='THROW_TRAY'){
+      const throws=event.payload.throws;
+      if(Array.isArray(throws))for(let i=0;i<throws.length;i++)
+        legacy.set(event.id+'-throw-'+i,expires);
+    }else if(event.type==='REROLL_DIE'&&typeof event.payload.id==='string')
+      legacy.set(event.payload.id,expires);
+  }
+  const deadlines=new Map<string,number>();
+  for(const obj of state.objects)if(obj.throwDice){
+    const deadline=Number.isFinite(obj.throwExpiresAt)?
+      obj.throwExpiresAt!:legacy.get(obj.id)??0;
+    deadlines.set(obj.id,deadline);
+  }
+  return deadlines;
+}
+/** No ephemeral view-only fade: removes expired dice/flipcoins from the
+ * authoritative objects array. Pure, so it also guards replay and loads. */
+export function expireThrownDice(
+  state:GameState,now:number,events:readonly EventRecord[]=[]
+):GameState{
+  const deadlines=thrownDieDeadlines(state,events);
+  if(![...deadlines.values()].some(deadline=>deadline<=now))return state;
+  return {...state,objects:state.objects.filter(o=>!o.throwDice||
+    (deadlines.get(o.id)??0)>now)};
 }
 export function replay(initial:GameState,commands:readonly Command[]):GameState{return commands.reduce((s,c)=>applyCommand(s,c),initial);}
 export function nearestFrameIndex(seat:number,rotationDegrees:number,frameCount:number):number {
