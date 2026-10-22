@@ -73,6 +73,24 @@ test('a rotated card must fit within bounds using its whole rotated footprint',(
   assert.ok(actual.y+half.y<=center.y+zone.height/2+1e-6);
 });
 
+test('merged-zone seam is playable and updates a card from HAND to PLAY',()=>{
+  const merged=[centerMergeKey(seat,1)];
+  const game=createGame('tcg');
+  game.centerMerges=merged;
+  const hero=game.objects.find(o=>o.id==='hero-a');assert.ok(hero);
+  hero.zone='HAND';hero.faceUp=false;hero.matSeat=seat;
+  const r1=local(cell(1)),r2=local(cell(2));
+  const seam=world(r1.x,(r1.y+r2.y)/2);
+  const moved=applyCommand(game,{id:'merge-seam',actor:'local',type:'MOVE',
+    payload:{id:hero.id,x:seam.x,y:seam.y,freePlacement:true,snapMergedSeat:seat},
+    seq:game.seq+1,at:1792651959000});
+  const after=moved.objects.find(o=>o.id===hero.id);
+  assert.ok(after);
+  assert.equal(after.zone,'TABLE');
+  assert.equal(after.faceUp,true);
+  assert.equal(after.matSeat,seat);
+  close(local(after).y,local(seam).y);
+});
 test('snapping enabled retains exact half-slot anchors',()=>{
   const c=cell(2),center=local(c);
   const candidate=world(center.x+(3.5-3)*c.width/TCG_MAT.centerCards,center.y);
