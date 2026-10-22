@@ -34,6 +34,7 @@ import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {fitDockedRadial} from '../lib/actionRadialFit';
+import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -187,7 +188,7 @@ function drawTcgMats(
   onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
   eyeHoldMs:number,selectedEnemy:number|null,
-  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void
 ){
   const drawnSeats=seatLayers
     ? [...seatLayers.keys()]
@@ -587,7 +588,11 @@ function drawTcgMats(
       const eyePosition=viewButtonPosition('eye');
       eye.position.set(eyePosition.x,eyePosition.y);
       eye.eventMode='static';
+      // Initial hit region is updated to a constant minimum on-screen size
+      // after the seat transform/camera is applied. The wooden eye itself
+      // remains 32 units wide at every zoom.
       eye.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
+      onEyeReady(eye);
       eye.cursor='pointer';
       eye.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut'));
       eye.addChild(new Graphics().ellipse(0,0,10,6).stroke({color:0xf4e4bd,width:1.8})
@@ -836,7 +841,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   viewport:{width:number;height:number},
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
   selectedEnemy:number|null,
-  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void):Map<number,Container>|null{
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void):Map<number,Container>|null{
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   if(duelOpponent!==null||castleActive){
@@ -883,7 +888,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,seatLayers,
-    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer);
+    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer,onEyeReady);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -1277,6 +1282,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const mount=useRef<HTMLDivElement>(null);
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
+  const eyeHitTarget=useRef<Container|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -1692,6 +1698,18 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
+        // The Eye icon becomes tiny at overview zoom. Grow its invisible
+        // target to at least 48 × 44 screen pixels while extending away
+        // from Castle, whose center is only 44 playmat units to its right.
+        // Use actual local-to-screen size, including 1v1/Castle seat scale.
+        const eye=eyeHitTarget.current;
+        if(eye&&!eye.destroyed){
+          const center=eye.toGlobal(new Point(0,0));
+          const unit=eye.toGlobal(new Point(1,0));
+          const pixelScale=Math.hypot(unit.x-center.x,unit.y-center.y);
+          const bounds=eyeHitBounds(pixelScale);
+          eye.hitArea=new Rectangle(bounds.x,bounds.y,bounds.width,bounds.height);
+        }
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
           const bottom=new Point(
@@ -1807,7 +1825,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     hoverTimers.current.clear();
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     diceSources.current.clear();diceBadges.current.clear();diceTrayMat.current=null;
-    drawerGroups.current.clear();drawerTabs.current.clear();
+    drawerGroups.current.clear();drawerTabs.current.clear();eyeHitTarget.current=null;
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
@@ -1827,7 +1845,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       preferredCastleMode.current,
       {ally:eyeView.castleFocusedAlly??null,enemy:eyeView.castleFocusedEnemy??null},
       viewport,relations,250,eyeView.castleSelectedEnemy??null,
-      boxClosed,drawerGroups.current,drawerTabs.current,toggleBox);
+      boxClosed,drawerGroups.current,drawerTabs.current,toggleBox,
+      button=>{eyeHitTarget.current=button;});
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
