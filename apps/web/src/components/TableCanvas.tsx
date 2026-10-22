@@ -192,7 +192,11 @@ function drawTcgMats(
     mat.position.set((topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2);
     mat.rotation=topLeft.angle;
     parent.addChild(mat);
-    layers.playmats.attach(mat);
+    // A transform-only mat owns separate painter surfaces. Its masked
+    // drawers must not be nested inside the playmat's render layer.
+    const surface=new Container();
+    mat.addChild(surface);
+    layers.playmats.attach(surface);
     if(castleActive&&seat!==viewerSeat){
       // The actual playmat surface focuses a classified Castle opponent.
       // Child controls and draggable cards retain their own pointer input.
@@ -232,7 +236,7 @@ function drawTcgMats(
     const backingBottom=isEnemy
       ?TCG_MAT_HEIGHT/2
       :TCG_MAT_HEIGHT/2+4;
-    mat.addChild(new Graphics()
+    surface.addChild(new Graphics()
       .roundRect(-TCG_MAT_WIDTH/2-4,backingTop,TCG_MAT_WIDTH+8,
         backingBottom-backingTop,duel?7:12)
       .fill({color:0x101e1a,alpha:.82})
@@ -269,7 +273,7 @@ function drawTcgMats(
           .fill(0xffffff);
         mask.eventMode='none';
         mat.addChild(mask);
-        layers.accessories.attach(mask);
+        // A regular scene-tree stencil clips the drawer in accessory layer 4.
         drawerGroup.mask=mask;
         const bodyOuterX=cx+side*(trayW+24)/2;
         const wallX=side===1?bodyOuterX-12:bodyOuterX;
@@ -317,8 +321,11 @@ function drawTcgMats(
           if(event.pointerId!==e.pointerId)return;
           event.stopPropagation();
           if(event.cancelable)event.preventDefault();
-          const global=new Point((event.clientX-rect.left)*stage.clientWidth/rect.width,
-            (event.clientY-rect.top)*stage.clientHeight/rect.height);
+          const appScreen=session.current?.app.screen;
+          if(!appScreen)return;
+          const global=new Point(
+            (event.clientX-rect.left)*appScreen.width/rect.width,
+            (event.clientY-rect.top)*appScreen.height/rect.height);
           const start=mat.toLocal(new Point(startX,startY));
           const current=mat.toLocal(global);
           const dx=current.x-start.x,dy=current.y-start.y;
@@ -346,7 +353,9 @@ function drawTcgMats(
         window.addEventListener('pointercancel',onUp,true);
       });
       book.on('destroyed',()=>{if(release)activeBookPointer=null;});
-      (drawerGroups.get(side)??mat).addChild(book);
+      // The book must remain movable even after leaving the drawer.
+      // Never place its hit target under the drawer's clipping mask.
+      mat.addChild(book);
       layers.objects.attach(book);
       // Capture the drag before the table background can initiate camera pan.
     }
@@ -372,12 +381,12 @@ function drawTcgMats(
         .fill({color:isCenterColumn?accent:0x253d36,
           alpha:isCenterColumn?(merged?.13:.055):.025})
         .stroke({color:0x071915,width:1.8,alpha:.90});
-      base.eventMode='none';mat.addChild(base);
+      base.eventMode='none';surface.addChild(base);
       const spanImage=seatPlaymat.imageMode==='span';
       const imageId=spanImage?seatPlaymat.spanningImageId:section.imageId;
       const image=seatPlaymat.images[imageId];
-      if(image)addPlaymatImage(mat,base,x,y,w,h,image,spanImage);
-      addPlaymatFinish(mat,x,y,w,h,section,seat*12+cell.row*3+cell.column,isCenterColumn);
+      if(image)addPlaymatImage(surface,base,x,y,w,h,image,spanImage);
+      addPlaymatFinish(surface,x,y,w,h,section,seat*12+cell.row*3+cell.column,isCenterColumn);
       // Remove colored grid lines from both OUTER columns. Keep the
       // colored guide lines in the middle playing area unchanged.
       if(isCenterColumn){
@@ -385,7 +394,7 @@ function drawTcgMats(
         for(let gx=x+10;gx<x+w-5;gx+=10)grid.moveTo(gx,y+5).lineTo(gx,y+h-5);
         for(let gy=y+10;gy<y+h-5;gy+=10)grid.moveTo(x+5,gy).lineTo(x+w-5,gy);
         grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});
-        grid.eventMode='none';mat.addChild(grid);
+        grid.eventMode='none';surface.addChild(grid);
       }
       const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
@@ -395,7 +404,7 @@ function drawTcgMats(
       text.position.set(x+w/2,y+h/2);
       if(cell.column===0)text.rotation=-Math.PI/2;
       if(cell.column===2)text.rotation=Math.PI/2;
-      mat.addChild(text);
+      surface.addChild(text);
     }
     // No separate gold/yellow outer border beneath the mat: only the
     // central playing area keeps its colored guide lines.
@@ -809,9 +818,10 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     const chair=new Container();
     chair.position.set(x,y);
     chair.rotation=playerSeatRotation(i);
+    chair.addChild(new Graphics().roundRect(-78,-25,156,50,10)
+      .fill(0xc9a66a).stroke({color:0xf0d6a5,width:1.5}));
     const seatText=label('Player '+String(i+1).padStart(2,'0'),
-      22,0xf5deb5,'bold');
-    seatText.style.stroke={color:0x10221d,width:3,join:'round'};
+      22,0x263a32,'bold');
     seatText.position.set(0,-1);
     chair.addChild(seatText);
     board.addChild(chair);

@@ -52,9 +52,9 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
     g.restore();
   }
   g.globalAlpha=.95;g.fillStyle=gold;g.textAlign='center';
-  g.font='bold 90px Georgia, Times New Roman, serif';
+  g.font='bold 117px Georgia, Times New Roman, serif';
   g.fillText('SENNET',384,304);
-  g.globalAlpha=.72;g.font='bold 29px Georgia, serif';
+  g.globalAlpha=.96;g.font='bold 40px Georgia, serif';
   g.fillText('SETTINGS',384,357);
   g.lineWidth=3;g.beginPath();g.moveTo(221,388);g.lineTo(547,388);g.stroke();
   g.globalAlpha=.85;
@@ -67,7 +67,7 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
   }
   g.textAlign='center';g.textBaseline='middle';
   g.font='bold 173px Georgia, serif';g.fillText(style.glyph,384,578);
-  g.globalAlpha=.55;g.font='italic 33px Georgia, serif';
+  g.globalAlpha=.90;g.font='italic 33px Georgia, serif';
   g.fillText('THE TABLETOP COMPANION',384,835);
   g.globalAlpha=1;
   const t=new THREE.CanvasTexture(canvas);
@@ -76,7 +76,7 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
 function renderBook(design:TomeDesign):HTMLCanvasElement{
   const style=themes[design];
   const scene=new THREE.Scene();
-  const width=500,height=660;
+  const width=900,height=1188;
   const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'low-power'});
   renderer.setSize(width,height,false);
   renderer.setPixelRatio(1);
@@ -84,8 +84,10 @@ function renderBook(design:TomeDesign):HTMLCanvasElement{
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=1.5;
   renderer.setClearColor(0x000000,0);
-  const camera=new THREE.OrthographicCamera(-1.67,1.67,2.2,-2.2,.1,50);
-  camera.position.set(2.2,-3.3,7.7);camera.lookAt(0,0,.13);
+  // Nearly straight overhead: cover edges remain parallel to the cards.
+  // The shallow pitch still reveals real pages, boards and spine thickness.
+  const camera=new THREE.OrthographicCamera(-1.18,1.18,1.56,-1.56,.1,50);
+  camera.position.set(0,-.78,10.8);camera.lookAt(0,0,.16);
   scene.add(new THREE.HemisphereLight(0xfaf0d8,0x172c32,2.15));
   const key=new THREE.DirectionalLight(0xffe3b9,3.6);
   key.position.set(-3,-4,8);scene.add(key);

@@ -139,15 +139,16 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
     if(book.destroyed)return;
     const art=new Sprite(Texture.from(canvas));
     art.anchor.set(.5);
-    art.width=width*1.38;
-    art.height=height*1.24;
-    art.position.set(0,-height*.015);
+    // Match the model's actual portrait ratio; avoid skewed, stretched foil.
+    art.width=width*1.06;
+    art.height=height*1.06;
+    art.position.set(0,0);
     art.eventMode='none';
     body.visible=false;mark.visible=false;caption.visible=false;
     book.addChildAt(art,0);
   }).catch(()=>{/* No WebGL / restricted device: leave the existing book. */});
   // Collision-free hit rectangle is exclusively for selecting this object.
   book.eventMode='static';book.cursor='grab';
-  book.hitArea=new Rectangle(-width*.57,-height*.48,width*1.2,height*.98);
+  book.hitArea=new Rectangle(-width*.56,-height*.54,width*1.12,height*1.08);
   return book;
 }
