@@ -36,6 +36,31 @@ const KINDS:{id:GameKind;label:string;description:string;symbol:string}[]=[
   {id:'custom',label:'Custom Games',description:'Build whatever you can imagine.',symbol:'✳'}
 ];
 const ACTOR_KEY='sennet.actor.v1';
+const TOKEN_KEY='sennet.player-token.v1';
+const ONLINE_ROOMS_KEY='sennet.online-rooms.v1';
+type OnlineRoom={room:string;endpoint:string;updated:number;seat:number|null};
+function onlineRooms():OnlineRoom[]{
+  try{
+    const list=JSON.parse(localStorage.getItem(ONLINE_ROOMS_KEY)||'[]');
+    return Array.isArray(list)?list.filter((item):item is OnlineRoom=>
+      typeof item?.room==='string'&&typeof item?.endpoint==='string').slice(0,10):[];
+  }catch{return [];}
+}
+function playerToken():string{
+  let saved='';
+  try{saved=localStorage.getItem(TOKEN_KEY)||'';}catch{}
+  if(/^[a-f0-9]{64}$/i.test(saved))return saved;
+  const bytes=crypto.getRandomValues(new Uint8Array(32));
+  const fresh=Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
+  try{localStorage.setItem(TOKEN_KEY,fresh);}catch{}
+  return fresh;
+}
+function inviteUrl(room:string,endpoint:string):string{
+  const url=new URL(window.location.href);
+  url.searchParams.set('room',room);
+  url.searchParams.set('relay',endpoint);
+  return url.href;
+}
 const RECENT_KEY='sennet.recent.v1';
 const LAST_SESSION_KEY='sennet.last-play-session.v1';
 const REWIND_SESSION_KEY='sennet.rewind-play-session.v1';
@@ -193,11 +218,13 @@ export default function App(){
   const [cards,setCards]=useState([{name:'The Wanderer',amount:4},{name:'Moon Sentinel',amount:3},{name:'Golden Oracle',amount:2}]);
   const [script,setScript]=useState(SAMPLE_LUA);
   const [scriptOutput,setScriptOutput]=useState('');
-  const [endpoint,setEndpoint]=useState(()=>localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'');
+  const [endpoint,setEndpoint]=useState(()=>new URLSearchParams(window.location.search).get('relay')||
+    localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'');
   const [room,setRoom]=useState(()=>new URLSearchParams(window.location.search).get('room')||'');
   const [playerName,setPlayerName]=useState(()=>localStorage.getItem('sennet.name')||'Player');
   const [onlineStatus,setOnlineStatus]=useState('Offline · local game');
   const [isConnected,setConnected]=useState(false);
+  const [onlineRoomsList,setOnlineRoomsList]=useState<OnlineRoom[]>(onlineRooms);
   const [replayAt,setReplayAt]=useState<number|null>(null);
   const [actionLogOpen,setActionLogOpen]=useState(false);
   const receiptUpload=useRef<HTMLInputElement|null>(null);
@@ -248,18 +275,36 @@ export default function App(){
       setReceipt(rows=>[...rows,receiptForCommand(event,before,next)]);
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
-  function disconnect(){connection.current?.close();connection.current=null;setConnected(false);setOnlineStatus('Offline · local game');}
-  function joinRoom(){
+  function disconnect(){
+    connection.current?.close();connection.current=null;
+    setConnected(false);setOnlineStatus('Offline · local game');
+    const link=new URL(window.location.href);
+    link.searchParams.delete('room');link.searchParams.delete('relay');
+    window.history.replaceState({},'',link);
+  }
+  function joinRoom(options?:{room?:string;endpoint?:string}){
     try{
-      const url=new URL(endpoint);
+      const address=(options?.endpoint??endpoint).trim();
+      if(!address)throw new Error('A multiplayer relay must be configured once before inviting players.');
+      const url=new URL(address);
       if(!['ws:','wss:'].includes(url.protocol))throw new Error('Use a ws:// or wss:// relay address.');
-      if(location.protocol==='https:'&&url.protocol!=='wss:')throw new Error('HTTPS needs a secure wss:// relay.');
-      const roomId=room.trim()||('table-'+createId().slice(0,8));
-      if(!/^[a-z0-9_-]{3,48}$/i.test(roomId))throw new Error('Room ID must be 3–48 letters, numbers, dashes or underscores.');
-      disconnect();localStorage.setItem('sennet.ws',endpoint);localStorage.setItem('sennet.name',playerName);
-      setRoom(roomId);setOnlineStatus('Connecting…');
-      const link=new URL(location.href);link.searchParams.set('room',roomId);window.history.replaceState({},'',link);
-      connection.current=new RoomConnection(endpoint,roomId,game.kind,actor,seat,playerName,{
+      if(location.protocol==='https:'&&url.protocol!=='wss:')throw new Error('This site needs a secure wss:// relay.');
+      const roomId=(options?.room??room).trim()||('table-'+createId().replaceAll('-','').slice(0,24));
+      if(!/^[a-z0-9_-]{3,48}$/i.test(roomId))throw new Error('Room code must be 3–48 letters, numbers, dashes or underscores.');
+      connection.current?.close();
+      setEndpoint(address);setRoom(roomId);setOnlineStatus('Connecting…');
+      try{localStorage.setItem('sennet.ws',address);localStorage.setItem('sennet.name',playerName);}catch{}
+      window.history.replaceState({},'',inviteUrl(roomId,address));
+      connection.current=new RoomConnection(address,roomId,game.kind,actor,seat,playerName,playerToken(),{
+        onJoined:(assigned,joinedRoom)=>{
+          if(assigned!==null)setSeat(assigned);
+          const known:OnlineRoom={room:joinedRoom,endpoint:address,updated:Date.now(),seat:assigned};
+          setOnlineRoomsList(previous=>{
+            const next=[known,...previous.filter(entry=>entry.room!==joinedRoom||entry.endpoint!==address)].slice(0,10);
+            try{localStorage.setItem(ONLINE_ROOMS_KEY,JSON.stringify(next));}catch{}
+            return next;
+          });
+        },
         onState:state=>{
           const clean=expireThrownDice(state,Date.now());
           current.current=clean;setGame(clean);setInitial(clean);
@@ -273,12 +318,32 @@ export default function App(){
           current.current=next;setGame(next);
           setHistory(h=>[...h,event as EventRecord]);
           setReceipt(rows=>[...rows,receiptForCommand(event as EventRecord,before,next)]);
-        }catch{inform('Out of sync. Reconnect to resynchronize.');}},
+        }catch{connection.current?.requestSnapshot();}},
         onPlayers:players=>{const next={...current.current,players};current.current=next;setGame(next);},
         onStatus:setOnlineStatus,onError:inform
       });
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
+  async function shareRoom(){
+    if(!room||!endpoint){inform('Create or join a room before sharing.');return;}
+    const url=inviteUrl(room,endpoint);
+    try{
+      if(navigator.share)await navigator.share({title:'Join my Sennet table',url});
+      else if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);inform('Invitation link copied!');}
+      else{window.prompt('Copy this invite link',url);}
+    }catch{/* User dismissed system share sheet. */}
+  }
+  const autoJoinTried=useRef(false);
+  useEffect(()=>{
+    if(autoJoinTried.current)return;
+    autoJoinTried.current=true;
+    const params=new URLSearchParams(window.location.search);
+    const invitation=params.get('room');
+    if(!invitation)return;
+    const address=params.get('relay')||endpoint;
+    if(address)joinRoom({room:invitation,endpoint:address});
+    else{setBook('settings');setSettingsPage('multiplayer');setOnlineStatus('Invite received · configure your relay to join');}
+  },[]);
   useEffect(()=>()=>connection.current?.close(),[]);
   useEffect(()=>{
     const deadlines=thrownDieDeadlines(game,history);
@@ -496,6 +561,17 @@ export default function App(){
     }catch(e){setScriptOutput('Lua error: '+String(e));}
   }
   return <div className="sennet-home">
+    <div className="sennet-multiplayer-dock" role="group" aria-label="Multiplayer quick access">
+      <button type="button" className="sennet-multiplayer-open" onClick={()=>{
+        setSettingsPage('multiplayer');setBook('settings');
+      }} title="Host or join a table">
+        {isConnected?<Wifi size={15}/>:<Users size={15}/>}
+        <span>{isConnected?'Table '+room:'Play together'}</span>
+        {isConnected&&<small>{game.players.filter(p=>p.online).length} online</small>}
+      </button>
+      {isConnected&&<button type="button" className="sennet-multiplayer-share"
+        onClick={shareRoom} title="Share invitation"><Link2 size={16}/></button>}
+    </div>
     <div className="table-world">
       <TableCanvas bookDesign={bookDesign} bookDock={bookDock} bookOffset={bookOffset} onBookMove={point=>{
           writeReceipt('Move','Book · '+Math.round(bookOffset.x)+','+Math.round(bookOffset.y)+
@@ -699,7 +775,7 @@ export default function App(){
               <article id="sennet-guide-3"><span>03</span><h3>Your seat &amp; books</h3><p>The compact gold Player ## tab tucks against the bottom of the screen. Clicking it expands the drawer upward and outward: the gold tag stays on top, with the books below. The green section and any custom display name appear only when expanded; the extra word Player is omitted from that green name label. Click the tag again to collapse it. Hovering does nothing. Choose your seat in Settings.</p></article>
               <article id="sennet-guide-4"><span>04</span><h3>Individual TCG mats</h3><p>Every seat has its own four-row mat with seven original horizontal card slots in each PLAY and HAND row plus six in-between positions, for 13 selectable positions per row. Tap the Eye centered on the top line of your Play 03 zone to focus it. Hold it for 0.25 seconds, then select any opponent to bring both mats together in a full-height opposing view: theirs above, yours below, separated by the battlefield divider. Other players have a small retractable name/seat tag. Your own gold Player ## tab rises when clicked, revealing Sennet, Games, and Settings underneath it. The green book section stays concealed when collapsed. There is no caret, hover activation, auto-close timer, or separate bookshelf. In Opponent Mode, every other visible player's mat has a Sword and Shield pair whose circle centers sit directly on the Play 03 zone's top boundary from that player's perspective. Tap that player's Sword to mark them as an Enemy across the divider, or their Shield to place them beside you facing your direction. The Eye and Castle sit side by side, evenly centered on the top line of your Play 03 zone, with each circle straddling that line. The Eye keeps its original tap-and-hold controls and shows a one-on-one view with exactly one selected opponent always across from you; Castle defaults to All View: every marked Ally is placed in an optimally scaled grid to the right of your full-size mat, which stays anchored on the left. Hold Castle for 0.25 seconds to toggle BOTH groups to Single View: one Ally beside you and one Enemy across the divider. Both have left/right arrows that cycle independently through their own teammates or opponents. Hold Castle again to return BOTH groups to All View. In Castle All View, click an Ally mat to focus just that Ally while all Enemies remain in their unchanged All grid; click an Enemy mat to focus just that Enemy while all Allies remain as they were. You may focus both sides independently, leaving exactly three mats: yours, one Ally, and one Enemy. Each focused mat has its Sword/Shield and same-role left/right arrows. Focus is neither Single nor All; tap Castle to leave or hold Castle to resume toggling from the previous broad mode. Marked Enemies remain opposite you above the divider in both modes, and unclassified players stay hidden. Tap Castle to enter or leave the battlefield. Only one of Sword or Shield can be selected; tap the active icon again to clear it. Each opponent keeps their own setting. Eye always places the one selected opponent across the divider, even when marked Ally; only Castle puts all marked allies beside you and all marked enemies across from you. Use the circular left/right arrows centered on the selected opponent mat’s left and right edges to cycle counter-clockwise or clockwise through the numbered seats. While facing an opponent the camera is fixed—dragging or zooming the view is disabled, but cards can still be moved. Tap the eye again for the full table, or hold it to return to your mat alone. Hover over + or − to join or separate center sections. All changes can be replayed. The mat retains the original LOCATIONS, RESERVE, WAIT, RESOURCE, LEADERS, DECK, DISCARD and REMOVE pockets, three PLAY rows and HAND. Use the DECK arrow or D to draw; select a card and press T to tap/untap or F to flip. Drop a card or token into your REMOVE pocket to remove it.</p></article>
               <article id="sennet-guide-5"><span>05</span><h3>Bring your own games</h3><p>Import JSON game packs and externally hosted sprite sheets. Large creator files stay on their own hosting.</p></article>
-              <article id="sennet-guide-6"><span>06</span><h3>Multiplayer</h3><p>Connect a secure relay through Settings to join a shared table. Local tabletop play works without a connection.</p></article>
+              <article id="sennet-guide-6"><span>06</span><h3>Multiplayer</h3><p>Click Play together to create a table, invite friends with one link, and resume any saved seat from the same browser. Online games need a separately hosted WebSocket relay; shared progress is saved there.</p></article>
             </div>
             <button className="reader-primary" onClick={()=>{setBook('games');setGamesPage('all');}}>Open Games <ChevronRight size={17}/></button>
           </div>}
@@ -876,8 +952,35 @@ export default function App(){
               </>
             }
             {settingsPage==='deckbuilder'&&<div className="reader-block"><h2>Deckbuilder</h2><p>Build, import, and load decks directly onto the table.</p><button className="reader-primary" onClick={()=>{setBook(null);setTcgStudioOpen(true);}}>Open Deckbuilder</button></div>}
-            {settingsPage==='multiplayer'&&<><div className="reader-heading"><div><h2>Multiplayer</h2><p>Join a room through a secure WebSocket relay. The public GitHub Pages site runs locally until a relay is configured.</p></div></div>
-              <div className="reader-block"><div className="status-line">{isConnected?<Wifi size={16}/>:<WifiOff size={16}/>} {onlineStatus}</div><label>Server URL<input value={endpoint} onChange={e=>setEndpoint(e.target.value)} placeholder="wss://your-sennet-relay.example"/></label><label>Room ID<input value={room} onChange={e=>setRoom(e.target.value)} placeholder="friends-table"/></label><div className="tool-buttons"><button onClick={joinRoom}><Wifi size={16}/> Join / Create</button><button onClick={disconnect}><WifiOff size={16}/> Disconnect</button><button onClick={()=>{const link=new URL(location.href);link.searchParams.set('room',room);navigator.clipboard?.writeText(link.href);inform('Invite link copied.');}}><Copy size={16}/> Copy invite</button></div></div>
+            {settingsPage==='multiplayer'&&<><div className="reader-heading"><div><h2>Play Together</h2><p>One link to join. Your seat, pieces and shared tabletop stay saved when anyone leaves.</p></div></div>
+              <div className="reader-block sennet-online-controls">
+                <div className="status-line">{isConnected?<Wifi size={16}/>:<WifiOff size={16}/>} {onlineStatus}</div>
+                <div className="tool-buttons">
+                  <button type="button" className="reader-primary" onClick={()=>joinRoom({room:''})}><Plus size={16}/> New table</button>
+                  {isConnected&&<button type="button" className="reader-primary" onClick={shareRoom}><Link2 size={16}/> Invite friends</button>}
+                  {isConnected&&<button type="button" onClick={disconnect}><WifiOff size={16}/> Leave table</button>}
+                </div>
+                {isConnected&&<p className="sennet-room-code"><strong>Table:</strong> {room} <span>· Autosaved after every move</span></p>}
+                {isConnected&&<div className="sennet-online-players" aria-label="Saved players">
+                  {game.players.map(player=><span key={player.id} className={player.online?'online':'away'}>
+                    <i/>{player.name} · seat {player.seat+1}{player.id===actor?' (you)':''}{!player.online?' · away':''}
+                  </span>)}
+                </div>}
+                <label>Enter a table code<input value={room} onChange={e=>setRoom(e.target.value)} placeholder="Paste a table code"/></label>
+                <div className="tool-buttons"><button type="button" onClick={()=>joinRoom()}><Users size={16}/> Join / resume table</button></div>
+                {onlineRoomsList.length>0&&<div className="sennet-saved-rooms">
+                  <h4>Pick up where you left off</h4>
+                  {onlineRoomsList.map(previous=><button type="button" key={previous.endpoint+'|'+previous.room}
+                    onClick={()=>joinRoom({room:previous.room,endpoint:previous.endpoint})}>
+                    <RotateCw size={14}/><span>{previous.room}</span><small>{previous.seat===null?'Spectator':'Seat '+((previous.seat??0)+1)}</small>
+                  </button>)}
+                </div>}
+                <details className="reader-details"><summary>Connection setup · once per server</summary>
+                  <p>Host the Sennet relay separately; GitHub Pages cannot run WebSockets. Friends receive its address automatically in the invite, so they only click the link.</p>
+                  <label>Secure relay address<input value={endpoint} onChange={e=>setEndpoint(e.target.value)}
+                    placeholder="wss://your-sennet-relay.example"/></label>
+                </details>
+              </div>
             </>}
             {settingsPage==='scripting'&&<><div className="reader-heading"><div><h2>Lua scripting</h2><p>Run experimental local game scripts in an isolated worker.</p></div></div>
               <div className="reader-block"><label>Lua script<textarea rows={12} className="code-edit" spellCheck={false} value={script} onChange={e=>setScript(e.target.value)}/></label><button className="reader-secondary" onClick={executeLua}><Play size={16}/> Run script</button><p>{scriptOutput||'Ready to execute.'}</p></div>
