@@ -62,8 +62,7 @@ function normalizeRelay(raw:string):string{
   if(url.protocol==='http:')url.protocol='ws:';
   if(url.protocol!=='ws:'&&url.protocol!=='wss:')throw Error('Enter the HTTPS or WSS address of your Sennet relay.');
   if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('Online Sennet requires a secure HTTPS or WSS address.');
-  url.search='';url.hash='';url.pathname='/';
-  return url.href.replace(/\\/$/,'');
+  return url.origin;
 }
 function inviteUrl(room:string,endpoint:string):string{
   const url=new URL(window.location.href);
@@ -349,7 +348,7 @@ export default function App(){
     const value=joinInput.trim();
     if(!value){inform('Paste your invitation link or a room code.');return;}
     try{
-      if(/^https?:\\/\\//i.test(value)){
+      if(value.toLowerCase().startsWith('https://')||value.toLowerCase().startsWith('http://')){
         const link=new URL(value);
         const roomCode=link.searchParams.get('room');
         const relayUrl=link.searchParams.get('relay');
