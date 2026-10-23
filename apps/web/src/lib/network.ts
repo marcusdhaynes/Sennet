@@ -8,86 +8,164 @@ export interface RoomCallbacks {
   onError:(message:string)=>void;
   onJoined?:(seat:number|null,room:string)=>void;
 }
+type JoinMessage={
+  type:'join';room:string;kind:GameKind;actor:string;seat:number;name:string;token:string;
+};
+type RoomMessage={
+  type:string;message?:string;error?:string;seat?:number|null;room?:string;
+  state?:GameState;event?:EventRecord;players?:Player[];
+};
+const LOOP=1800;
 
-/** One logical multiplayer session survives tab sleep, transient disconnects and relay restarts.
- * Only the authoritative server snapshot can complete a reconnect; commands are never
- * silently replayed after an uncertain send (avoids duplicate moves). */
+/** WSS preferred; same-origin HTTPS requests are the VPN-friendly fallback.
+ * Server authority is identical for both paths. Player secrets travel in POST
+ * bodies, never in shared invite links or URLs. */
 export class RoomConnection {
   private ws:WebSocket|null=null;
   private stopped=false;
-  private attempt=0;
-  private retry:number|undefined;
   private joined=false;
-  private readonly address:string;
-  private readonly joinMessage:{type:'join';room:string;kind:GameKind;actor:string;seat:number;name:string;token:string};
+  private mode:'websocket'|'http'|'opening'='opening';
+  private tick:number|undefined;
+  private timeout:number|undefined;
+  private lastSeq=-1;
+  private lastPresence='';
+  private failures=0;
+  private readonly httpRoot:string;
+  private readonly payload:JoinMessage;
   private readonly handlers:RoomCallbacks;
-
   constructor(address:string,room:string,kind:GameKind,actor:string,seat:number,name:string,token:string,handlers:RoomCallbacks){
-    this.address=address;
-    this.joinMessage={type:'join',room,kind,actor,seat,name,token};
+    const url=new URL(address);
+    if(url.protocol!=='ws:'&&url.protocol!=='wss:')throw Error('A ws:// or wss:// server URL is required');
+    this.httpRoot=url.protocol==='wss:'?'https://'+url.host:'http://'+url.host;
+    this.payload={type:'join',room,kind,actor,seat,name,token};
     this.handlers=handlers;
-    this.open();
+    this.startWebSocket(address);
   }
-
-  private open(){
-    if(this.stopped)return;
-    this.joined=false;
-    this.handlers.onStatus(this.attempt?'Reconnecting to saved table…':'Connecting to table…');
-    const ws=new WebSocket(this.address);
-    this.ws=ws;
-    ws.onopen=()=>{
-      if(this.stopped||this.ws!==ws){ws.close();return;}
-      ws.send(JSON.stringify(this.joinMessage));
-      this.handlers.onStatus('Synchronizing table…');
-    };
-    ws.onmessage=event=>{
-      if(this.stopped||this.ws!==ws)return;
-      try{
-        const msg=JSON.parse(String(event.data));
-        if(msg.type==='joined'){
-          this.joined=true;this.attempt=0;
-          this.handlers.onStatus(msg.seat===null?'Watching table · all seats occupied':'Online · seat '+(msg.seat+1));
-          this.handlers.onJoined?.(msg.seat,msg.room);
-        }
-        if(msg.type==='snapshot')this.handlers.onState(msg.state);
-        if(msg.type==='event')this.handlers.onEvent(msg.event);
-        if(msg.type==='presence')this.handlers.onPlayers(msg.players);
-        if(msg.type==='error'){
-          this.handlers.onError(String(msg.message||'The room rejected your request'));
-          if(!this.joined){
-            this.stopped=true;
-            this.handlers.onStatus('Unable to join · check room details');
-            ws.close();
-          }
-        }
-      }catch(e){this.handlers.onError(String(e));}
-    };
-    ws.onerror=()=>{if(!this.stopped&&this.attempt===0)this.handlers.onStatus('Connection interrupted…');};
-    ws.onclose=()=>{
-      if(this.stopped||this.ws!==ws)return;
-      this.joined=false;
-      const delay=Math.min(12000,700*Math.pow(1.7,Math.min(this.attempt++,6)));
-      this.handlers.onStatus('Offline · reconnecting automatically…');
-      this.retry=window.setTimeout(()=>this.open(),delay);
-    };
+  private announce(joined:RoomMessage,viaHttp=false){
+    this.joined=true;this.failures=0;
+    this.handlers.onJoined?.(joined.seat??null,joined.room||this.payload.room);
+    this.handlers.onStatus(joined.seat==null?'Watching table · all seats occupied':
+      'Online · seat '+(joined.seat+1)+(viaHttp?' · VPN-compatible mode':''));
   }
-
-  requestSnapshot(){
-    if(this.ws?.readyState===WebSocket.OPEN&&this.joined){
-      this.ws.send(JSON.stringify({type:'resync'}));
+  private receiveSnapshot(state:GameState){
+    if(state.seq!==this.lastSeq){
+      this.lastSeq=state.seq;
+      this.handlers.onState(state);
+    }
+    const presence=JSON.stringify(state.players);
+    if(presence!==this.lastPresence){
+      this.lastPresence=presence;
+      this.handlers.onPlayers(state.players);
     }
   }
-
-  send(command:Command){
-    if(!this.joined||this.ws?.readyState!==WebSocket.OPEN)
-      throw new Error('Reconnecting · your move was not sent. Please retry.');
-    this.ws.send(JSON.stringify({type:'command',command}));
+  private startWebSocket(address:string){
+    this.mode='opening';
+    this.handlers.onStatus('Connecting securely…');
+    try{
+      const socket=new WebSocket(address);
+      this.ws=socket;
+      this.timeout=window.setTimeout(()=>this.startHttp(),5000);
+      socket.onopen=()=>{
+        if(this.stopped||this.ws!==socket){socket.close();return;}
+        socket.send(JSON.stringify(this.payload));
+        this.handlers.onStatus('Joining saved table…');
+      };
+      socket.onmessage=event=>{
+        if(this.stopped||this.ws!==socket)return;
+        try{
+          const msg=JSON.parse(String(event.data)) as RoomMessage;
+          if(msg.type==='joined'){
+            this.mode='websocket';this.clearTimer();this.announce(msg);return;
+          }
+          if(msg.type==='snapshot'&&msg.state){this.receiveSnapshot(msg.state);return;}
+          if(msg.type==='event'&&msg.event){this.lastSeq=msg.event.seq;this.handlers.onEvent(msg.event);return;}
+          if(msg.type==='presence'&&msg.players){
+            this.lastPresence=JSON.stringify(msg.players);this.handlers.onPlayers(msg.players);return;
+          }
+          if(msg.type==='error'){
+            this.handlers.onError(msg.message||'Room request was rejected');
+            if(!this.joined){this.stopped=true;this.clearTimer();socket.close();}
+          }
+        }catch(error){this.handlers.onError(String(error));}
+      };
+      socket.onerror=()=>{if(!this.stopped&&this.mode!=='http')this.handlers.onStatus('Trying compatible connection…');};
+      socket.onclose=()=>{if(!this.stopped&&this.mode!=='http')this.startHttp();};
+    }catch{this.startHttp();}
   }
-
+  private clearTimer(){
+    if(this.timeout!==undefined){window.clearTimeout(this.timeout);this.timeout=undefined;}
+  }
+  private async post(path:string,body:Record<string,unknown>):Promise<RoomMessage>{
+    const controller=new AbortController();
+    const timer=window.setTimeout(()=>controller.abort(),10000);
+    try{
+      const response=await fetch(this.httpRoot+'/api/room/'+path,{
+        method:'POST',mode:'cors',credentials:'omit',cache:'no-store',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({...this.payload,...body}),
+        signal:controller.signal
+      });
+      const result=await response.json() as RoomMessage;
+      if(!response.ok)throw Error(result.error||'Relay responded with '+response.status);
+      return result;
+    }finally{window.clearTimeout(timer);}
+  }
+  private startHttp(){
+    if(this.stopped||this.mode==='http')return;
+    this.mode='http';this.clearTimer();
+    this.ws?.close();this.ws=null;this.joined=false;
+    this.handlers.onStatus('Connecting through VPN-compatible HTTPS…');
+    void this.poll(true);
+  }
+  private async poll(join:boolean){
+    if(this.stopped||this.mode!=='http')return;
+    try{
+      const msg=await this.post(join?'join':'sync',{});
+      if(this.stopped||this.mode!=='http')return;
+      if(join){this.announce(msg,true);}
+      if(msg.state)this.receiveSnapshot(msg.state);
+      this.failures=0;
+    }catch(error){
+      if(this.stopped)return;
+      const message=error instanceof Error?error.message:String(error);
+      this.failures++;
+      this.handlers.onStatus(this.failures===1?'Reconnecting over HTTPS…':'Cannot reach multiplayer server · retrying…');
+      if(this.failures===1||this.failures%5===0)this.handlers.onError(
+        message.includes('Failed to fetch')?'The relay is unreachable. Check the hosting URL, network or VPN settings.':message);
+      this.joined=false;
+    }
+    const delay=this.failures?Math.min(12000,1200*Math.pow(1.6,Math.min(5,this.failures))):LOOP;
+    this.tick=window.setTimeout(()=>this.poll(!this.joined),delay);
+  }
+  requestSnapshot(){
+    if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN)
+      this.ws.send(JSON.stringify({type:'resync'}));
+    else if(this.mode==='http'&&this.joined)
+      void this.post('sync',{}).then(msg=>{if(msg.state)this.receiveSnapshot(msg.state);}).catch(()=>{});
+  }
+  send(command:Command){
+    if(!this.joined)throw new Error('Still connecting. Please retry your move.');
+    if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN){
+      this.ws.send(JSON.stringify({type:'command',command}));return;
+    }
+    if(this.mode==='http'){
+      void this.post('command',{command}).then(msg=>{
+        if(this.stopped)return;
+        if(msg.state)this.receiveSnapshot(msg.state);
+      }).catch(error=>{
+        this.handlers.onError('Move was not confirmed; checking the saved game. '+String(error));
+        this.requestSnapshot();
+      });
+      return;
+    }
+    throw new Error('Room is reconnecting. Please retry your move.');
+  }
   close(){
-    this.stopped=true;
-    if(this.retry!==undefined)window.clearTimeout(this.retry);
-    this.ws?.close();
-    this.ws=null;
+    if(this.stopped)return;
+    const wasHttp=this.mode==='http'&&this.joined;
+    this.stopped=true;this.clearTimer();
+    if(this.tick!==undefined)window.clearTimeout(this.tick);
+    this.ws?.close();this.ws=null;
+    if(wasHttp)void this.post('leave',{}).catch(()=>{});
   }
 }
