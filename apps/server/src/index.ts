@@ -266,7 +266,7 @@ wss.on('connection',ws=>{
     const entry=rooms.get(s.room);if(!entry)return;
     entry.sockets.delete(ws);
     if(![...entry.sockets].some(client=>sessions.get(client)?.actor===s.actor))entry.state.players=entry.state.players.map(p=>p.id===s.actor?{...p,online:false}:p);
-    broadcast(s.room,{type:'presence',players:entry.state.players});persist(s.room);
+    updatePresence(s.room);broadcast(s.room,{type:'presence',players:entry.state.players});persist(s.room);
   });
 });
 server.listen(PORT,()=>console.log(`Sennet relay: http://localhost:${PORT} — gameplay logs only; no uploaded files`));
