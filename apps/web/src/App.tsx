@@ -341,7 +341,7 @@ export default function App(){
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
   function createOnlineTable(){
-    setCreateAfterSetup(true);
+    if(!endpoint.trim())setCreateAfterSetup(true);
     joinRoom({room:''});
   }
   function joinEnteredTable(){
