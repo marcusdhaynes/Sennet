@@ -2591,3 +2591,69 @@ body>.reader-backdrop{
   .sennet-multiplayer-open small{display:none;}
   .sennet-multiplayer-share{padding:6px 8px;min-height:33px;}
 }
+
+
+/* Multiplayer book chapter — compact, legible and usable on a narrow page */
+.sennet-play-together{display:flex;flex-direction:column;gap:14px;padding-bottom:18px;}
+.sennet-play-together .reader-heading{margin:0 0 2px;}
+.sennet-play-together .reader-heading h2{font-size:clamp(27px,3vw,36px);margin:0 0 4px;}
+.sennet-play-together .reader-heading p{margin:0;line-height:1.5;}
+.sennet-multi-status{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #b9a17b87;border-radius:10px;background:linear-gradient(100deg,#f9edd3,#f1dfbf70);}
+.sennet-multi-status-led{display:block;flex-shrink:0;height:11px;width:11px;border-radius:50%;border:2px solid #fff8;box-shadow:0 0 0 3px #947a5b35;background:#ad8b50;}
+.sennet-multi-status-led.online{background:#4d8e64;}
+.sennet-multi-status-led.waiting{background:#cfab55;}
+.sennet-multi-status-led.missing{background:#ad7360;}
+.sennet-multi-status>div{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.sennet-multi-status strong{font-weight:700;font-size:14px;color:#503e2b;}
+.sennet-multi-status small{font-size:12px;color:#69563f;line-height:1.4;}
+.sennet-online-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.sennet-online-card{display:flex;flex-direction:column;align-items:flex-start;gap:9px;min-width:0;
+  background:#faf0d8b8;border:1px solid #cab187a6;border-radius:12px;
+  box-shadow:0 3px 8px #503d2312;padding:15px 14px;}
+.sennet-online-card-mark{height:35px;width:35px;display:grid;place-items:center;color:#76562b;
+  border-radius:50%;background:#f0dfb7;border:1px solid #d3b882;}
+.sennet-online-card strong{font-size:16px;color:#453323;}
+.sennet-online-card p{font-size:12px;line-height:1.45;margin:0;color:#695742;min-height:44px;}
+.sennet-online-card input{width:100%;max-width:100%;min-width:0;min-height:37px;padding:8px 10px;
+  background:#fffaec;border:1px solid #c9b18c;color:#513e29;border-radius:6px;font-size:12px;}
+.sennet-online-card button{max-width:100%;min-height:37px;border-radius:7px;
+  padding:7px 10px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  font-weight:700;font-size:12px;margin-top:auto;white-space:normal;}
+.sennet-online-current,.sennet-saved-rooms{display:flex;flex-direction:column;gap:10px;
+  padding:12px 14px;border:1px solid #c8b28e;border-radius:10px;background:#fff5d9a8;}
+.sennet-online-current-header{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:14px;color:#57432b;flex-wrap:wrap;}
+.sennet-online-current-header span{font-family:monospace;font-size:12px;word-break:break-all;}
+.sennet-online-current .tool-buttons{display:flex;flex-wrap:wrap;gap:8px;}
+.sennet-online-current .tool-buttons button{font-size:12px;padding:7px 10px;display:flex;gap:7px;align-items:center;}
+.sennet-online-current>small{font-size:11px;line-height:1.5;}
+.sennet-saved-rooms h3{font-size:17px;margin:0;color:#503924;}
+.sennet-hosting-panel{border:1px solid #c0a983;border-radius:10px;background:rgba(255,246,222,.64);overflow:hidden;}
+.sennet-hosting-panel>summary{display:flex;align-items:center;gap:8px;list-style:none;padding:12px 14px;
+  color:#5b452b;font-size:14px;font-weight:700;cursor:pointer;}
+.sennet-hosting-panel>summary::-webkit-details-marker{display:none;}
+.sennet-hosting-panel>summary:after{content:'⌄';font-size:17px;margin-left:auto;transform:rotate(0deg);transition:transform .15s;}
+.sennet-hosting-panel[open]>summary:after{transform:rotate(180deg);}
+.sennet-hosting-panel>summary small{display:block;font-size:10px;font-weight:400;opacity:.75;margin-left:auto;text-align:right;}
+.sennet-hosting-panel[open]>summary{border-bottom:1px solid #d1b98b;}
+.sennet-hosting-body{display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:14px;}
+.sennet-hosting-body p{font-size:12px;line-height:1.6;margin:0;}
+.sennet-hosting-body>small{font-size:11px;line-height:1.5;}
+.sennet-hosting-body label{width:100%;font-size:12px;font-weight:700;}
+.sennet-hosting-body label input{width:100%;min-width:0;margin-top:6px;padding:9px;font-weight:400;background:#fffaf0;
+  border:1px solid #baa37a;border-radius:5px;font-size:12px;}
+.sennet-hosting-deploy{display:flex;align-items:center;gap:8px;border:1px solid #bba06a;
+  border-radius:7px;background:#e8d5aa;padding:10px 12px;font-size:13px;color:#4d3b2b;
+  text-decoration:none;font-weight:700;}
+.sennet-hosting-deploy:hover{background:#d9bc80;}
+.sennet-hosting-body>button{font-size:12px;display:flex;gap:8px;align-items:center;}
+.sennet-hosting-body>button:disabled{opacity:.5;cursor:not-allowed;}
+.sennet-hosting-ok{display:flex;gap:5px;align-items:center;color:#26633a;}
+.sennet-hosting-error{color:#9b4e39;}
+@media(max-width:600px){
+  .sennet-online-cards{grid-template-columns:1fr;}
+  .sennet-online-card{padding:12px;gap:7px;}
+  .sennet-online-card p{min-height:0;}
+  .sennet-online-card button{width:100%;}
+  .sennet-hosting-panel>summary small{display:none;}
+}
