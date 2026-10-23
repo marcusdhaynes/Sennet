@@ -1056,7 +1056,7 @@ export default function App(){
                   <small>{endpoint?'Edit or test server':'Required to create online rooms'}</small></summary>
                 <div className="sennet-hosting-body">
                   <p>Sennet needs one online server for everyone's shared games. This is not a VPN error. Once hosted, friends never need to set up a server.</p>
-                  <a className="sennet-hosting-deploy" href="https://dashboard.render.com/blueprint/new?repo=https://github.com/marcusdhaynes/Sennet"
+                  <a className="sennet-hosting-deploy" href="https://render.com/deploy?repo=https://github.com/marcusdhaynes/Sennet"
                     target="_blank" rel="noopener noreferrer">Deploy Sennet relay on Render <ChevronRight size={15}/></a>
                   <small>Render may charge for the persistent disk and hosting. The preconfigured blueprint keeps games saved between restarts.</small>
                   <label>Multiplayer server address
