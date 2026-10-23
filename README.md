@@ -28,6 +28,20 @@ Once a persistent relay is hosted, multiplayer is **one click to make a table, o
 
 No user account or password is required for a trusted private playtest. Sennet generates a cryptographically random player secret and retains it in the browser, separate from the public player ID. Do not erase browser storage if you want to reclaim that identity; this is not a replacement for cross-device account login. **A room invitation grants access to the game; share it only with your intended players.**
 
+#### Deploy the multiplayer relay on Render (persistent pickup games)
+
+This repository now includes [render.yaml](render.yaml) for a single Node web service **with a persistent disk**, suitable for small, trusted private rooms. Render may charge for the configured compute service and disk.
+
+1. In [Render's Blueprint setup](https://dashboard.render.com/blueprint/new?repo=https://github.com/marcusdhaynes/Sennet), connect this Sennet repository and review/authorize the plan and disk.
+2. After deployment, open your service's `https://<service>.onrender.com/health` endpoint. It should respond with `{"ok":true,...}`.
+3. In Sennet, open **Play Together → Set up online hosting once**, paste the **https://** service address, and choose **Save & test connection**. Sennet converts it to `wss://` and remembers it.
+4. Choose **Create online table** and copy the invitation link. The other player needs only that link—**no setup**.
+5. Optionally configure GitHub Actions repository variable `SENNET_RELAY_WSS_URL` to the matching `wss://` URL so new visitors can create rooms before receiving any invite.
+
+**VPNs:** use TLS on port 443 (`wss://`), with automatic fallback to HTTPS room sync and commands if a VPN, proxy or browser blocks WebSocket upgrades. No inbound port forwarding or WebRTC peer-to-peer connection is required. Some VPNs block both protocols; those cannot be bypassed from browser code.
+
+**Before hosting:** the app now explains when hosting is missing instead of treating it as an ordinary game disconnection. Without a deployed relay, a multiplayer room cannot truthfully be created. Offline tabletop play remains available.
+
 #### One-time relay setup
 
 GitHub Pages cannot host persistent WebSocket connections. The WebSocket server is `apps/server` and must run in an independent Node 22.16+ hosting service or VM that supports **long-lived WebSockets and persistent disk**.
