@@ -2540,3 +2540,54 @@ body>.reader-backdrop{
   box-shadow:0 0 0 1.5px #25292d,
     0 0 0 2.7px color-mix(in srgb,var(--coin-accent,#d8b979) 52%,white);
 }
+
+
+/* Pickup games: a small, always-accessible join/share surface that never
+ * follows the camera transform or interferes with the bottom action wheel. */
+.sennet-multiplayer-dock{
+  position:fixed;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));
+  z-index:46;display:flex;gap:5px;align-items:stretch;
+  color:#f5e7c9;font-family:inherit;
+}
+.sennet-multiplayer-open,.sennet-multiplayer-share{
+  background:linear-gradient(150deg,rgba(25,39,43,.97),rgba(12,22,28,.95));
+  border:1px solid rgba(211,178,108,.57);color:#f5e7c9;border-radius:13px;
+  min-height:37px;padding:7px 12px;display:flex;gap:9px;align-items:center;
+  box-shadow:0 3px 17px #0008;cursor:pointer;
+}
+.sennet-multiplayer-open:hover,.sennet-multiplayer-share:hover{
+  border-color:#efcb83;background:#2c3e40;
+}
+.sennet-multiplayer-open small{
+  color:#bcd7bf;font-size:11px;white-space:nowrap;
+}
+.sennet-multiplayer-share{padding:8px 11px;}
+.sennet-online-controls{display:flex;flex-direction:column;gap:13px;}
+.sennet-room-code{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:2px 0;}
+.sennet-room-code span{font-size:.85em;opacity:.8;}
+.sennet-online-players{display:flex;flex-wrap:wrap;gap:7px;}
+.sennet-online-players span{
+  display:inline-flex;align-items:center;gap:7px;padding:5px 9px;
+  background:rgba(53,71,66,.16);border:1px solid #ab987b7a;
+  border-radius:99px;font-size:12px;
+}
+.sennet-online-players i{height:7px;width:7px;border-radius:50%;background:#70b891;}
+.sennet-online-players .away{opacity:.68;}
+.sennet-online-players .away i{background:#a6a1a0;}
+.sennet-saved-rooms{display:flex;flex-direction:column;gap:6px;}
+.sennet-saved-rooms h4{margin:4px 0 7px;}
+.sennet-saved-rooms button{
+  display:flex;align-items:center;gap:9px;min-height:37px;
+  padding:7px 10px;border-radius:7px;
+  border:1px solid rgba(132,113,77,.35);background:rgba(218,192,139,.1);
+  text-align:left;color:inherit;cursor:pointer;
+}
+.sennet-saved-rooms button:hover{background:rgba(218,192,139,.22);}
+.sennet-saved-rooms button span{flex:1;overflow:hidden;text-overflow:ellipsis;}
+.sennet-saved-rooms button small{opacity:.76;}
+@media(max-width:620px){
+  .sennet-multiplayer-dock{top:max(7px,env(safe-area-inset-top));right:9px;}
+  .sennet-multiplayer-open{padding:5px 9px;min-height:33px;font-size:12px;}
+  .sennet-multiplayer-open small{display:none;}
+  .sennet-multiplayer-share{padding:6px 8px;min-height:33px;}
+}
