@@ -1,5 +1,5 @@
 import {WebSocket,WebSocketServer} from 'ws';
-import {createServer} from 'node:http';
+import {createServer,type IncomingMessage,type ServerResponse} from 'node:http';
 import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomInt,randomUUID} from 'node:crypto';
@@ -35,7 +35,12 @@ async function authorizedRiftbound(){
 const server=createServer((req,res)=>{
   const u=new URL(req.url||'/',`http://${req.headers.host||'localhost'}`);
   res.setHeader('Access-Control-Allow-Origin','*');
+  res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers','Content-Type');
+  res.setHeader('Cache-Control','no-store');
   res.setHeader('Content-Type','application/json');
+  if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
+  if(u.pathname.startsWith('/api/room/')){void httpRoom(req,res,u.pathname);return;}
   if(u.pathname==='/health'){res.end(JSON.stringify({ok:true,rooms:rooms.size,version:'0.1.0'}));return;}
   if(u.pathname==='/api/tcg/riftbound/catalog'){
     if(req.method!=='GET'){res.writeHead(405);res.end(JSON.stringify({error:'Read only'}));return;}
@@ -80,6 +85,118 @@ function persist(room:string){
 function send(ws:WebSocket,message:unknown){if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));}
 function broadcast(room:string,message:unknown){for(const ws of rooms.get(room)?.sockets||[])send(ws,message);}
 function projectedSnapshot(room:string,ws:WebSocket){const entry=rooms.get(room);if(!entry)return;const actor=sessions.get(ws)?.actor||'';send(ws,{type:'snapshot',state:projectForActor(entry.state,actor)});}
+
+/** HTTPS fallback for VPNs, browsers, and corporate gateways that block
+ * WebSocket upgrade. POST bodies never place player secrets in URLs or logs.
+ * Each response is the actor-projected authoritative state. */
+const httpPresence=new Map<string,number>();
+const PRESENCE_TTL=15000;
+const presenceKey=(room:string,actor:string)=>room+'|'+actor;
+function updatePresence(room:string){
+  const entry=rooms.get(room);if(!entry)return;
+  const now=Date.now();
+  let changed=false;
+  entry.state.players=entry.state.players.map(player=>{
+    const wsOnline=[...entry.sockets].some(socket=>
+      socket.readyState===WebSocket.OPEN&&sessions.get(socket)?.actor===player.id);
+    const viaHttp=(httpPresence.get(presenceKey(room,player.id))||0)>now-PRESENCE_TTL;
+    const online=wsOnline||viaHttp;
+    if(player.online!==online)changed=true;
+    return player.online===online?player:{...player,online};
+  });
+  if(changed){broadcast(room,{type:'presence',players:entry.state.players});persist(room);}
+}
+function authorize(entry:NonNullable<ReturnType<typeof rooms.get>>,actor:string,token:string){
+  if(!/^[a-zA-Z0-9_-]{6,80}$/.test(actor)||!/^[a-f0-9]{32,128}$/i.test(token))
+    throw new Error('Invalid player identity');
+  const signature=createHash('sha256').update(token).digest('hex');
+  if(entry.identities[actor]&&entry.identities[actor]!==signature)
+    throw new Error('That saved player belongs to a different browser identity');
+  return signature;
+}
+function applyAction(room:string,actor:string,rawAction:Command){
+  const entry=rooms.get(room);
+  if(!entry||!entry.state.players.some(player=>player.id===actor))throw new Error('Not seated in this room');
+  if(!rawAction||typeof rawAction!=='object')throw new Error('Bad command');
+  const command:Command={...rawAction,actor,id:String(rawAction.id||'').slice(0,120)};
+  if(!command.id)throw new Error('Missing action ID');
+  if(entry.seen.has(command.id))return null;
+  if(command.type==='SET_MODE'&&entry.owner!==actor)throw new Error('Only the room creator may change mode');
+  if(command.type==='ADD'&&command.payload?.object&&typeof command.payload.object==='object'){
+    command.payload={...command.payload,object:sanitizeObject({...command.payload.object as Record<string,unknown>,owner:undefined})};
+  }
+  if(command.type==='ROLL'||command.type==='SHUFFLE')command.payload={...command.payload,seed:randomInt(1,2147483647)};
+  const updated=applyCommand(entry.state,command);entry.state=updated;
+  const record:EventRecord={...command,seq:updated.seq,at:Date.now()};
+  entry.history.push(record);entry.seen.add(record.id);
+  if(entry.history.length>4000)entry.history=entry.history.slice(-3000);
+  persist(room);
+  if(['DRAW','SHUFFLE','SET_ZONE','MOVE','MOVE_STACK','FLIP','BATCH_CARD_ACTION'].includes(command.type)){
+    for(const client of entry.sockets)projectedSnapshot(room,client);
+  }else broadcast(room,{type:'event',event:record});
+  return record;
+}
+async function readRequest(req:IncomingMessage):Promise<Record<string,unknown>>{
+  if(req.method!=='POST')throw new Error('POST required');
+  let source='';
+  for await(const part of req){
+    source+=part.toString('utf8');
+    if(source.length>MAX_MESSAGE)throw new Error('Request too large');
+  }
+  const value=JSON.parse(source) as unknown;
+  if(!value||typeof value!=='object'||Array.isArray(value))throw new Error('Invalid request body');
+  return value as Record<string,unknown>;
+}
+async function httpRoom(req:IncomingMessage,res:ServerResponse,path:string){
+  try{
+    const body=await readRequest(req);
+    const room=String(body.room||''),actor=String(body.actor||''),token=String(body.token||'');
+    if(!safeRoom(room))throw new Error('Invalid room code');
+    let entry;
+    if(path==='/api/room/join'){
+      const kinds:GameKind[]=['sandbox','boardgame','tcg','rpg','wargame','dice','party','custom'];
+      entry=await loadRoom(room,kinds.includes(body.kind as GameKind)?body.kind as GameKind:'sandbox',actor);
+      const hash=authorize(entry,actor,token);
+      let player=entry.state.players.find(p=>p.id===actor);
+      if(!player){
+        const reserved=new Set(entry.state.players.map(p=>p.seat));
+        const preferred=Number.isInteger(body.seat)&&Number(body.seat)>=0&&Number(body.seat)<12?Number(body.seat):undefined;
+        const seat=preferred!==undefined&&!reserved.has(preferred)?preferred:Array.from({length:12},(_,i)=>i).find(i=>!reserved.has(i));
+        if(seat!==undefined){
+          player={id:actor,seat,name:String(body.name||'Player').slice(0,32),online:true};
+          entry.state.players.push(player);
+        }
+      }
+      entry.identities[actor]=hash;
+      httpPresence.set(presenceKey(room,actor),Date.now());
+      updatePresence(room);persist(room);
+      res.end(JSON.stringify({type:'joined',room,seat:player?.seat??null,owner:entry.owner,
+        state:projectForActor(entry.state,actor)}));return;
+    }
+    entry=rooms.get(room);
+    if(!entry)throw new Error('This room is not active. Join first.');
+    authorize(entry,actor,token);
+    if(!entry.identities[actor])throw new Error('Join first');
+    if(path==='/api/room/leave'){
+      httpPresence.delete(presenceKey(room,actor));updatePresence(room);
+      res.end(JSON.stringify({ok:true}));return;
+    }
+    httpPresence.set(presenceKey(room,actor),Date.now());
+    updatePresence(room);
+    if(path==='/api/room/command'){
+      applyAction(room,actor,body.command as Command);
+    }else if(path!=='/api/room/sync')throw new Error('Unknown room action');
+    res.end(JSON.stringify({type:'snapshot',state:projectForActor(entry.state,actor)}));
+  }catch(error){
+    res.writeHead(400);
+    res.end(JSON.stringify({error:error instanceof Error?error.message:'Room request failed'}));
+  }
+}
+const presenceSweep=setInterval(()=>{
+  for(const room of rooms.keys())updatePresence(room);
+},5000);
+presenceSweep.unref();
+
 const rate=new WeakMap<WebSocket,{at:number,count:number}>();
 // Ping inactive browser tabs and detect dead sockets without erasing their saved seats.
 const alive=new WeakMap<WebSocket,boolean>();
@@ -129,30 +246,8 @@ wss.on('connection',ws=>{
       if(msg.type==='resync'){projectedSnapshot(session.room,ws);return;}
       if(msg.type==='command'){
         if(!entry.state.players.some(p=>p.id===session.actor))throw new Error('Spectators cannot modify the table');
-        const rawAction=msg.command as Command;
-        if(!rawAction||typeof rawAction!=='object')throw new Error('Bad command');
-        const command={...rawAction,actor:session.actor,id:String(rawAction.id||'').slice(0,120)};
-        if(!command.id)throw new Error('Missing action ID');
-        if(entry.seen.has(command.id)){send(ws,{type:'duplicate',id:command.id});return;}
-        if(command.type==='SET_MODE'&&entry.owner!==session.actor)throw new Error('Only the room creator may change mode');
-        if(command.type==='ADD'&&command.payload?.object && typeof command.payload.object==='object'){
-          command.payload={...command.payload,object:sanitizeObject({...command.payload.object as Record<string,unknown>,owner:undefined})};
-        }
-        if(command.type==='ROLL'||command.type==='SHUFFLE')command.payload={...command.payload,seed:randomInt(1,2147483647)};
-        const updated=applyCommand(entry.state,command);entry.state=updated;
-        const record:EventRecord={...command,seq:updated.seq,at:Date.now()};entry.history.push(record);entry.seen.add(record.id);
-        persist(session.room);
-        // Event-only transport for public moves. Private draws and deck ordering require
-        // an authoritative per-view snapshot to prevent transmitting hidden information.
-        // Moving a card into a private hand/deck requires actor-specific
-        // snapshots, exactly like drawing or shuffling, so spectators never
-        // retain the card's identity in a public event replay.
-        if(['DRAW','SHUFFLE','SET_ZONE','MOVE','MOVE_STACK','FLIP'].includes(command.type)||
-           command.type==='BATCH_CARD_ACTION'){
-          for(const client of entry.sockets)projectedSnapshot(session.room,client);
-        } else {
-          broadcast(session.room,{type:'event',event:record});
-        }
+        const record=applyAction(session.room,session.actor,msg.command as Command);
+        if(!record)send(ws,{type:'duplicate',id:String(msg.command?.id||'')});
         return;
       }
       throw new Error('Unsupported message');
