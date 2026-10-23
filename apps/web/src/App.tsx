@@ -228,7 +228,7 @@ export default function App(){
   const [script,setScript]=useState(SAMPLE_LUA);
   const [scriptOutput,setScriptOutput]=useState('');
   const [endpoint,setEndpoint]=useState(()=>new URLSearchParams(window.location.search).get('relay')||
-    localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'');
+    localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'wss://sennet-multiplayer.onrender.com');
   const [room,setRoom]=useState(()=>new URLSearchParams(window.location.search).get('room')||'');
   const [playerName,setPlayerName]=useState(()=>localStorage.getItem('sennet.name')||'Player');
   const [onlineStatus,setOnlineStatus]=useState(()=>endpoint?'Ready to connect':'Hosting not configured · local table only');
