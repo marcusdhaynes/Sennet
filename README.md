@@ -17,15 +17,40 @@ npm run dev
 
 Open **http://localhost:5173**. Pick Sandbox, Board Games, TCG, RPG, Wargame, Dice & Tiles, Party, or Custom. Drag pieces, switch among twelve seat perspectives, rotate/flip/clone, roll dice, shuffle/draw, and export action history.
 
-### Local multiplayer relay
+### Multiplayer — invite, drop in, pick up later
 
-In a second terminal:
+Once a persistent relay is hosted, multiplayer is **one click to make a table, one link to join it**:
+
+1. Choose **Play together → New table**. Sennet allocates an unguessable room code and a saved seat.
+2. Choose **Invite friends**. The link includes both the room and relay address, so invitees join automatically without configuring a server.
+3. Leave whenever you like. Reconnects happen automatically after network interruptions. Reopen **Play together → Pick up where you left off** to reclaim your saved seat and reload the authoritative room.
+4. Everyone can come and go independently; shared cards, tokens, turns, player assignments and their online/away status live on the relay, not in the host's tab. User-specific playmat preferences remain local to each browser identity.
+
+No user account or password is required for a trusted private playtest. Sennet generates a cryptographically random player secret and retains it in the browser, separate from the public player ID. Do not erase browser storage if you want to reclaim that identity; this is not a replacement for cross-device account login. **A room invitation grants access to the game; share it only with your intended players.**
+
+#### One-time relay setup
+
+GitHub Pages cannot host persistent WebSocket connections. The WebSocket server is `apps/server` and must run in an independent Node 22.16+ hosting service or VM that supports **long-lived WebSockets and persistent disk**.
+
+```bash
+npm install
+SENNET_DATA_DIR=/persistent/sennet PORT=8787 npm run start -w @sennet/server
+```
+
+On the server, expose port 8787 through a TLS reverse proxy with a `wss://` endpoint, and provide a durable writable disk for `SENNET_DATA_DIR`. Room JSON is saved atomically after every command and seat change; it is not stored in GitHub Pages or the host browser. A server with ephemeral filesystem **will lose saved pickup games when restarted**. Keep backups, access controls and a retention policy for real deployments.
+
+For one-time default configuration across all visitors, set GitHub repository **Settings → Secrets and variables → Actions → Variables** key `SENNET_RELAY_WSS_URL` to the public `wss://` relay URL, then redeploy Pages. Alternatively, enter the relay address once in the Multiplayer settings book: subsequent invites automatically carry it to guests.
+
+The server currently targets **trusted private games**. Public hosting will additionally require room authorization/moderation, robust authentication for cross-device profiles, database-backed scalable room storage, automated backups and operational monitoring. Until a relay is actually deployed, the site remains fully playable offline and the public multiplayer buttons cannot establish online rooms.
+
+#### Local two-player check
 
 ```bash
 npm run dev:server
+npm run dev
 ```
 
-In Sennet, open **Settings**, configure `ws://localhost:8787`, give your room a name, and join on two browser tabs/devices that can reach the relay. You can also launch the web frontend and relay simultaneously in two Codespaces terminals. **The relay is not production-ready: local development/testing only.** The room server persists move logs and snapshots to `.sennet-server/`. It never stores community model files, textures or whole game bundles.
+Point Sennet's one-time multiplayer relay setting to `ws://localhost:8787` on `http://localhost:5173`. Start a table, open the invitation link in another browser profile, move pieces, close either client, reopen, and verify the saved seats and shared state. Use `wss://` for the hosted HTTPS site.
 
 ### Tests and build
 
