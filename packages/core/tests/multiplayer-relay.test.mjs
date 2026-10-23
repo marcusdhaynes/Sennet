@@ -37,7 +37,7 @@ async function connect(url,room,actor,token){
     socket.on('message',raw=>{
       const data=JSON.parse(String(raw));
       if(data.type==='joined')joined=data;
-      if(data.type==='error'){clearTimeout(timer);reject(new Error(data.message));}
+      if(data.type==='error'){clearTimeout(timer);socket.close();reject(new Error(data.message));}
       if(data.type==='snapshot'){clearTimeout(timer);resolve(data);}
     });
   });
@@ -63,7 +63,7 @@ test('multiplayer rooms preserve individual seats and game state across disconne
   let server;
   t.after(async()=>{server?.kill('SIGTERM');await rm(directory,{force:true,recursive:true});});
   async function start(){
-    server=spawn('npm',['run','start','-w','@sennet/server'],{
+    server=spawn(process.execPath,['--import','tsx','apps/server/src/index.ts'],{
       cwd:process.cwd(),env:{...process.env,PORT:String(port),SENNET_DATA_DIR:directory},
       stdio:'ignore'
     });
