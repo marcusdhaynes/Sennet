@@ -307,7 +307,7 @@ export default function App(){
       const address=normalizeRelay(raw);
       const roomId=(options?.room??room).trim()||('table-'+createId().replaceAll('-','').slice(0,16));
       if(!/^[a-z0-9_-]{3,48}$/i.test(roomId))throw new Error('Room code must be 3–48 letters, numbers, dashes or underscores.');
-      connection.current?.close();
+      connection.current?.close();connection.current=null;setConnected(false);
       setEndpoint(address);setRoom(roomId);setJoinInput(roomId);setOnlineStatus('Connecting…');
       try{localStorage.setItem('sennet.ws',address);localStorage.setItem('sennet.name',playerName);}catch{}
       window.history.replaceState({},'',inviteUrl(roomId,address));
