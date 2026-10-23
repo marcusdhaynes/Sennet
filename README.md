@@ -32,7 +32,7 @@ No user account or password is required for a trusted private playtest. Sennet g
 
 This repository now includes [render.yaml](render.yaml) for a single Node web service **with a persistent disk**, suitable for small, trusted private rooms. Render may charge for the configured compute service and disk.
 
-1. In [Render's Blueprint setup](https://dashboard.render.com/blueprint/new?repo=https://github.com/marcusdhaynes/Sennet), connect this Sennet repository and review/authorize the plan and disk.
+1. In [Render's Blueprint setup](https://render.com/deploy?repo=https://github.com/marcusdhaynes/Sennet), connect this Sennet repository and review/authorize the plan and disk.
 2. After deployment, open your service's `https://<service>.onrender.com/health` endpoint. It should respond with `{"ok":true,...}`.
 3. In Sennet, open **Play Together → Set up online hosting once**, paste the **https://** service address, and choose **Save & test connection**. Sennet converts it to `wss://` and remembers it.
 4. Choose **Create online table** and copy the invitation link. The other player needs only that link—**no setup**.
