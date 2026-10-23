@@ -7,7 +7,9 @@ import {applyCommand,createGame,projectForActor,sanitizeObject,type Command,type
 const PORT=Number(process.env.PORT||8787);
 const DATA_DIR=process.env.SENNET_DATA_DIR||'.sennet-server';
 const MAX_MESSAGE=16*1024;
-const rooms=new Map<string,{state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string;identities:Record<string,string>}>();
+type RoomEntry={state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string;identities:Record<string,string>};
+const rooms=new Map<string,RoomEntry>();
+const loadingRooms=new Map<string,Promise<RoomEntry>>();
 const sessions=new WeakMap<WebSocket,{room:string;actor:string}>();
 // Riot keys are NEVER sent to browsers. Sennet's optional relay fetches
 // authorized content once per day, then serves a short-lived public cache.
@@ -61,6 +63,8 @@ const wss=new WebSocketServer({server,maxPayload:MAX_MESSAGE,perMessageDeflate:f
 const safeRoom=(id:string)=>/^[a-zA-Z0-9_-]{3,48}$/.test(id);
 async function loadRoom(room:string,kind:GameKind,actor:string) {
   const cached=rooms.get(room);if(cached)return cached;
+  const pending=loadingRooms.get(room);if(pending)return pending;
+  const task=(async():Promise<RoomEntry>=>{
   let state=createGame(kind,room),history:EventRecord[]=[],owner=actor,identities:Record<string,string>={};
   try {
     const stored=JSON.parse(await readFile(join(DATA_DIR,`${room}.json`),'utf8'));
@@ -72,6 +76,9 @@ async function loadRoom(room:string,kind:GameKind,actor:string) {
   }catch{/* New room. */}
   const entry={state,history,seen:new Set<string>(history.map(a=>a.id)),sockets:new Set<WebSocket>(),owner,identities};
   rooms.set(room,entry);return entry;
+  })();
+  loadingRooms.set(room,task);
+  try{return await task;}finally{loadingRooms.delete(room);}
 }
 const persistQueues=new Map<string,Promise<void>>();
 function persist(room:string){
@@ -80,7 +87,8 @@ function persist(room:string){
   const next=(persistQueues.get(room)||Promise.resolve()).catch(()=>{}).then(async()=>{await mkdir(DATA_DIR,{recursive:true});const destination=join(DATA_DIR,`${room}.json`);
     const temporary=destination+'.'+randomUUID()+'.tmp';
     await writeFile(temporary,payload,'utf8');await rename(temporary,destination);});
-  persistQueues.set(room,next);
+  persistQueues.set(room,next.catch(error=>{console.error('Room autosave failed for '+room,error);throw error;}));
+  void next.catch(()=>{});
 }
 function send(ws:WebSocket,message:unknown){if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));}
 function broadcast(room:string,message:unknown){for(const ws of rooms.get(room)?.sockets||[])send(ws,message);}
