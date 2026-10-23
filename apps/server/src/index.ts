@@ -1,13 +1,13 @@
 import {WebSocket,WebSocketServer} from 'ws';
 import {createServer} from 'node:http';
-import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
-import {randomInt,randomUUID} from 'node:crypto';
+import {createHash,randomInt,randomUUID} from 'node:crypto';
 import {applyCommand,createGame,projectForActor,sanitizeObject,type Command,type EventRecord,type GameKind,type GameState,type Player} from '@sennet/core';
 const PORT=Number(process.env.PORT||8787);
 const DATA_DIR=process.env.SENNET_DATA_DIR||'.sennet-server';
 const MAX_MESSAGE=16*1024;
-const rooms=new Map<string,{state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string}>();
+const rooms=new Map<string,{state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string;identities:Record<string,string>}>();
 const sessions=new WeakMap<WebSocket,{room:string;actor:string}>();
 // Riot keys are NEVER sent to browsers. Sennet's optional relay fetches
 // authorized content once per day, then serves a short-lived public cache.
@@ -56,29 +56,43 @@ const wss=new WebSocketServer({server,maxPayload:MAX_MESSAGE,perMessageDeflate:f
 const safeRoom=(id:string)=>/^[a-zA-Z0-9_-]{3,48}$/.test(id);
 async function loadRoom(room:string,kind:GameKind,actor:string) {
   const cached=rooms.get(room);if(cached)return cached;
-  let state=createGame(kind,room),history:EventRecord[]=[],owner=actor;
+  let state=createGame(kind,room),history:EventRecord[]=[],owner=actor,identities:Record<string,string>={};
   try {
     const stored=JSON.parse(await readFile(join(DATA_DIR,`${room}.json`),'utf8'));
     if(stored?.state?.version===1 && Array.isArray(stored.history)){
       state=stored.state;history=stored.history;owner=stored.owner||actor;
+      identities=stored.identities&&typeof stored.identities==='object'?stored.identities:{};
       state.players=state.players.map((p:Player)=>({...p,online:false}));
     }
   }catch{/* New room. */}
-  const entry={state,history,seen:new Set<string>(history.map(a=>a.id)),sockets:new Set<WebSocket>(),owner};
+  const entry={state,history,seen:new Set<string>(history.map(a=>a.id)),sockets:new Set<WebSocket>(),owner,identities};
   rooms.set(room,entry);return entry;
 }
 const persistQueues=new Map<string,Promise<void>>();
 function persist(room:string){
   const entry=rooms.get(room);if(!entry)return;
-  const payload=JSON.stringify({state:entry.state,history:entry.history.slice(-3000),owner:entry.owner});
-  const next=(persistQueues.get(room)||Promise.resolve()).catch(()=>{}).then(async()=>{await mkdir(DATA_DIR,{recursive:true});await writeFile(join(DATA_DIR,`${room}.json`),payload,'utf8');});
+  const payload=JSON.stringify({state:entry.state,history:entry.history.slice(-3000),owner:entry.owner,identities:entry.identities});
+  const next=(persistQueues.get(room)||Promise.resolve()).catch(()=>{}).then(async()=>{await mkdir(DATA_DIR,{recursive:true});const destination=join(DATA_DIR,`${room}.json`);
+    const temporary=destination+'.'+randomUUID()+'.tmp';
+    await writeFile(temporary,payload,'utf8');await rename(temporary,destination);});
   persistQueues.set(room,next);
 }
 function send(ws:WebSocket,message:unknown){if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(message));}
 function broadcast(room:string,message:unknown){for(const ws of rooms.get(room)?.sockets||[])send(ws,message);}
 function projectedSnapshot(room:string,ws:WebSocket){const entry=rooms.get(room);if(!entry)return;const actor=sessions.get(ws)?.actor||'';send(ws,{type:'snapshot',state:projectForActor(entry.state,actor)});}
 const rate=new WeakMap<WebSocket,{at:number,count:number}>();
+// Ping inactive browser tabs and detect dead sockets without erasing their saved seats.
+const alive=new WeakMap<WebSocket,boolean>();
+const heartbeat=setInterval(()=>{
+  for(const ws of wss.clients){
+    if(alive.get(ws)===false){ws.terminate();continue;}
+    alive.set(ws,false);if(ws.readyState===WebSocket.OPEN)ws.ping();
+  }
+},30000);
+heartbeat.unref();
 wss.on('connection',ws=>{
+  alive.set(ws,true);
+  ws.on('pong',()=>alive.set(ws,true));
   ws.on('message',async raw=>{
     try {
       const r=rate.get(ws)||{at:Date.now(),count:0};if(Date.now()-r.at>1000){r.at=Date.now();r.count=0;}r.count++;rate.set(ws,r);
@@ -87,9 +101,16 @@ wss.on('connection',ws=>{
       if(msg.type==='join'){
         if(sessions.has(ws))throw new Error('Already joined');
         const room=String(msg.room||'');const actor=String(msg.actor||'');
+        const token=String(msg.token||'');
         if(!safeRoom(room)||!/^[a-zA-Z0-9_-]{6,80}$/.test(actor))throw new Error('Invalid room or identity');
+        if(!/^[a-f0-9]{32,128}$/i.test(token))throw new Error('A saved player identity is required');
         const kinds:GameKind[]=['sandbox','boardgame','tcg','rpg','wargame','dice','party','custom'];
         const entry=await loadRoom(room,kinds.includes(msg.kind)?msg.kind:'sandbox',actor);
+        const signature=createHash('sha256').update(token).digest('hex');
+        if(entry.identities[actor]&&entry.identities[actor]!==signature)
+          throw new Error('That saved player belongs to a different browser identity');
+        // Existing pre-upgrade player seats can be migrated on their first return.
+        if(!entry.identities[actor])entry.identities[actor]=signature;
         const occupied=entry.state.players.find(p=>p.id===actor);
         let seat=occupied?.seat;
         if(seat===undefined){
