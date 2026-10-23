@@ -91,12 +91,38 @@ test('multiplayer rooms preserve individual seats and game state across disconne
   assert.equal(saved.state.players[1].seat,1);
   assert.equal(saved.identities[first]?.length,64);
   assert.equal(saved.identities[second]?.length,64);
+  // Corporate firewalls and VPNs can reject WebSocket upgrades. HTTPS-only
+  // room clients must still share actions and saved identity with WS clients.
+  async function http(action,actor,token,extra={}){
+    const response=await fetch('http://127.0.0.1:'+port+'/api/room/'+action,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({room,actor,token,kind:'sandbox',seat:1,name:actor,...extra})
+    });
+    const message=await response.json();
+    if(!response.ok)throw Error(message.error);
+    return message;
+  }
+  const fallback=await http('join',second,secondToken);
+  assert.equal(fallback.seat,1);
+  assert.equal(fallback.state.turnSeat,1);
+  const next=eventOfType(a.socket,'event');
+  const command=await http('command',second,secondToken,{command:{
+    id:'http_turn_'+process.pid,actor:second,type:'NEXT_TURN',payload:{}
+  }});
+  assert.equal(command.state.seq,2);
+  assert.equal((await next).event.seq,2);
+  assert.equal((await http('sync',second,secondToken)).state.turnSeat,0);
+  await http('leave',second,secondToken);
+  await waitFor(async()=>{
+    const latest=JSON.parse(await readFile(disk,'utf8'));
+    return latest.state.seq===2&&!latest.state.players[1].online;
+  });
   a.socket.close();await once(a.socket,'close');
   server.kill('SIGTERM');await once(server,'exit');
   await start();
   const revived=await connect(url,room,first,firstToken);
   assert.equal(revived.joined.seat,0);
-  assert.equal(revived.snapshot.state.turnSeat,1);
+  assert.equal(revived.snapshot.state.turnSeat,0);
   assert.equal(revived.snapshot.state.players[1].online,false);
   revived.socket.close();await once(revived.socket,'close');
   await assert.rejects(()=>connect(url,room,first,'c'.repeat(64)),/different browser identity/);
