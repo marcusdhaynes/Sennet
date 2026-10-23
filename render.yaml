@@ -1,0 +1,22 @@
+# One-time production relay for Sennet. Render will show the selected
+# paid plan and persistent disk charges before the user authorizes deployment.
+# Do not downgrade to an ephemeral free service: pickup saves must survive deploys.
+services:
+  - type: web
+    name: sennet-multiplayer
+    runtime: node
+    plan: starter
+    region: ohio
+    buildCommand: npm install --include=dev --no-audit --no-fund
+    startCommand: npm run start -w @sennet/server
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: SENNET_DATA_DIR
+        value: /data/sennet-rooms
+    disk:
+      name: sennet-saved-games
+      mountPath: /data
+      sizeGB: 1
