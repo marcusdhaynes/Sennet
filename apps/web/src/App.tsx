@@ -55,6 +55,16 @@ function playerToken():string{
   try{localStorage.setItem(TOKEN_KEY,fresh);}catch{}
   return fresh;
 }
+function normalizeRelay(raw:string):string{
+  const value=raw.trim();
+  const url=new URL(value);
+  if(url.protocol==='https:')url.protocol='wss:';
+  if(url.protocol==='http:')url.protocol='ws:';
+  if(url.protocol!=='ws:'&&url.protocol!=='wss:')throw Error('Enter the HTTPS or WSS address of your Sennet relay.');
+  if(location.protocol==='https:'&&url.protocol!=='wss:')throw Error('Online Sennet requires a secure HTTPS or WSS address.');
+  url.search='';url.hash='';url.pathname='/';
+  return url.href.replace(/\\/$/,'');
+}
 function inviteUrl(room:string,endpoint:string):string{
   const url=new URL(window.location.href);
   url.searchParams.set('room',room);
@@ -222,7 +232,12 @@ export default function App(){
     localStorage.getItem('sennet.ws')||import.meta.env.VITE_SENNET_WS_URL||'');
   const [room,setRoom]=useState(()=>new URLSearchParams(window.location.search).get('room')||'');
   const [playerName,setPlayerName]=useState(()=>localStorage.getItem('sennet.name')||'Player');
-  const [onlineStatus,setOnlineStatus]=useState('Offline · local game');
+  const [onlineStatus,setOnlineStatus]=useState(()=>endpoint?'Ready to connect':'Hosting not configured · local table only');
+  const [joinInput,setJoinInput]=useState(()=>new URLSearchParams(window.location.search).get('room')||'');
+  const [showHosting,setShowHosting]=useState(()=>!endpoint);
+  const [hostingBusy,setHostingBusy]=useState(false);
+  const [hostingHealth,setHostingHealth]=useState<'untested'|'ready'|'error'>('untested');
+  const [createAfterSetup,setCreateAfterSetup]=useState(false);
   const [isConnected,setConnected]=useState(false);
   const [onlineRoomsList,setOnlineRoomsList]=useState<OnlineRoom[]>(onlineRooms);
   const [replayAt,setReplayAt]=useState<number|null>(null);
@@ -277,22 +292,24 @@ export default function App(){
   }
   function disconnect(){
     connection.current?.close();connection.current=null;
-    setConnected(false);setOnlineStatus('Offline · local game');
+    setConnected(false);setOnlineStatus(endpoint?'Ready to join another table':'Hosting not configured · local table only');
     const link=new URL(window.location.href);
     link.searchParams.delete('room');link.searchParams.delete('relay');
     window.history.replaceState({},'',link);
   }
   function joinRoom(options?:{room?:string;endpoint?:string}){
     try{
-      const address=(options?.endpoint??endpoint).trim();
-      if(!address)throw new Error('A multiplayer relay must be configured once before inviting players.');
-      const url=new URL(address);
-      if(!['ws:','wss:'].includes(url.protocol))throw new Error('Use a ws:// or wss:// relay address.');
-      if(location.protocol==='https:'&&url.protocol!=='wss:')throw new Error('This site needs a secure wss:// relay.');
-      const roomId=(options?.room??room).trim()||('table-'+createId().replaceAll('-','').slice(0,24));
+      const raw=(options?.endpoint??endpoint).trim();
+      if(!raw){
+        setCreateAfterSetup(!options?.room);setShowHosting(true);
+        setOnlineStatus('Hosting not configured · connect a relay below');
+        return;
+      }
+      const address=normalizeRelay(raw);
+      const roomId=(options?.room??room).trim()||('table-'+createId().replaceAll('-','').slice(0,16));
       if(!/^[a-z0-9_-]{3,48}$/i.test(roomId))throw new Error('Room code must be 3–48 letters, numbers, dashes or underscores.');
       connection.current?.close();
-      setEndpoint(address);setRoom(roomId);setOnlineStatus('Connecting…');
+      setEndpoint(address);setRoom(roomId);setJoinInput(roomId);setOnlineStatus('Connecting…');
       try{localStorage.setItem('sennet.ws',address);localStorage.setItem('sennet.name',playerName);}catch{}
       window.history.replaceState({},'',inviteUrl(roomId,address));
       connection.current=new RoomConnection(address,roomId,game.kind,actor,seat,playerName,playerToken(),{
@@ -323,6 +340,43 @@ export default function App(){
         onStatus:setOnlineStatus,onError:inform
       });
     }catch(e){inform(e instanceof Error?e.message:String(e));}
+  }
+  function createOnlineTable(){
+    setCreateAfterSetup(true);
+    joinRoom({room:''});
+  }
+  function joinEnteredTable(){
+    const value=joinInput.trim();
+    if(!value){inform('Paste your invitation link or a room code.');return;}
+    try{
+      if(/^https?:\\/\\//i.test(value)){
+        const link=new URL(value);
+        const roomCode=link.searchParams.get('room');
+        const relayUrl=link.searchParams.get('relay');
+        if(!roomCode)throw Error('The link does not contain a Sennet room code.');
+        if(!relayUrl&&!endpoint){setShowHosting(true);throw Error('This invitation does not include a hosting address.');}
+        joinRoom({room:roomCode,endpoint:relayUrl||endpoint});
+      }else joinRoom({room:value});
+    }catch(error){inform(error instanceof Error?error.message:String(error));}
+  }
+  async function testRelay(){
+    setHostingBusy(true);setHostingHealth('untested');
+    try{
+      const address=normalizeRelay(endpoint);
+      const check=address.replace(/^wss:/,'https:').replace(/^ws:/,'http:')+'/health';
+      const response=await fetch(check,{mode:'cors',cache:'no-store',signal:AbortSignal.timeout(8000)});
+      if(!response.ok)throw Error('Server returned HTTP '+response.status);
+      const json=await response.json();
+      if(json?.ok!==true)throw Error('This address is not a Sennet multiplayer relay.');
+      try{localStorage.setItem('sennet.ws',address);}catch{}
+      setEndpoint(address);setHostingHealth('ready');setShowHosting(false);
+      setOnlineStatus('Relay reachable · ready to connect');
+      if(createAfterSetup){setCreateAfterSetup(false);joinRoom({room:'',endpoint:address});}
+      else inform('Relay connected and saved. You can create or join a table.');
+    }catch(error){
+      setHostingHealth('error');setShowHosting(true);
+      inform('Cannot reach Sennet relay: '+(error instanceof Error?error.message:String(error)));
+    }finally{setHostingBusy(false);}
   }
   async function shareRoom(){
     if(!room||!endpoint){inform('Create or join a room before sharing.');return;}
@@ -952,36 +1006,72 @@ export default function App(){
               </>
             }
             {settingsPage==='deckbuilder'&&<div className="reader-block"><h2>Deckbuilder</h2><p>Build, import, and load decks directly onto the table.</p><button className="reader-primary" onClick={()=>{setBook(null);setTcgStudioOpen(true);}}>Open Deckbuilder</button></div>}
-            {settingsPage==='multiplayer'&&<><div className="reader-heading"><div><h2>Play Together</h2><p>One link to join. Your seat, pieces and shared tabletop stay saved when anyone leaves.</p></div></div>
-              <div className="reader-block sennet-online-controls">
-                <div className="status-line">{isConnected?<Wifi size={16}/>:<WifiOff size={16}/>} {onlineStatus}</div>
+            {settingsPage==='multiplayer'&&<div className="sennet-play-together">
+              <div className="reader-heading"><div><h2>Play Together</h2>
+                <p>Create a table, share its link, and pick up any game later. No accounts needed for invited friends.</p></div></div>
+              <section className="sennet-multi-status" aria-live="polite">
+                <span className={'sennet-multi-status-led '+(isConnected?'online':endpoint?'waiting':'missing')}/>
+                <div><strong>{isConnected?'Connected to '+room:endpoint?'Ready for multiplayer':'Online hosting not connected'}</strong>
+                  <small>{onlineStatus}{isConnected?' · Your table autosaves on the server':''}</small></div>
+              </section>
+              <div className="sennet-online-cards">
+                <section className="sennet-online-card">
+                  <div className="sennet-online-card-mark"><Plus size={19}/></div>
+                  <strong>Start a table</strong>
+                  <p>Make a new shared room. Friends join using one invitation link.</p>
+                  <button type="button" className="reader-primary" onClick={createOnlineTable}>Create online table <ChevronRight size={17}/></button>
+                </section>
+                <section className="sennet-online-card">
+                  <div className="sennet-online-card-mark"><Users size={19}/></div>
+                  <strong>Join a friend</strong>
+                  <p>Paste the invitation link or room code.</p>
+                  <input value={joinInput} onChange={e=>setJoinInput(e.target.value)}
+                    placeholder="Paste invite link or room code" aria-label="Invite link or room code"
+                    onKeyDown={e=>{if(e.key==='Enter')joinEnteredTable();}}/>
+                  <button type="button" className="reader-secondary" onClick={joinEnteredTable}>Join table <ChevronRight size={17}/></button>
+                </section>
+              </div>
+              {isConnected&&<section className="sennet-online-current">
+                <div className="sennet-online-current-header"><strong>Current table</strong><span>{room}</span></div>
                 <div className="tool-buttons">
-                  <button type="button" className="reader-primary" onClick={()=>joinRoom({room:''})}><Plus size={16}/> New table</button>
-                  {isConnected&&<button type="button" className="reader-primary" onClick={shareRoom}><Link2 size={16}/> Invite friends</button>}
-                  {isConnected&&<button type="button" onClick={disconnect}><WifiOff size={16}/> Leave table</button>}
+                  <button type="button" className="reader-primary" onClick={shareRoom}><Link2 size={16}/> Copy / share invitation</button>
+                  <button type="button" onClick={disconnect}><WifiOff size={16}/> Leave table</button>
                 </div>
-                {isConnected&&<p className="sennet-room-code"><strong>Table:</strong> {room} <span>· Autosaved after every move</span></p>}
-                {isConnected&&<div className="sennet-online-players" aria-label="Saved players">
+                <div className="sennet-online-players" aria-label="Saved players">
                   {game.players.map(player=><span key={player.id} className={player.online?'online':'away'}>
                     <i/>{player.name} · seat {player.seat+1}{player.id===actor?' (you)':''}{!player.online?' · away':''}
                   </span>)}
-                </div>}
-                <label>Enter a table code<input value={room} onChange={e=>setRoom(e.target.value)} placeholder="Paste a table code"/></label>
-                <div className="tool-buttons"><button type="button" onClick={()=>joinRoom()}><Users size={16}/> Join / resume table</button></div>
-                {onlineRoomsList.length>0&&<div className="sennet-saved-rooms">
-                  <h4>Pick up where you left off</h4>
-                  {onlineRoomsList.map(previous=><button type="button" key={previous.endpoint+'|'+previous.room}
-                    onClick={()=>joinRoom({room:previous.room,endpoint:previous.endpoint})}>
-                    <RotateCw size={14}/><span>{previous.room}</span><small>{previous.seat===null?'Spectator':'Seat '+((previous.seat??0)+1)}</small>
-                  </button>)}
-                </div>}
-                <details className="reader-details"><summary>Connection setup · once per server</summary>
-                  <p>Host the Sennet relay separately; GitHub Pages cannot run WebSockets. Friends receive its address automatically in the invite, so they only click the link.</p>
-                  <label>Secure relay address<input value={endpoint} onChange={e=>setEndpoint(e.target.value)}
-                    placeholder="wss://your-sennet-relay.example"/></label>
-                </details>
-              </div>
-            </>}
+                </div>
+                <small>Shared pieces and seats are saved automatically. Leaving does not erase your place.</small>
+              </section>}
+              {onlineRoomsList.length>0&&<section className="sennet-saved-rooms">
+                <h3>Continue a saved game</h3>
+                {onlineRoomsList.map(previous=><button type="button" key={previous.endpoint+'|'+previous.room}
+                  onClick={()=>joinRoom({room:previous.room,endpoint:previous.endpoint})}>
+                  <RotateCw size={15}/><span>{previous.room}</span><small>{previous.seat===null?'Spectator':'Seat '+((previous.seat??0)+1)}</small>
+                </button>)}
+              </section>}
+              <details className="sennet-hosting-panel" open={showHosting}
+                onToggle={event=>setShowHosting(event.currentTarget.open)}>
+                <summary><Settings2 size={15}/><span>{endpoint?'Multiplayer connection settings':'Set up online hosting once'}</span>
+                  <small>{endpoint?'Edit or test server':'Required to create online rooms'}</small></summary>
+                <div className="sennet-hosting-body">
+                  <p>Sennet needs one online server for everyone's shared games. This is not a VPN error. Once hosted, friends never need to set up a server.</p>
+                  <a className="sennet-hosting-deploy" href="https://dashboard.render.com/blueprint/new?repo=https://github.com/marcusdhaynes/Sennet"
+                    target="_blank" rel="noopener noreferrer">Deploy Sennet relay on Render <ChevronRight size={15}/></a>
+                  <small>Render may charge for the persistent disk and hosting. The preconfigured blueprint keeps games saved between restarts.</small>
+                  <label>Multiplayer server address
+                    <input value={endpoint} onChange={e=>{setEndpoint(e.target.value);setHostingHealth('untested');}}
+                      placeholder="https://your-service.onrender.com"/>
+                  </label>
+                  <button type="button" className="reader-primary" disabled={hostingBusy||!endpoint.trim()}
+                    onClick={testRelay}>{hostingBusy?'Checking connection…':'Save & test connection'} <Wifi size={16}/></button>
+                  {hostingHealth==='ready'&&<small className="sennet-hosting-ok"><Check size={14}/> Server is reachable.</small>}
+                  {hostingHealth==='error'&&<small className="sennet-hosting-error">Unable to connect. Check the server's /health page and deployment status.</small>}
+                  <small>Uses secure WSS for real-time play, with HTTPS fallback for compatible VPN and firewall connections.</small>
+                </div>
+              </details>
+            </div>}
             {settingsPage==='scripting'&&<><div className="reader-heading"><div><h2>Lua scripting</h2><p>Run experimental local game scripts in an isolated worker.</p></div></div>
               <div className="reader-block"><label>Lua script<textarea rows={12} className="code-edit" spellCheck={false} value={script} onChange={e=>setScript(e.target.value)}/></label><button className="reader-secondary" onClick={executeLua}><Play size={16}/> Run script</button><p>{scriptOutput||'Ready to execute.'}</p></div>
               <p className="reader-footnote"><ShieldCheck size={15}/> Untrusted public scripts need stricter per-game limits before production multiplayer.</p>
