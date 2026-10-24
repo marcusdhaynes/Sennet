@@ -45,7 +45,7 @@ import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
 import {cardGestureOptions,isDoubleCardTap,GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD,type CardGestureAction} from '../lib/cardGestures';
 import {cardStackMembers,nearestFrameIndex,playerSeatRotation,viewerTableRotation,tcgMatCells,tcgMatRegions,tcgMatOrigin,opponentAtTablePoint,groupedMatchupLayout,oneOnOneMatchupLayout,castleGridLayout,castleIndependentFocusLayout,castleArrowsVisible,nextCastleAllySeat,nextCastleFocusedSeat,type CastleSideFocus,opponentAcrossDivider,BATTLEFIELD_PLAYMAT_PADDING,battlefieldFitBounds,toggleOpponentRelation,type OpponentRelation,type CastleMode,neighboringOpponentSeat,centerMergeKey,tcgSnapPoint,tcgPlacementPoint,tcgDropZone,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,TCG_ROW_COLORS,isTcgRemoveDrop,tcgRegionLabel,tcgMatLocal,tcgMatWorld,THROWN_DIE_LIFETIME_MS,BOARD_CENTER,BOARD_W,TABLE_APOTHEM,TABLE_SEAT_RADIUS,TABLE_VIEW_RADIUS,MIN_TABLE_ZOOM,clampTableZoom,clampTablePan,type GameState,type Player,type TableObject,type PlaymatAppearance,type PlaymatSectionStyle,playmatSectionIndex,playmatAppearanceForSeat,opponentRelationButtonPosition,OPPONENT_RELATION_COLORS,OPPONENT_RELATION_BUTTON_RADIUS,OPPONENT_RELATION_BUTTON_HIT_RADIUS,viewButtonPosition,VIEW_BUTTON_RADIUS,VIEW_BUTTON_HIT_RADIUS,tcgSettingsButtonPosition,coinNumericValue,validCoinText} from '@sennet/core';
-interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;onOpenReceipt:()=>void;onInterfaceAction:(type:string,location:string,description:string)=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
+interface Props{diceHoldMs:number;diceFadeMs:number;latestAction:string;canUndo:boolean;canRedo:boolean;onUndo:()=>void;onRedo:()=>void;onOpenReceipt:()=>void;onInterfaceAction:(type:string,location:string,description:string)=>void;bookDesign:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock:'left'|'right'|'free';bookOffset:{x:number;y:number};onBookMove:(point:{x:number;y:number})=>void;onBookOpen:()=>void;drawer?:ReactNode;wheelMode:'mobile'|'docked'|'hold';state:GameState;seat:number;playerName:string;actorId:string;selected:string|null;onSelect:(id:string|null)=>void;onMove:(id:string,x:number,y:number)=>void;onMoveStack:(id:string,x:number,y:number)=>void;onMoveSelection:(ids:string[],anchorId:string,x:number,y:number)=>void;onDrawMat:()=>void;onOpenTcgSettings:()=>void;onCardAction:(id:string,action:"tap"|"flip")=>void;onGestureAction:(id:string,action:CardGestureAction)=>void;onRadialAction:(ids:string[],action:RadialAction,destination?:string)=>void;playmat:PlaymatAppearance;labelScale:number;diceAppearance:DiceAppearance;mergeOpacity:number;mergeHoverMs:number;onMergeCenter:(seat:number,boundary:number,merged:boolean)=>void;onViewChange?:(view:{x:number;y:number;scale:number})=>void;coinAppearance:CoinAppearance;customCoinValue:number;customCoinText:string;onCustomCoinText:(text:string)=>void;onCustomCoinValue:(value:number)=>void;onTokenPlace:(value:number,sign:1|-1,x:number,y:number,carrierId?:string,color?:string,coinText?:string)=>void;onCoinModify:(id:string,changes:{delta?:number;color?:string;coinText?:string})=>void;onCoinDuplicate:(id:string)=>void;onTokenAdjust:(ids:string[],value:number,sign:1|-1)=>void;onDiceThrow:(throws:{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}[])=>void;
 onDiceReroll:(id:string,rolls:number[],x:number,y:number,rotation:number,quaternion?:[number,number,number,number],altitude?:number)=>void;readonly?:boolean}
 /** Draw ordering is global across all seats, even when Castle mats overlap.
  * Separate opponent backings from the viewer's mat and every interactable:
@@ -182,7 +182,7 @@ function addPlaymatImage(mat:Container,base:Graphics,x:number,y:number,w:number,
  * cell coordinates on every client; drag release is snapped in core. */
 function drawTcgMats(
   board:Container,layers:TablePaintLayers,state:GameState,viewerSeat:number,readonly:boolean,
-  opacity:number,hoverMs:number,playmat:PlaymatAppearance,
+  opacity:number,hoverMs:number,playmat:PlaymatAppearance,labelScale:number,
   bookDesign:Props['bookDesign'],bookDock:Props['bookDock'],bookOffset:Props['bookOffset'],onBookOpen:()=>void,onBookMove:Props['onBookMove'],
   onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,
   onFocusCastleSeat:(seat:number)=>void,
@@ -199,7 +199,11 @@ function drawTcgMats(
   for(const seat of drawnSeats){
     // Personal appearance belongs only to the current viewer's own mat.
     // Opponents use the default appearance in both table and versus views.
-    const seatPlaymat=playmatAppearanceForSeat(playmat,viewerSeat,seat);
+    const seatActor=state.players.find(p=>p.seat===seat)?.id;
+    const remoteAppearance=seatActor?state.appearances?.[seatActor]:undefined;
+    const seatPlaymat=seat===viewerSeat?playmat:
+      remoteAppearance?.playmat??playmatAppearanceForSeat(playmat,viewerSeat,seat);
+    const regionTextScale=seat===viewerSeat?labelScale:remoteAppearance?.labelScale??1.25;
     const parent=seatLayers?.get(seat)??board;
     const cells=tcgMatCells(seat);
     const topLeft=cells.find(c=>c.column===0&&c.row===0)!;
@@ -259,14 +263,14 @@ function drawTcgMats(
       .stroke({color:0x466059,width:1,alpha:.46}));
     // Two empty trays are siblings of the mat pockets in the SAME transformed
     // container, so Castle/Eye/ordinary views all carry them automatically.
-    if(seat===viewerSeat){
+    {
       const trayW=TCG_MAT.cardWidth;
       // Exact zone edges: row 1 = PLAY 02; row 3 = HAND.
       // Match the pockets, including the gaps between their rows.
       const trayTop=-TCG_MAT_HEIGHT/2+(TCG_MAT.rowHeight+TCG_MAT.gap);
       const trayBottom=TCG_MAT_HEIGHT/2;
       const trayH=trayBottom-trayTop;
-      const woodFinish=playmat.sideBoxStyle??'walnut';
+      const woodFinish=seatPlaymat.sideBoxStyle??'walnut';
       for(const side of [-1,1]){
         const cx=side*(TCG_MAT_WIDTH/2+trayW/2+3),cy=(trayTop+trayBottom)/2;
         // High-resolution wood, hand-worked chamfers, brass corner pins,
@@ -278,7 +282,7 @@ function drawTcgMats(
         drawerGroup.addChild(tray);
         mat.addChild(drawerGroup);
         layers.accessories.attach(drawerGroup);
-        drawerGroups.set(side,drawerGroup);
+        if(seat===viewerSeat)drawerGroups.set(side,drawerGroup);
         // The drawer slides UNDER the mat. Only the genuine outer wooden
         // sidewall remains uncovered (~10 tabletop units) when fully shut.
         // A stencil clips everything else behind the playmat, including
@@ -297,8 +301,8 @@ function drawTcgMats(
           cy-trayH/2-8,12,trayH+16).fill({color:0xffffff,alpha:.001});
         // This is the EXISTING outer wall: clicking it opens/closes the
         // drawer, while its wood grain remains the only visible artwork.
-        wall.eventMode='static';
-        wall.cursor='pointer';
+        wall.eventMode=seat===viewerSeat?'static':'none';
+        wall.cursor=seat===viewerSeat?'pointer':'default';
         wall.on('pointerdown',e=>{
           e.stopPropagation();onControlDown(e.pointerId);
         });
@@ -306,7 +310,33 @@ function drawTcgMats(
           e.stopPropagation();onToggleDrawer(side as -1|1);
         });
         drawerGroup.addChild(wall);
-        drawerTabs.set(side,wall);
+        if(seat===viewerSeat)drawerTabs.set(side,wall);
+        if(seat!==viewerSeat&&side===1){
+          const rightX=TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3;
+          const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+          const locations=diceRackLocations(rightX,top);
+          DICE_TYPES.forEach((sides,index)=>{
+            const die=makeDie(sides);
+            die.position.set(locations[index].x,locations[index].y);
+            die.scale.set(DICE_SOURCE_RACK_SCALE);
+            die.eventMode='none';drawerGroup.addChild(die);
+            const mark=label(diceLabel(sides),8.8,0xffedbe,'bold');
+            mark.position.set(locations[index].x,locations[index].y+15);
+            drawerGroup.addChild(mark);
+          });
+          const c=remoteAppearance?.coin;
+          const coinStyle:CoinAppearance={
+            finish:(c?.finish as CoinAppearance['finish'])??'polished',
+            shine:c?.shine??65,bevel:c?.bevel??50,size:c?.size??1
+          };
+          [remoteAppearance?.coinText??'1',remoteAppearance?.coinValue??10].forEach((value,index)=>{
+            const coin=makeCoin(value,coinStyle,true,1,index===0?'#c4d8d9':'#d8b979',index===0);
+            coin.position.set(rightX+(index===0?-15:15),top+25);
+            coin.scale.set(.68);drawerGroup.addChild(coin);
+            const mark=label(index===0?'∞':'∑',index===0?17.6:8.8,0xffedbe,'bold');
+            mark.position.set(coin.x,top+43);drawerGroup.addChild(mark);
+          });
+        }
 
       }
     }
@@ -475,7 +505,7 @@ function drawTcgMats(
         grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});
         grid.eventMode='none';surface.addChild(grid);
       }
-      const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),cell.column!==1?8:merged?12:10,accent, 'bold');
+      const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),(cell.column!==1?8:merged?12:10)*regionTextScale,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
       // Keep the etched letter edges crisp while a wider, soft shadow
       // falls off gradually across busy felt textures and artwork.
@@ -838,7 +868,7 @@ function makeDuelSeatLayers(
 }
 function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,seat:number,playerName:string,readonly:boolean,
   opacity:number,hoverMs:number,onMerge:(seat:number,boundary:number,merged:boolean)=>void,
-  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,
+  onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onToggleRelation:(seat:number,choice:'enemy'|'ally')=>void,onFocusCastleSeat:(seat:number)=>void,onControlDown:(id:number)=>void,hoverTimers:Set<number>,playmat:PlaymatAppearance,labelScale:number,
   bookDesign:Props['bookDesign'],bookDock:Props['bookDock'],bookOffset:Props['bookOffset'],onBookOpen:()=>void,onBookMove:Props['onBookMove'],
   duelOpponent:number|null,castleActive:boolean,castleMode:CastleMode|'focus',
   castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,
@@ -887,7 +917,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   const seatLayers=duelOpponent===null&&!castleActive
     ?null:makeDuelSeatLayers(board,seat,duelOpponent,relations,castleActive,
       castleMode,castleBaseMode,focused,viewport,selectedEnemy);
-  if(state.kind==='tcg')drawTcgMats(board,layers,state,seat,readonly,opacity,hoverMs,playmat,
+  if(state.kind==='tcg')drawTcgMats(board,layers,state,seat,readonly,opacity,hoverMs,playmat,labelScale,
     bookDesign,bookDock,bookOffset,onBookOpen,onBookMove,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
@@ -1188,7 +1218,7 @@ type EyeView={
   castleSelectedEnemy?:number|null;
 };
 const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
-export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,onOpenReceipt,onInterfaceAction,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
+export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,onOpenReceipt,onInterfaceAction,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,labelScale,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
   const selectionReadout=formatDiceSelection(diceQuantities);
@@ -1864,7 +1894,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
        (direction,sourceSeat)=>cycleOpponentHandler.current(direction,sourceSeat),
       (targetSeat,choice)=>toggleRelationHandler.current(targetSeat,choice),
       targetSeat=>castleFocusHandler.current(targetSeat),
-      id=>{controlPointer.current=id;},hoverTimers.current,playmat,
+      id=>{controlPointer.current=id;},hoverTimers.current,playmat,labelScale,
       bookDesign,bookDock,bookOffset,onBookOpen,onBookMove,
       eyeView.kind==='versus'||eyeView.kind==='castle'?eyeView.opponent:null,
       eyeView.kind==='castle',eyeView.castleMode??preferredCastleMode.current,
@@ -2438,7 +2468,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // They are released only when removed from the game or on unmount.
       for(const {el} of coinLayers)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
