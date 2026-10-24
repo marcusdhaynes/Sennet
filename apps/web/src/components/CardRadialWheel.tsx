@@ -112,6 +112,9 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     const actionLabel=act.id==='tap-toggle'?tapLabel:act.label;
      const help=act.id==='reveal'?'Reveal':act.id==='flip'?'Flip':act.id==='shuffle'?'Shuffle':act.id==='scale-bigger'?'Increase':act.id==='scale-smaller'?'Decrease':act.id==='scale-original'?'Original':actionLabel;
     const selected=category===i,hot=action===act.id;
+    // Compared with the previous 18px radial text: State/Scale symbols are
+    // 3× (54px); the three Position commands are 2× (36px).
+    const glyphSize=i===0?36:54;
     return <g key={act.id} aria-label={help} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
       onPointerDown={e=>{e.preventDefault();e.stopPropagation();if(!collapsed)onChoose(act.id);}}
@@ -122,10 +125,13 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     {<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
-       textAnchor="middle" fontSize="18" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
-       {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
-     </text>}
+     <text x={p.x} y={p.y}
+       textAnchor="middle" dominantBaseline="central"
+       fontSize={glyphSize} fontWeight="700"
+       textLength={half&&i===0?49:undefined}
+       lengthAdjust={half&&i===0?'spacingAndGlyphs':undefined}
+       fill="#f8f3ff" stroke="#20172f" strokeWidth=".6"
+       paintOrder="stroke" pointerEvents="none">{actionLabel}</text>
     </g>;
    }))}
    </g>
