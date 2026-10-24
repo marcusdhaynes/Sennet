@@ -19,7 +19,7 @@ export interface GameState {
 /** Loose thrown dice (including the two-sided flipcoin) are permanent
  * deletions after 10 seconds; unlike the drawer generators themselves. */
 export const THROWN_DIE_LIFETIME_MS=10_000;
-export type CommandType = 'ADD' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY' | 'REROLL_DIE';
+export type CommandType = 'ADD' | 'ADD_MANY' | 'MOVE' | 'MOVE_STACK' | 'SET_CENTER_MERGE' | 'ROTATE' | 'FLIP' | 'DELETE' | 'CLONE' | 'ROLL' | 'DRAW' | 'SHUFFLE' | 'NEXT_TURN' | 'SET_MODE' | 'ADJUST_COUNTER' | 'SET_ZONE' | 'BATCH_CARD_ACTION' | 'TOKEN_PLACE' | 'TOKEN_ADJUST' | 'THROW_TRAY' | 'COIN_MODIFY' | 'REROLL_DIE';
 export interface Command {
   id: string; actor: string; type: CommandType; payload: Record<string, unknown>;
 }
@@ -1030,8 +1030,7 @@ export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameSt
     sandbox: shared,
     boardgame: [object('game-board','board','Checkered board',500,330,'#ad9879',{locked:true}), ...Array.from({length:8},(_,i)=>object(`pawn-${i}`,'token',`Piece ${i+1}`,370+i*37,300,i%2?'#bf9d70':'#86b6a8'))],
     tcg: [
-      ...deck('alpha',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:0})),
-      ...deck('beta',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:6})),
+      // New TCG sessions start without either player's cards.
       object('hero-a','card','Guardian',500,330,'#6baaa6',{...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:0}),
       object('hero-b','card','Invoker',500,330,'#ba8ab6',{...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:6})
     ],
@@ -1147,11 +1146,25 @@ const isLooseAccessory=(object:TableObject)=>
 export function validateCommand(state: GameState, command: Command): string | null {
   if (!command || typeof command !== 'object' || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) return 'Invalid command';
   if (!command.actor || !command.id || command.id.length > 120 || command.actor.length > 120) return 'Invalid actor or command ID';
-  const types: CommandType[]=['ADD','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY','COIN_MODIFY','REROLL_DIE'];
+  const types: CommandType[]=['ADD','ADD_MANY','MOVE','MOVE_STACK','SET_CENTER_MERGE','ROTATE','FLIP','DELETE','CLONE','ROLL','DRAW','SHUFFLE','NEXT_TURN','SET_MODE','ADJUST_COUNTER','SET_ZONE','BATCH_CARD_ACTION','TOKEN_PLACE','TOKEN_ADJUST','THROW_TRAY','COIN_MODIFY','REROLL_DIE'];
   if (!types.includes(command.type)) return 'Unsupported action';
   if (state.mode !== 'sandbox' && command.type !== 'SET_MODE' && command.type !== 'SET_CENTER_MERGE') {
     const current = state.players.find(p=>p.seat===state.turnSeat);
     if (state.players.length && current?.id!==command.actor) return `Waiting for seat ${state.turnSeat+1}`;
+  }
+  if(command.type==='ADD_MANY'){
+    const entries=command.payload.objects;
+    if(state.kind!=='tcg')return 'Load a Trading Card Game table to add a deck';
+    if(!Array.isArray(entries)||entries.length<1||entries.length>24)return 'Deck batches contain 1–24 cards';
+    const player=state.players.find(p=>p.id===command.actor);
+    if(state.players.length&&!player)return 'Spectators cannot add decks';
+    if(entries.some(o=>!o||typeof o!=='object'||o.kind!=='card'||
+       typeof o.id!=='string'||o.id.length>100||
+       !Number.isInteger(o.matSeat)||o.matSeat!==player?.seat&&state.players.length>0||
+       typeof o.name!=='string'||o.name.length>120))return 'Invalid deck card or seat';
+    const ids=entries.map(o=>o.id);
+    if(new Set(ids).size!==ids.length||ids.some(id=>state.objects.some(o=>o.id===id)))
+      return 'Duplicate deck card ID';
   }
   const id=String(command.payload.id ?? '');
   const target=state.objects.find(o=>o.id===id);
@@ -1461,6 +1474,14 @@ export function applyCommand(state: GameState, command: Command): GameState {
     }
   };
   switch(command.type) {
+    case 'ADD_MANY':{
+      for(const raw of p.objects as Record<string,unknown>[]){
+        const added=sanitizeObject({...raw,matSeat:state.players.find(p=>p.id===command.actor)?.seat??raw.matSeat,
+          owner:command.actor});
+        objects.push(added);
+      }
+      message='Deck added · '+(p.objects as unknown[]).length+' cards';
+    }break;
     case 'ADD':{
       const added=sanitizeObject(p.object as Record<string,unknown>);
       if(isLooseAccessory(added)&&added.zone==='TABLE'){
