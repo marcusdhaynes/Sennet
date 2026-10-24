@@ -3,7 +3,7 @@ import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
-import {RADIAL_ACTIONS,type RadialAction} from '../lib/radialWheel';
+import {RADIAL_ACTIONS} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
