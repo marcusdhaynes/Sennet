@@ -1503,6 +1503,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   useEffect(()=>installTopLayerBookHover(),[]);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
+  // Every Pixi control is normalized in ONE place before each render.
+  // A React redraw creates new Pixi nodes, so camera-change-only sizing
+  // cannot guarantee an invariant screen-space diameter.
+  const syncFixedControls=useRef<()=>void>(()=>{});
   const seatRef=useRef(seat);seatRef.current=seat;
   const pointers=useRef(new Map<number,{x:number;y:number}>());
   // Canvas pan belongs to the pointer that pressed empty space, never to a card drag.
@@ -1956,6 +1960,63 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       scene.addChild(board);app.stage.addChild(scene);mount.current?.appendChild(app.canvas);
       session.current={app,scene,board};setReady(true);
       let lastWidth=0,lastHeight=0;
+      const normalizeFixedControls=()=>{
+        const host=mount.current;
+        if(!host||!app.canvas.isConnected)return;
+        const width=host.clientWidth,height=host.clientHeight;
+        if(width<=0||height<=0)return;
+        if(controlReferencePixels.current===null){
+          const bounds=battlefieldFitBounds(1,BATTLEFIELD_PLAYMAT_PADDING,true);
+          controlReferencePixels.current=eyeOpponentReferencePixels(
+            width,height,bounds,TCG_MAT_WIDTH,TCG_MAT_HEIGHT);
+          // This is set ONCE. It never changes with camera/view zoom,
+          // including Castle all-grid and distant overview views.
+          host.style.setProperty('--sennet-control-size',
+            controlReferencePixels.current+'px');
+        }
+        const desired=controlReferencePixels.current;
+        const canvas=app.canvas.getBoundingClientRect();
+        const sx=canvas.width/app.screen.width;
+        const sy=canvas.height/app.screen.height;
+        if(!(sx>0&&sy>0))return;
+        // Global transform is measured on each control's PARENT,
+        // which excludes that control's own inverse-scale correction.
+        // No button x/y/rotation/pivot/anchor is ever changed.
+        const fix=(node:Container,sourceDiameter:number)=>{
+          if(node.destroyed||!node.parent)return;
+          const p=node.parent;
+          const origin=p.toGlobal(new Point(0,0));
+          const oneX=p.toGlobal(new Point(1,0));
+          const oneY=p.toGlobal(new Point(0,1));
+          const worldX=Math.hypot((oneX.x-origin.x)*sx,(oneX.y-origin.y)*sy);
+          const worldY=Math.hypot((oneY.x-origin.x)*sx,(oneY.y-origin.y)*sy);
+          if(!(worldX>0&&worldY>0))return;
+          const factor=desired/sourceDiameter;
+          const pxX=factor/worldX,pxY=factor/worldY;
+          // Set absolute scales, never multiply an existing scale:
+          // otherwise a camera animation accumulates enlargement.
+          if(Math.abs(node.scale.x-pxX)>1e-6||Math.abs(node.scale.y-pxY)>1e-6)
+            node.scale.set(pxX,pxY);
+        };
+        const eye=eyeHitTarget.current;
+        if(eye&&!eye.destroyed&&eye.parent&&!eye.parent.destroyed){
+          // Eye and Castle share a single anchored group; its fixed
+          // outer circle and separation never depend on the camera.
+          fix(eye.parent,34);
+          eye.scale.set(1);
+          const castle=castleHitTarget.current;
+          if(castle&&!castle.destroyed)castle.scale.set(1);
+        }
+        for(const button of mergeHitTargets.current){
+          if(button.destroyed)continue;
+          fix(button,34);
+        }
+      };
+      syncFixedControls.current=normalizeFixedControls;
+      // This is registered BEFORE scene composition/rendering. Controls
+      // are normalized on every ticker frame even during a game-state
+      // rebuild or an eased camera transition.
+      app.ticker.add(normalizeFixedControls);
       const rescale=()=>{
         if(!mount.current)return;
         const w=Math.max(100,mount.current.clientWidth),h=Math.max(100,mount.current.clientHeight);
@@ -1975,61 +2036,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
-        if(controlReferencePixels.current===null){
-          const referenceBounds=battlefieldFitBounds(1,BATTLEFIELD_PLAYMAT_PADDING,true);
-          controlReferencePixels.current=eyeOpponentReferencePixels(
-            w,h,referenceBounds,TCG_MAT_WIDTH,TCG_MAT_HEIGHT);
-          // Count badges use the same reference but stay DOM overlays
-          // independent of card zoom; their SVG viewBox is unchanged.
-          mount.current.style.setProperty('--sennet-control-size',
-            controlReferencePixels.current+'px');
-        }
-        const targetPixels=controlReferencePixels.current;
-        // Fixed-size controls: Eye, Castle, merge and counters all have
-        // the SAME SMALL 16px silhouette at every zoom.
-        // Their anchor positions NEVER change. Only the Pixi container
-        // scale is inverse to the camera; the DOM stack badge is already
-        // screen-space. No per-frame X/Y offsets or hit-area inflation.
-        const control=eyeHitTarget.current;
-        if(control&&!control.destroyed&&control.parent?.parent){
-          const group=control.parent;
-          const mat=group.parent!;
-          const origin=mat.toGlobal(new Point(0,0));
-          const unit=mat.toGlobal(new Point(1,0));
-          const rect=app.canvas.getBoundingClientRect();
-          // toGlobal() returns logical renderer-screen units, NOT
-          // framebuffer pixels. renderer.width can change with devicePixelRatio
-          // while screen.width is the matching logical coordinate space.
-          // Using renderer.width made buttons larger/smaller across devices.
-          const pxPerWorld=Math.hypot(
-            (unit.x-origin.x)*rect.width/app.screen.width,
-            (unit.y-origin.y)*rect.height/app.screen.height);
-          if(Number.isFinite(pxPerWorld)&&pxPerWorld>0){
-            const inverse=fixedMatControlScale(pxPerWorld,targetPixels);
-            // Camera scale cancels against 16/34. The fixed group
-            // stays at its original world anchor, with no X/Y edits.
-            group.scale.set(inverse);
-            for(const button of [control,castleHitTarget.current]){
-              if(!button||button.destroyed)continue;
-              button.scale.set(1);
-              button.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
-            }
-            // Other controls can have a DIFFERENT parent mat scale
-            // (opponent, Castle grids, or full table). Measure each
-            // parent independently, rather than reusing the viewer's.
-            for(const merge of mergeHitTargets.current){
-              if(!merge||merge.destroyed||!merge.parent)continue;
-              const parent=merge.parent;
-              const matOrigin=parent.toGlobal(new Point(0,0));
-              const matUnit=parent.toGlobal(new Point(1,0));
-              const matPx=Math.hypot(
-                (matUnit.x-matOrigin.x)*rect.width/app.screen.width,
-                (matUnit.y-matOrigin.y)*rect.height/app.screen.height);
-              merge.scale.set(fixedMatControlScale(matPx,targetPixels));
-              merge.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
-            }
-          }
-        }
+        // Enforce fixed button diameter during every camera update as
+        // well as in the renderer ticker and after every game-state redraw.
+        normalizeFixedControls();
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
           const parent=duelLayers.current?.get(seatRef.current)??board;
@@ -2151,6 +2160,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(diceThrowAnimation.current!==null)cancelAnimationFrame(diceThrowAnimation.current);
       for(const flying of diceFlying.current)if(!flying.destroyed)flying.destroy({children:true});
       diceFlying.current=[];dicePointer.current=null;
+      syncFixedControls.current=()=>{};
+      app.ticker.remove(normalizeFixedControls);
       session.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
   },[]);
   useEffect(()=>{
@@ -3025,6 +3036,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // Castle opponents' playmat backings render BELOW every other layer.
     // Objects, controls, dice, book and our own mat remain above them.
     board.addChild(...TABLE_PAINT_ORDER.map(name=>paintLayers[name]));
+    // The rebuilt Pixi controls must be normalized BEFORE the first
+    // visible render, not after the next wheel/zoom event.
+    syncFixedControls.current();
     app.renderer.render(app.stage);
     staticDiceEntries.current=staticEntries;
     staticDice3D.current?.setEntries(staticEntries);
