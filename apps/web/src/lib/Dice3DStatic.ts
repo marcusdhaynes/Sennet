@@ -41,6 +41,7 @@ export interface StaticDice3DRenderer {
   setEntries:(entries:StaticDiePlacement[])=>void;
   sync:(force?:boolean)=>void;
   setSourceQuantity:(sides:number,quantity:number)=>void;
+  setEmphasis:(id:string,highlight:boolean)=>void;
   getRenderedRevision:()=>number;
   destroy:()=>void;
 }
@@ -195,6 +196,7 @@ export function createStaticDice3D(
     entries=next;
     entriesRevision++;
   };
+  const emphasized=new Set<string>();
   const sync=(force=false)=>{
     if(stopped)return;
     const now=performance.now();
@@ -254,7 +256,7 @@ export function createStaticDice3D(
       // Source dice match the right-drawer coins; Pixi fallbacks, hit
       // targets and 3D meshes all use the same scale at any camera zoom.
       const rackScale=entry.source?DICE_SOURCE_RACK_SCALE:1;
-      const sf=scale*rackScale;
+      const sf=scale*rackScale*(emphasized.has(entry.id)?3:1);
       // A die's resting height is the support point of its actual convex
       // hull, not its bounding-sphere radius. Keep the height sampled from
       // the final Cannon frame to prevent the last-frame vertical jump.
@@ -314,6 +316,10 @@ export function createStaticDice3D(
     setEntries(entries.map(e=>e.id===id?{...e,quantity}:e));
     sync(true);
   };
-  return {setEntries,sync,setSourceQuantity,
+  const setEmphasis=(id:string,highlight:boolean)=>{
+    if(highlight)emphasized.add(id);else emphasized.delete(id);
+    sync(true);
+  };
+  return {setEntries,sync,setSourceQuantity,setEmphasis,
     getRenderedRevision:()=>renderedRevision,destroy};
 }
