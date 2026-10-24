@@ -1894,7 +1894,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
       list.splice(0,list.length,...before);
       for(let i=list.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
       if(list.length>1&&list.every((o,i)=>o.id===before[i].id))list.push(list.shift()!);
-      list.forEach((o,i)=>o.order=i);message=`Shuffled ${list.length} cards`;break;
+      list.forEach((o,i)=>o.order=i);message=`Shuffled ${list.length} cards${p.matSeat!==undefined?' · Seat '+(Number(p.matSeat)+1):''}`;break;
     }
     case 'NEXT_TURN':{
       const seats=state.players.map(p=>p.seat).sort((a,b)=>a-b);
