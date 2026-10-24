@@ -2,7 +2,7 @@ import {useEffect,useRef,useState,type ReactNode} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
-import CardRadialWheel from './CardRadialWheel';
+import CardRadialWheel,{RadialActionGlyph} from './CardRadialWheel';
 import {RADIAL_ACTIONS} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
@@ -3811,7 +3811,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             const ids=selectedIds.length?selectedIds:selected?[selected]:[];
             if(ids.length)callbacks.current.onRadialAction(ids,action.id as RadialAction);
             restartSelectionIdle.current();
-          }}>{action.label}</button>)}
+          }}><RadialActionGlyph action={action.id}/></button>)}
       </div>}
     {state.kind==='tcg'&&actionScreenVisible&&
       <div ref={node=>{
