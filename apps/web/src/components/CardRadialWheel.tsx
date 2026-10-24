@@ -153,24 +153,32 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
- // Render the zoomed wedge in document.body, outside the wheel's clipping
- // and every playmat, modal, drawer and camera stacking context. getScreenCTM
- // also preserves camera movement, rotation, zoom and half-wheel geometry.
- // The portal is purely visual; the original unscaled wedge owns all input.
+ // The docked radial is an SVG whose viewBox starts at Y=200.
+ // getScreenCTM() differs between browsers for a viewBox offset inside a
+ // transformed DOM parent; its result previously teleported hover previews.
+ // Map the exact rendered SVG rectangle back to our 400-unit artwork, with
+ // the 200-unit origin adjustment only for the bottom semicircle.
+ // The preview lives under <body>, is pointer-transparent, and preserves
+ // its position while the camera or browser viewport is moved.
  useLayoutEffect(()=>{
   if(!hoveredAction||collapsed)return;
   let frame=0;
   const syncMagnifier=()=>{
-   const matrix=svgRef.current?.getScreenCTM();
-   const portal=magnifierPortalRef.current;
-   if(portal&&matrix){
-    portal.style.transform=`matrix(${matrix.a},${matrix.b},${matrix.c},${matrix.d},${matrix.e},${matrix.f})`;
+   const svg=svgRef.current,portal=magnifierPortalRef.current;
+   if(svg&&portal){
+    const bounds=svg.getBoundingClientRect();
+    const scaleX=bounds.width/400;
+    const scaleY=bounds.height/(half?200:400);
+    if(scaleX>0&&scaleY>0){
+      const matrix=`matrix(${scaleX},0,0,${scaleY},${bounds.left},${bounds.top-(half?200*scaleY:0)})`;
+      if(portal.style.transform!==matrix)portal.style.transform=matrix;
+    }
    }
    frame=window.requestAnimationFrame(syncMagnifier);
   };
   syncMagnifier();
   return ()=>window.cancelAnimationFrame(frame);
- },[hoveredAction,collapsed]);
+ },[hoveredAction,collapsed,half]);
  return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')+(half?' is-half':'')+(hoveredAction?' has-sector-preview':'')} style={{width:size,height:half?size/2:size,left:(dragOffset?.x??x)-size/2,top:half?y:(dragOffset?.y??y)-size/2,transition:half||dragOffset?'none':'left .38s cubic-bezier(.18,.82,.2,1), top .38s cubic-bezier(.18,.82,.2,1)'}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
