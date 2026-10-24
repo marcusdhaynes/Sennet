@@ -187,7 +187,7 @@ export function createStaticDice3D(
           new THREE.MeshBasicMaterial({map:shadowTexture,transparent:true,
             depthWrite:false,opacity:.44}));
         shadow.position.z=.4;scene.add(shadow);
-        const children=e.source?e.piece.children.slice(0,1):e.piece.children;
+        const children=e.source?e.piece.children.slice(0,2):e.piece.children;
         const hidden=children.map(piece=>({piece:piece as Container,visible:piece.visible}));
         for(const item of hidden)item.piece.visible=false;
         visual={id:e.id,sides:e.sides,themeId:e.themeId,piece:e.piece,
