@@ -11,10 +11,11 @@ export interface TableObject {
   locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; coinText?: string; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number; throwExpiresAt?:number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
+export interface SharedAppearance {playmat?:PlaymatAppearance;dice?:{all:string;overrides:Record<string,string>};coin?:{finish:string;shine:number;bevel:number;size:number};coinText?:string;coinValue?:number;labelScale?:number}
 export interface GameState {
   version: 1; roomId: string; kind: GameKind; mode: PlayMode;
   seq: number; turnSeat: number; round: number; objects: TableObject[];
-  players: Player[]; message: string; centerMerges?: number[];
+  players: Player[]; message: string; centerMerges?: number[]; appearances?:Record<string,SharedAppearance>;
 }
 /** Loose thrown dice (including the two-sided flipcoin) are permanent
  * deletions after 10 seconds; unlike the drawer generators themselves. */
@@ -1029,11 +1030,7 @@ export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameSt
   const presets: Record<GameKind, TableObject[]> = {
     sandbox: shared,
     boardgame: [object('game-board','board','Checkered board',500,330,'#ad9879',{locked:true}), ...Array.from({length:8},(_,i)=>object(`pawn-${i}`,'token',`Piece ${i+1}`,370+i*37,300,i%2?'#bf9d70':'#86b6a8'))],
-    tcg: [
-      // New TCG sessions start without either player's cards.
-      object('hero-a','card','Guardian',500,330,'#6baaa6',{...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:0}),
-      object('hero-b','card','Invoker',500,330,'#ba8ab6',{...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:6})
-    ],
+    tcg: [],
     rpg: [object('map','board','Campaign Map',500,330,'#538175',{locked:true}),object('hero','miniature','Hero',460,290,'#d9c391'),object('enemy','miniature','Goblin',570,367,'#b69e89'),object('rpg-die','die','D20',340,440,'#dce3df',{sides:20,value:17})],
     wargame: [object('map','board','Battlefield',500,330,'#647e60',{locked:true}),...Array.from({length:6},(_,i)=>object(`soldier-${i}`,'miniature',`Unit ${i+1}`,345+60*(i%3),235+150*Math.floor(i/3),i<3?'#bd9985':'#83b5a6'))],
     dice: [4,6,8,10,12,20].map((sides,i)=>object(`die-${sides}`,'die',`D${sides}`,290+i*82,340,i%2?'#edc890':'#c1c9e9',{sides,value:1})),
