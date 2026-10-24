@@ -14,7 +14,7 @@ test('merge, Eye, Castle, stack controls all use the same SMALL 16px diameter',(
   assert.equal(EYE_CONTROL_DIAMETER_PX,16);
   assert.match(table,/woodenControl\(VIEW_BUTTON_RADIUS,seatPlaymat\.sideBoxStyle\?\?'walnut',merged\)/);
   assert.match(table,/createEyeStyleCounter\(count,playmat\.sideBoxStyle/);
-  assert.match(styles,/width:16px!important;height:16px!important/);
+  assert.match(styles,/width:var\(--sennet-control-size,16px\)!important/);
   assert.ok(!styles.includes('width:34px!important;height:34px!important'));
   assert.equal(viewButtonPosition('eye').x,-22);
   assert.equal(viewButtonPosition('castle').x,22);
@@ -39,7 +39,7 @@ test('merge positions remain in their true playmat gutters',()=>{
     (boundary+1)*TCG_MAT.rowHeight+(boundary+.5)*TCG_MAT.gap);
   assert.ok(y[0]<y[1]&&y[1]<y[2]);
   assert.match(table,/marker\.position\.set\(0,gapCenter\)/);
-  assert.match(table,/merge\.scale\.set\(inverse\)/);
+  assert.match(table,/merge\.scale\.set\(fixedMatControlScale\(matPx,targetPixels\)\)/);
   assert.ok(!table.includes('merge.position.x='));
 });
 
@@ -68,12 +68,28 @@ test('all tabletop controls use CSS pixel scale, never physical framebuffer reso
     .split('const hand=tcgMatCells')[0];
   assert.ok(!controls.includes('rect.width/app.renderer.width'));
   assert.ok(!controls.includes('rect.height/app.renderer.height'));
-  assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:16px!important;height:16px!important/s);
+  assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:var\(--sennet-control-size,16px\)!important/s);
 });
 
 test('mat controls only change inverse scale; world anchor and merge positions remain immutable',()=>{
   const fragment=table.split('const control=eyeHitTarget.current;')[1].split('const hand=tcgMatCells')[0];
   assert.match(fragment,/group\.scale\.set\(inverse\)/);
-  assert.match(fragment,/merge\.scale\.set\(inverse\)/);
+  assert.match(fragment,/merge\.scale\.set\(fixedMatControlScale\(matPx,targetPixels\)\)/);
   assert.ok(!/\.position\.set|\.position\.x\s*=|\.position\.y\s*=/.test(fragment));
+});
+
+test('one session reference uses the opponent Sword/Shield size in initial Eye view',()=>{
+  assert.match(table,/controlReferencePixels=useRef<number\|null>\(null\)/);
+  assert.match(table,/if\(controlReferencePixels\.current===null\)\{/);
+  assert.match(table,/eyeOpponentReferencePixels\(/);
+  assert.match(table,/mount\.current\.style\.setProperty\('--sennet-control-size'/);
+  assert.match(table,/fixedMatControlScale\(pxPerWorld,targetPixels\)/);
+  assert.match(table,/fixedMatControlScale\(matPx,targetPixels\)/);
+});
+
+test('opponent Sword/Shield, navigation, gears, and every merge register for inverse scaling',()=>{
+  assert.match(table,/onMergeReady\(marker\)/);
+  assert.match(table,/onMergeReady\(settings\)/);
+  assert.match(table,/onMergeReady\(button\)/);
+  assert.ok(!table.includes('if(seat===viewerSeat)onMergeReady(marker)'));
 });
