@@ -11,7 +11,7 @@ export interface TableObject {
   locked?: boolean; height?: number; description?: string; matSeat?: number; counters?: number; scale?: number; carrierId?: string; tokenCoin?: boolean; coinText?: string; tokenSign?: 1|-1; throwDice?: boolean; throwRolls?: number[]; throwQuantity?: number; throwTotal?: number; throwQuaternion?: [number,number,number,number]; throwAltitude?:number; throwExpiresAt?:number;
 }
 export interface Player { id: string; seat: number; name: string; online: boolean; bot?: boolean }
-export interface SharedAppearance {playmat?:PlaymatAppearance;dice?:{all:string;overrides:Record<string,string>};coin?:{finish:string;shine:number;bevel:number;size:number};coinText?:string;coinValue?:number;labelScale?:number}
+export interface SharedAppearance {playmat?:PlaymatAppearance;dice?:{all:string;overrides:Record<string,string>};coin?:{finish:string;shine:number;bevel:number;size:number};coinText?:string;coinValue?:number;labelScale?:number;bookDesign?:'tiny'|'dragon'|'journal'|'arcane'|'strapped';bookDock?:'left'|'right'|'free';bookOffset?:{x:number;y:number}}
 export interface GameState {
   version: 1; roomId: string; kind: GameKind; mode: PlayMode;
   seq: number; turnSeat: number; round: number; objects: TableObject[];
