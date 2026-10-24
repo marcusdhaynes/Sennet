@@ -131,8 +131,9 @@ export function createStaticDice3D(
   const releaseHoverMesh=()=>{
     if(!hoverStage?.mesh)return;
     const stage=hoverStage;
-    stage.scene.remove(stage.mesh);
-    stage.mesh.traverse(obj=>{
+    const mesh=stage.mesh;
+    stage.scene.remove(mesh);
+    mesh.traverse(obj=>{
       if(obj instanceof THREE.Mesh||obj instanceof THREE.LineSegments){
         const materials=Array.isArray(obj.material)?obj.material:[obj.material];
         // Geometry and texture maps are shared with the canonical die.
