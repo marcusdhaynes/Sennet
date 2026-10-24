@@ -100,7 +100,7 @@ import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '.
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
 import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom,
-  EYE_CONTROL_DIAMETER_PX,fixedMatControlScale,eyeOpponentReferencePixels} from '../lib/actionRadialFit';
+  EYE_CONTROL_DIAMETER_PX,eyeOpponentReferencePixels} from '../lib/actionRadialFit';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -1952,6 +1952,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
 
   useEffect(()=>{
     let disposed=false;let resizeObserver:ResizeObserver|undefined;
+    let unregisterFixedControls=()=>{};
     const app=new Application();
     (async()=>{
       await app.init({width:BOARD_W,height:BOARD_W,backgroundColor:0x101e1d,antialias:true,resolution:Math.min(window.devicePixelRatio||1,2),preference:'webgl',autoDensity:true});
@@ -2017,6 +2018,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // are normalized on every ticker frame even during a game-state
       // rebuild or an eased camera transition.
       app.ticker.add(normalizeFixedControls);
+      unregisterFixedControls=()=>app.ticker.remove(normalizeFixedControls);
       const rescale=()=>{
         if(!mount.current)return;
         const w=Math.max(100,mount.current.clientWidth),h=Math.max(100,mount.current.clientHeight);
@@ -2161,7 +2163,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       for(const flying of diceFlying.current)if(!flying.destroyed)flying.destroy({children:true});
       diceFlying.current=[];dicePointer.current=null;
       syncFixedControls.current=()=>{};
-      app.ticker.remove(normalizeFixedControls);
+      unregisterFixedControls();
       session.current=null;try{app.destroy(true);}catch{/* init may still be in flight */}};
   },[]);
   useEffect(()=>{
