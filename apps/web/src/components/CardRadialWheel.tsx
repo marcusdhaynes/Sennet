@@ -18,13 +18,18 @@ const REVEAL_HANDS_ICON_PATH='M0,226 L0,230 L3,234 L10,234 L24,203 L34,189 L51,1
 /** Three illustrated Scale tools, drawn like Shuffle rather than font glyphs.
  * All remain visual-only: the existing radial sectors own pointer events. */
 function ScaleCardIcon({kind}:{kind:'scale-bigger'|'scale-smaller'|'scale-original'}){
- const symbol=kind==='scale-bigger'?'+':kind==='scale-smaller'?'−':'=';
+ // All three operators use symmetric vector strokes about the card's exact
+ // center (50,50). Font glyph ascenders and baselines cannot shift them.
+ const symbol=kind==='scale-bigger'
+  ? 'M50 36V64 M36 50H64'
+  : kind==='scale-smaller'
+    ? 'M36 50H64'
+    : 'M36 43H64 M36 57H64';
  return <g stroke="#fff" strokeLinejoin="round">
   <rect x="22" y="10" width="56" height="80" rx="6"
     fill="#fff" fillOpacity=".08" strokeWidth="5"/>
-  <text x="50" y="51" textAnchor="middle" dominantBaseline="central"
-    fontFamily="Inter,system-ui,sans-serif" fontSize="49" fontWeight="800"
-    stroke="none" fill="#fff">{symbol}</text>
+  <path d={symbol} fill="none" strokeWidth="7"
+    strokeLinecap="round"/>
  </g>;
 }
 const cx=200,cy=200;
