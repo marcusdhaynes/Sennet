@@ -1979,8 +1979,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const origin=mat.toGlobal(new Point(0,0));
           const unit=mat.toGlobal(new Point(1,0));
           const rect=app.canvas.getBoundingClientRect();
-          const pxPerWorld=Math.hypot((unit.x-origin.x)*rect.width/app.renderer.width,
-            (unit.y-origin.y)*rect.height/app.renderer.height);
+          // toGlobal() returns logical renderer-screen units, NOT
+          // framebuffer pixels. renderer.width can change with devicePixelRatio
+          // while screen.width is the matching logical coordinate space.
+          // Using renderer.width made buttons larger/smaller across devices.
+          const pxPerWorld=Math.hypot(
+            (unit.x-origin.x)*rect.width/app.screen.width,
+            (unit.y-origin.y)*rect.height/app.screen.height);
           if(Number.isFinite(pxPerWorld)&&pxPerWorld>0){
             const inverse=fixedMatControlScale(pxPerWorld);
             // Camera scale cancels against 16/34. The fixed group
