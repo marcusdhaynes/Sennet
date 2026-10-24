@@ -2536,90 +2536,96 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         });
       });
     }
-    // Three independent draggable instruments. The life counter starts
-    // docked at the exact top-center of the left drawer, and returns to its
-    // dock when dropped close to it. Other release positions are retained.
+    // All three instruments begin INSIDE the visible left drawer.
+    // Keep dragging in the seat's own coordinate system: reparenting to
+    // the unrotated board used to turn them upside down in rotated views.
     if(state.kind==='tcg'){
       const left=drawerGroups.current.get(-1);
       const local=seatGroups?.get(seat)??board;
-      const trayX=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth/2-3;
-      const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
-      const dockY=trayTop-53;
-      const instruments:{key:string;node:Container;x:number;y:number;scale:number;inDrawer:boolean}[]=[
-        {key:'magnifier',node:buildDrawerMagnifier(),x:trayX-12,y:trayTop+44,scale:.52,inDrawer:true},
-        {key:'calculator',node:buildDrawerCalculator(),x:trayX+17,y:trayTop+58,scale:.62,inDrawer:true},
-        {key:'life',node:buildLifeCounter(seat),x:trayX,y:dockY,scale:.72,inDrawer:false}
-      ];
-      for(const instrument of instruments){
-        const {node,key}=instrument;
-        const homeParent=instrument.inDrawer&&left?left:local;
-        node.position.set(instrument.x,instrument.y);
-        node.scale.set(instrument.scale);
-        homeParent.addChild(node);
-        if(key==='life'){
-          // The paint-layer attachment previously detached the counter from
-          // its owning seat without converting coordinates, hiding it offscreen.
-          // Attach to the foreground paint layer in BOARD coordinates.
-          const global=node.toGlobal(new Point(0,0));
-          const boardPoint=board.toLocal(global);
-          paintLayers.buttons.attach(node);
-          node.position.copyFrom(boardPoint);
-        }
-        const storageKey='sennet.instrument-position.v1.'+seat+'.'+key;
-        try{
-          const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
-          if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){
-            board.addChild(node);
-            node.position.set(saved.x,saved.y);
-          }
-        }catch{/* Storage is optional. */}
-        // Uninterrupted move path: independent of React rerenders, camera
-        // zoom, and the HTML card overlay. Controls retain their own taps.
-        node.eventMode='static';node.cursor='grab';
-        node.hitArea=new Rectangle(-49,-54,98,108);
-        node.on('pointerdown',e=>{
-          if(e.button!==0)return;
-          e.stopPropagation();
-          const pointer=e.pointerId;
-          // Reparent without changing its visible world position.
-          const global=node.toGlobal(new Point(0,0));
-          const localPoint=board.toLocal(global);
-          if(node.parent!==board)board.addChild(node);
-          node.position.copyFrom(localPoint);
-          const origin=board.toLocal(e.global);
-          const startX=node.x,startY=node.y;
-          node.cursor='grabbing';
-          let moved=false;
-          const move=(event:PointerEvent)=>{
-            if(event.pointerId!==pointer||!session.current)return;
-            const rect=app.canvas.getBoundingClientRect();
-            const point=new Point((event.clientX-rect.left)*app.renderer.width/rect.width,
-              (event.clientY-rect.top)*app.renderer.height/rect.height);
-            const current=board.toLocal(point,app.stage);
-            const dx=current.x-origin.x,dy=current.y-origin.y;
-            if(Math.hypot(dx,dy)>1)moved=true;
-            node.position.set(startX+dx,startY+dy);
-          };
-          const finish=(event:PointerEvent)=>{
-            if(event.pointerId!==pointer)return;
-            window.removeEventListener('pointermove',move);
-            window.removeEventListener('pointerup',finish);
-            window.removeEventListener('pointercancel',finish);
-            node.cursor='grab';
-            if(!moved)return;
-            const dockPoint=board.toLocal(homeParent.toGlobal(new Point(instrument.x,instrument.y)));
-            if(key==='life')dockPoint.copyFrom(board.toLocal(local.toGlobal(new Point(instrument.x,instrument.y))));
-            if(key==='life'&&Math.hypot(node.x-dockPoint.x,node.y-dockPoint.y)<28){
-              node.position.copyFrom(dockPoint);
-              try{localStorage.removeItem(storageKey);}catch{/* ignore */}
-            }else{
-              try{localStorage.setItem(storageKey,JSON.stringify({x:node.x,y:node.y}));}catch{/* ignore */}
+      if(left){
+        const trayX=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth/2-3;
+        const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+        const instruments=[
+          {key:'life',node:buildLifeCounter(seat),x:trayX,y:trayTop+39,scale:.57},
+          {key:'magnifier',node:buildDrawerMagnifier(),x:trayX-9,y:trayTop+112,scale:.52},
+          {key:'calculator',node:buildDrawerCalculator(),x:trayX+4,y:trayTop+175,scale:.62}
+        ];
+        for(const instrument of instruments){
+          const {node,key}=instrument;
+          node.position.set(instrument.x,instrument.y);
+          node.scale.set(instrument.scale);
+          left.addChild(node);
+          // The left drawer stencil and its accessory paint layer own all
+          // three tools at rest. Attaching life to the buttons layer removed
+          // it from that layer and made it disappear in previous builds.
+          const storageKey='sennet.instrument-position.v2.'+seat+'.'+key;
+          try{
+            const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
+            if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){
+              local.addChild(node);
+              node.position.set(saved.x,saved.y);
             }
-          };
-          window.addEventListener('pointermove',move);
-          window.addEventListener('pointerup',finish);
-          window.addEventListener('pointercancel',finish);
-        });
+          }catch{/* Storage is optional. */}
+          node.eventMode='static';
+          node.cursor='grab';
+          node.hitArea=new Rectangle(-49,-54,98,108);
+          node.on('pointerdown',e=>{
+            if(e.button!==0)return;
+            e.stopPropagation();
+            // The camera pan handler ignores this pointer all the way to
+            // pointerup, exactly as it does for cards and dice.
+            controlPointer.current=e.pointerId;
+            const pointer=e.pointerId;
+            const global=node.toGlobal(new Point(0,0));
+            const place=local.toLocal(global);
+            if(node.parent!==local)local.addChild(node);
+            node.position.copyFrom(place);
+            const origin=local.toLocal(e.global);
+            const startX=node.x,startY=node.y;
+            node.cursor='grabbing';
+            let moved=false;
+            const move=(event:PointerEvent)=>{
+              if(event.pointerId!==pointer||!session.current)return;
+              const rect=app.canvas.getBoundingClientRect();
+              if(!rect.width||!rect.height)return;
+              const point=new Point((event.clientX-rect.left)*app.renderer.width/rect.width,
+                (event.clientY-rect.top)*app.renderer.height/rect.height);
+              const current=local.toLocal(point,app.stage);
+              const dx=current.x-origin.x,dy=current.y-origin.y;
+              if(Math.hypot(dx,dy)>2)moved=true;
+              node.position.set(startX+dx,startY+dy);
+            };
+            const finish=(event:PointerEvent)=>{
+              if(event.pointerId!==pointer)return;
+              window.removeEventListener('pointermove',move);
+              window.removeEventListener('pointerup',finish);
+              window.removeEventListener('pointercancel',finish);
+              if(controlPointer.current===pointer)controlPointer.current=null;
+              node.cursor='grab';
+              if(!moved){
+                // A click is not a move. Return the untouched item to its
+                // actual drawer parent instead of leaving it floating above.
+                if(node.parent===local&&startX===place.x&&startY===place.y){
+                  const home=left.toLocal(node.toGlobal(new Point(0,0)));
+                  left.addChild(node);
+                  node.position.copyFrom(home);
+                }
+                return;
+              }
+              const dock=local.toLocal(left.toGlobal(new Point(instrument.x,instrument.y)));
+              if(key==='life'&&Math.hypot(node.x-dock.x,node.y-dock.y)<22){
+                left.addChild(node);
+                node.position.set(instrument.x,instrument.y);
+                try{localStorage.removeItem(storageKey);}catch{/* ignore */}
+              }else{
+                try{localStorage.setItem(storageKey,JSON.stringify({x:node.x,y:node.y}));}catch{/* ignore */}
+              }
+            };
+            window.addEventListener('pointermove',move);
+            window.addEventListener('pointerup',finish);
+            window.addEventListener('pointercancel',finish);
+          });
+        }
       }
     }
     // Fixed, interactive source coins live inside the *local* right tray.
