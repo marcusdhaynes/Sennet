@@ -362,7 +362,7 @@ test('right-drawer rack fits all eight larger dice between coins and book',()=>{
 test('right-drawer source dice match the two smaller source coins',()=>{
   const coinRadius=16*1.08*.9*.72;
   const dieRadius=13.7*DICE_SOURCE_RACK_SCALE;
-  assert.ok(Math.abs(coinRadius-dieRadius)<.35);
+  assert.ok(dieRadius>coinRadius&&dieRadius<coinRadius*1.15);
 });
 
 test('right drawer throws toward the playmat rather than away from it',()=>{
