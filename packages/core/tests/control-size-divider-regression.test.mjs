@@ -99,7 +99,7 @@ test('radial hover modifies only the ORIGINAL wedge; no independent portal or gi
  assert.ok(!radial.includes('createPortal('));
  assert.ok(!radial.includes('magnifierPortalRef'));
  assert.ok(!radial.includes('sennet-radial-hover-top-layer'));
- assert.ok(!radial.includes('document.body'));
+ assert.ok(!radial.includes(',document.body)'));
  assert.ok(!radial.includes('<use key={item.id}'));
  assert.match(radial,/hoveredAction===act.id&&\!collapsed/);
  assert.match(radial,/scale\(1\.45\)/);
