@@ -60,3 +60,18 @@ test('action radial cannot be moved separately from the physical playmat',()=>{
   assert.equal(p.y,455);
   assert.equal(p.size,186);
 });
+
+test('all tabletop controls use CSS pixel scale, never physical framebuffer resolution',()=>{
+  assert.match(table,/rect\.width\/app\.screen\.width/);
+  assert.match(table,/rect\.height\/app\.screen\.height/);
+  assert.ok(!table.includes('rect.width/app.renderer.width'));
+  assert.ok(!table.includes('rect.height/app.renderer.height'));
+  assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:16px!important;height:16px!important/s);
+});
+
+test('mat controls only change inverse scale; world anchor and merge positions remain immutable',()=>{
+  const fragment=table.split('const control=eyeHitTarget.current;')[1].split('const hand=tcgMatCells')[0];
+  assert.match(fragment,/group\.scale\.set\(inverse\)/);
+  assert.match(fragment,/merge\.scale\.set\(inverse\)/);
+  assert.ok(!/\.position\.set|\.position\.x\s*=|\.position\.y\s*=/.test(fragment));
+});
