@@ -98,9 +98,9 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   // Foil-inlaid cover has exactly the same vanishing geometry as the model.
   const inset=Math.max(6,width*.095);
   const border=plane(-halfW+inset,-halfH+inset*.68,halfW-inset*.75,halfH-inset*.72,thickness+1.15);
-  outline(body,border,c.foil,.95,.90);
+  outline(body,border,c.foil,1,1.25);
   const border2=plane(-halfW+inset+3,-halfH+inset*.68+4,halfW-inset*.75-3,halfH-inset*.72-4,thickness+1.2);
-  outline(body,border2,c.foil,.37,.48);
+  outline(body,border2,c.foil,.75,.8);
   // Embossed clasp and filigree live on the modeled cover plane.
   const center=project(spineWidth*.25,-height*.055,thickness+1.55);
   const emblemRadius=Math.max(7,width*.135);
@@ -131,8 +131,8 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   book.addChild(mark);
   const captionPoint=project(spineWidth*.28,height*.29,thickness+2);
   const caption=new Text({text:'SENNET',resolution:2,
-    style:{fontFamily:'Georgia, serif',fontSize:Math.max(6.5,width*.115),
-      fontWeight:'bold',letterSpacing:1.1,fill:c.foil}});
+    style:{fontFamily:'Georgia, serif',fontSize:Math.max(8,width*.15),
+      fontWeight:'bold',letterSpacing:1.4,fill:0xffe7a5}});
   caption.anchor.set(.5);caption.position.set(captionPoint.x,captionPoint.y);
   caption.rotation=.025;
   book.addChild(caption);
