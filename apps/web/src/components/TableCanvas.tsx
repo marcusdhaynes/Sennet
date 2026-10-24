@@ -1693,7 +1693,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const visuals=useRef(new Map<string,Container>());
   const tokenDrag=useRef<{pointerId:number;value:number;sign:1|-1;
     coinText?:string;startX:number;startY:number;mat:Container;ghost:Container;
-    ghostEl:HTMLDivElement;color:string}|null>(null);
+    ghostEl:HTMLDivElement;color:string;onCenterTap?:()=>void}|null>(null);
   const commitCoinEdit=()=>{
     if(validCoinText(coinDraft)){
       if(coinEditing?.id)onCoinModify(coinEditing.id,{coinText:coinDraft});
@@ -2424,29 +2424,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(!hoveredCoin||(piece&&hoveredCoin.piece!==piece))return;
       hoveredCoin.preview.remove();hoveredCoin=null;
     };
-    const coinOverlapsStackCounter=(piece:Container)=>{
-      if(!session.current||!stackBadges.length)return false;
-      const canvas=session.current.app.canvas;
-      const rect=canvas.getBoundingClientRect();
-      const at=piece.toGlobal(new Point(0,0));
-      const cx=rect.left+at.x*rect.width/session.current.app.screen.width;
-      const cy=rect.top+at.y*rect.height/session.current.app.screen.height;
-      return stackBadges.some(({button})=>{
-        if(!button.isConnected)return false;
-        const area=button.getBoundingClientRect();
-        const bx=area.left+area.width/2,by=area.top+area.height/2;
-        return Math.hypot(cx-bx,cy-by)<Math.max(14,area.width/2+10);
-      });
-    };
     const setCoinHover=(piece:Container,el:HTMLDivElement)=>{
       // A real coin may be placed ON a stack-count marker. When the
       // marker takes pointer focus Pixi can retain coin-hover state,
       // leaving a giant 3x coin over the tiny count control. Never let
       // the coin magnifier obscure the stack's clickable counter.
-      if(coinOverlapsStackCounter(piece)){
-        clearCoinHover();
-        return;
-      }
       if(hoveredCoin?.piece===piece)return;
       clearCoinHover();
       const preview=el.cloneNode(true) as HTMLDivElement;
@@ -2635,11 +2617,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           if(e.button!==0)return;
           e.stopPropagation();
           controlPointer.current=e.pointerId;
-          const sign=sideAt(e.global);
-          if(sign===0){
-            // Open immediately from the coin center: a bubbling window
-            // pointerup was losing clicks on the right drawer source.
-            // Upper/lower rims still initiate the existing coin drag.
+          const region=sideAt(e.global);
+          const sign:1|-1=region===0?1:region;
+          // One complete draggable hit target. The feature only activates
+          // after a stationary center RELEASE, never on pointerdown.
+          const onCenterTap=region===0?()=>{
             const projected=source.toGlobal(new Point(0,0));
             const rect=app.canvas.getBoundingClientRect();
             const x=projected.x*rect.width/app.renderer.width;
@@ -2649,20 +2631,18 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               setCoinDraft(customCoinText);
               setCoinEditing({x,y});
             }else{
-              setCoinEditing(null);
-              setCoinColorsOpen(false);
+              setCoinEditing(null);setCoinColorsOpen(false);
               setCoinMenu(previous=>previous?.type==='source'&&previous.index===index
                 ?null:{type:'source',index,x,y});
             }
-            return;
-          }
+          }:undefined;
           const ghost=makeCoin(isEditable?faces[index]:value,coinAppearance,false,sign,color,isEditable);
           ghost.visible=false;ghost.alpha=.85;mat.addChild(ghost);
           paintLayers.objects.attach(ghost);
           const ghostEl=showCoinAboveArtwork(ghost,isEditable?faces[index]:value,sign,false,color,isEditable);
           tokenDrag.current={pointerId:e.pointerId,value,sign,
             ...(isEditable?{coinText:faces[index]}:{}),
-            startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl,color};
+            startX:e.clientX,startY:e.clientY,mat,ghost,ghostEl,color,onCenterTap};
         });
       });
     }
@@ -3325,6 +3305,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       controlPointer.current=null;
       if(!commit||!current||!at)return;
       if(traveled<9){
+        if(d.onCenterTap){d.onCenterTap();return;}
         // A stationary click only acts when cards have been selected.
         const ids=[...selectedSet.current].filter(id=>{
           const card=currentState.current.objects.find(o=>o.id===id);
