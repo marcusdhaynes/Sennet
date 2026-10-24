@@ -65,7 +65,7 @@ async function loadRoom(room:string,kind:GameKind,actor:string) {
   const cached=rooms.get(room);if(cached)return cached;
   const pending=loadingRooms.get(room);if(pending)return pending;
   const task=(async():Promise<RoomEntry>=>{
-  let state=createGame(kind,room),history:EventRecord[]=[],owner=actor,identities:Record<string,string>={};
+  let state=createGame(kind,room,false),history:EventRecord[]=[],owner=actor,identities:Record<string,string>={};
   try {
     const stored=JSON.parse(await readFile(join(DATA_DIR,`${room}.json`),'utf8'));
     if(stored?.state?.version===1 && Array.isArray(stored.history)){
