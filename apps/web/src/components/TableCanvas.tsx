@@ -1429,6 +1429,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const mount=useRef<HTMLDivElement>(null);
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
   const play00ToolbarRef=useRef<HTMLDivElement|null>(null);
+  const handPlayModeRef=useRef(handPlayMode);handPlayModeRef.current=handPlayMode;
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const eyeHitTarget=useRef<Container|null>(null);
@@ -1944,7 +1945,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             screen.y,matScreenWidth/TCG_MAT_WIDTH);
           const matUpperLeft=tcgMatWorld(-TCG_MAT_WIDTH/2+8,-TCG_MAT_HEIGHT/2+13,seatRef.current);
           const upperLeft=parent.toGlobal(new Point(matUpperLeft.x,matUpperLeft.y));
-          const display=handPlayMode?{
+          const display=handPlayModeRef.current?{
             ...normalDisplay,left:upperLeft.x,y:upperLeft.y,
             width:Math.max(125,Math.min(matScreenWidth*.38,240)),
             heightScale:Math.max(.65,Math.min(1,matScreenWidth/TCG_MAT_WIDTH)),
@@ -2144,6 +2145,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       selectedSet.current=new Set(still);
       queueMicrotask(()=>setSelectedIds(still));
     }
+    const skipMassAnimations=/^\\d+ selected cards|^Moved stack of/.test(state.message??'');
     const staticEntries:StaticDiePlacement[]=[];
     for(const id of [...dieShownAt.current.keys()]){
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
@@ -2607,7 +2609,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
       const old=oldLocations.current.get(obj.id);
       // A physically settled die must remain EXACTLY where it landed.
-      if(!obj.throwDice&&old && (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
+      if(!skipMassAnimations&&!obj.throwDice&&old &&
+         (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=220;
         const animate=(now:number)=>{
           if(piece.destroyed)return;
@@ -3283,8 +3286,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // Fit to the screen, including the view controls on PLAY 03.
       // Both actual wooden side drawers (plus slim pull handles) must fit.
       const completeMatWidth=TCG_MAT_WIDTH+2*(TCG_MAT.cardWidth+18);
-      const widthFit=.94*w/completeMatWidth;
-      const heightFit=.91*h/(TCG_MAT_HEIGHT+148);
+      const widthFit=.98*w/completeMatWidth;
+      const heightFit=.98*h/(TCG_MAT_HEIGHT+148);
       const zoom=clampTableZoom(Math.min(widthFit,heightFit)/fit);
       const scale=fit*zoom;
       const panX=(BOARD_CENTER-localX)*scale,panY=(BOARD_CENTER-localY)*scale;
