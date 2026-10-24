@@ -129,9 +129,10 @@ export function createStaticDice3D(
     mesh:THREE.Group|null;from:THREE.Group|null;
   }|null=null;
   const releaseHoverMesh=()=>{
-    if(!hoverStage?.mesh)return;
+    if(!hoverStage)return;
     const stage=hoverStage;
     const mesh=stage.mesh;
+    if(!mesh)return;
     stage.scene.remove(mesh);
     mesh.traverse(obj=>{
       if(obj instanceof THREE.Mesh||obj instanceof THREE.LineSegments){
