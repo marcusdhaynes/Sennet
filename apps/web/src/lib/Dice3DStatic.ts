@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import {installDiceLighting} from './Dice3DLighting.ts';
 import type {Container} from 'pixi.js';
 import {createDie3DModel,radiusFor} from './Dice3DGeometry';
-import {diceToCssTransform,DICE_SOURCE_RACK_SCALE} from './diceCoordinates';
+import {diceToCssTransform,DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET} from './diceCoordinates';
 import type {DiceThemeId} from './diceThemes';
 import {looseDieOpacity} from './diceCoordinates';
 import {TCG_MAT_WIDTH} from '@sennet/core';
@@ -21,6 +21,8 @@ export interface StaticDiePlacement {
   quantity?:number;
   result?:string;
   source?:boolean;
+  /** Engraved drawer caption rendered in the same Three layer as its source. */
+  caption?:string;
   /** Sources live behind the playmat when their drawer is retracted. */
   drawerClosed?:boolean;
   shownAt?:number;
@@ -35,6 +37,7 @@ interface DieVisual {
   shadow:THREE.Mesh;
   revealPlane?:THREE.Plane;
   result?:HTMLElement;
+  caption?:THREE.Sprite;
   hidden:{piece:Container;visible:boolean}[];
 }
 export interface StaticDice3DRenderer {
@@ -74,6 +77,41 @@ export function createStaticDice3D(
     ctx.fillStyle=gradient;ctx.fillRect(0,0,64,64);
   }
   const shadowTexture=new THREE.CanvasTexture(shadowCanvas);
+  // Captions belong to the very same WebGL scene, clip plane and camera as
+  // their dice. No independently sorted Pixi text can float above a closed
+  // drawer or lag while the drawer slides.
+  const makeCaption=(value:string)=>{
+    const text=document.createElement('canvas');
+    text.width=192;text.height=72;
+    const ctx=text.getContext('2d');
+    if(ctx){
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='800 39px Inter,system-ui,sans-serif';
+      ctx.shadowColor='rgba(0,0,0,.9)';
+      ctx.shadowBlur=8;ctx.shadowOffsetY=4;
+      ctx.lineWidth=8;ctx.lineJoin='round';
+      ctx.strokeStyle='#0d150f';
+      ctx.strokeText(value,96,34);
+      ctx.fillStyle='#ffedbe';
+      ctx.fillText(value,96,34);
+    }
+    const texture=new THREE.CanvasTexture(text);
+    texture.colorSpace=THREE.SRGBColorSpace;
+    const material=new THREE.SpriteMaterial({
+      map:texture,transparent:true,depthTest:false,depthWrite:false,
+      toneMapped:false
+    });
+    const sprite=new THREE.Sprite(material);
+    sprite.renderOrder=12;
+    scene.add(sprite);
+    return sprite;
+  };
+  const disposeCaption=(sprite:THREE.Sprite|undefined)=>{
+    if(!sprite)return;
+    scene.remove(sprite);
+    const material=sprite.material as THREE.SpriteMaterial;
+    material.map?.dispose();material.dispose();
+  };
   const visuals:DieVisual[]=[];
   let entries:StaticDiePlacement[]=[];
   let stopped=false,lastFrame=0,w=0,h=0;
@@ -100,6 +138,7 @@ export function createStaticDice3D(
   const clear=()=>{
     for(const visual of visuals){
       scene.remove(visual.group,visual.shadow);
+      disposeCaption(visual.caption);
       disposeGroup(visual.group);
       visual.shadow.geometry.dispose();
       (visual.shadow.material as THREE.Material).dispose();
@@ -126,13 +165,14 @@ export function createStaticDice3D(
         for(const item of old.hidden){
           if(!item.piece.destroyed)item.piece.visible=item.visible;
         }
-        const children=e.source?e.piece.children.slice(0,1):e.piece.children;
+        const children=e.source?e.piece.children.slice(0,2):e.piece.children;
         visual.hidden=children.map(piece=>({piece:piece as Container,visible:piece.visible}));
         visual.piece=e.piece;
         for(const item of visual.hidden)item.piece.visible=false;
       }else{
         if(old){
           scene.remove(old.group,old.shadow);
+          disposeCaption(old.caption);
           disposeGroup(old.group);
           old.shadow.geometry.dispose();
           (old.shadow.material as THREE.Material).dispose();
@@ -165,6 +205,12 @@ export function createStaticDice3D(
           }
         });
         (visual.shadow.material as THREE.Material).clippingPlanes=[plane];
+        if(e.caption&&!visual.caption)visual.caption=makeCaption(e.caption);
+        if(visual.caption){
+          (visual.caption.material as THREE.SpriteMaterial).clippingPlanes=[plane];
+        }
+      }else if(visual.caption){
+        disposeCaption(visual.caption);visual.caption=undefined;
       }
       const q=e.quaternion??[0,0,0,1];
       visual.group.quaternion.set(...q);
@@ -185,6 +231,7 @@ export function createStaticDice3D(
     }
     for(const orphan of previous.values()){
       scene.remove(orphan.group,orphan.shadow);
+      disposeCaption(orphan.caption);
       disposeGroup(orphan.group);
       orphan.shadow.geometry.dispose();
       (orphan.shadow.material as THREE.Material).dispose();
@@ -230,6 +277,7 @@ export function createStaticDice3D(
       }
       if(!entry||!visible||entry.drawerClosed){
         visual.group.visible=false;visual.shadow.visible=false;
+        if(visual.caption)visual.caption.visible=false;
         if(visual.result)visual.result.style.display='none';
         continue;
       }
@@ -262,9 +310,17 @@ export function createStaticDice3D(
       // the final Cannon frame to prevent the last-frame vertical jump.
       visual.group.position.set(x,h-y,(entry.altitude??radiusFor(entry.sides))*sf);
       visual.group.scale.setScalar(sf);
+      if(visual.caption){
+        const captionAt=visual.piece.toGlobal({x:0,y:DICE_RACK_LABEL_OFFSET});
+        visual.caption.position.set(captionAt.x*xScale,h-captionAt.y*yScale,1.2);
+        // No hover zoom: the caption stays on its original drawer baseline.
+        visual.caption.scale.set(42*scale,15*scale,1);
+        visual.caption.visible=true;
+      }
       const opacity=entry.source?1:
         looseDieOpacity(Date.now()-(entry.shownAt??Date.now()),entry.fadeAfterMs??0);
       visual.group.visible=opacity>0;
+      if(visual.caption)visual.caption.visible=opacity>0;
       // Unlike hiding the whole canvas, material alpha fades only the
       // actual free die and preserves other dice and wooden drawer contents.
       if(opacity>0)visual.group.traverse(object=>{
