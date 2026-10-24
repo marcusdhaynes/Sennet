@@ -22,12 +22,6 @@ function sector(inside:number,outside:number,a:number,b:number){
  return ['M',start.x,start.y,'A',outside,outside,0,large,1,end.x,end.y,
   'L',innerEnd.x,innerEnd.y,'A',inside,inside,0,large,0,innerStart.x,innerStart.y,'Z'].join(' ');
 }
-function multiline(label:string){
- if(label==='Original')return ['Original'];
- if(label==='−50%'||label==='+50%')return [label];
- if(label==='Lock / Unlock')return ['Lock /','Unlock'];
- return [label];
-}
 export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,half=false,tapLabel='Tap',onMoveDock,onExpandedChange}:Props){
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
  const [category,setCategory]=useState<number|null>(null);
