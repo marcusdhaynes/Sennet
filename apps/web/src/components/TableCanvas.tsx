@@ -1490,6 +1490,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(viewRef.current.kind==='self')requestAnimationFrame(()=>focusMyMat.current());
     }
   },[handHoldView]);
+  const drawControlRef=useRef<Container|null>(null);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   // Keep the DOM node attached across camera-driven React renders. An inline
@@ -2032,6 +2033,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           if(button.destroyed)continue;
           fix(button,34);
         }
+        if(drawControlRef.current&&!drawControlRef.current.destroyed)
+          fix(drawControlRef.current,VIEW_BUTTON_RADIUS*2);
       };
       syncFixedControls.current=normalizeFixedControls;
       // This is registered BEFORE scene composition/rendering. Controls
@@ -2236,6 +2239,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     diceSources.current.clear();diceBadges.current.clear();diceTrayMat.current=null;
     drawerGroups.current.clear();drawerTabs.current.clear();
     eyeHitTarget.current=null;castleHitTarget.current=null;
+    drawControlRef.current=null;
     mergeHitTargets.current=[];
     visuals.current.clear();
     snapHighlight.current=null;
@@ -2847,6 +2851,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
          (obj.zone!=='DECK'||deckTop.get(pileKey(obj))?.id===obj.id)){
         const group=stacks.get(stackKey(obj))??[];
         const button=createEyeStyleCounter(count,playmat.sideBoxStyle??'walnut',true,stackSelected);
+        // The same permanent reference-pixel diameter as table buttons.
+        // Only position follows the camera; badge size never does.
+        button.style.setProperty('width',(controlReferencePixels.current??16)+'px','important');
+        button.style.setProperty('height',(controlReferencePixels.current??16)+'px','important');
+        button.style.opacity=String(mergeOpacity);
+        button.addEventListener('pointerenter',()=>{button.style.opacity=String(Math.max(.68,mergeOpacity));});
+        button.addEventListener('pointerleave',()=>{button.style.opacity=String(mergeOpacity);});
         button.addEventListener('pointerenter',()=>clearCoinHover());
         button.addEventListener('pointermove',()=>clearCoinHover());
         button.addEventListener('pointerdown',e=>{
@@ -2867,6 +2878,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
       if((obj.counters??0)>0){
         const button=createEyeStyleCounter(obj.counters!,playmat.sideBoxStyle??'walnut',false);
+        // The same permanent reference-pixel diameter as table buttons.
+        // Only position follows the camera; badge size never does.
+        button.style.setProperty('width',(controlReferencePixels.current??16)+'px','important');
+        button.style.setProperty('height',(controlReferencePixels.current??16)+'px','important');
+        button.style.opacity=String(mergeOpacity);
+        button.addEventListener('pointerenter',()=>{button.style.opacity=String(Math.max(.68,mergeOpacity));});
+        button.addEventListener('pointerleave',()=>{button.style.opacity=String(mergeOpacity);});
         mount.current?.appendChild(button);
         stackBadges.push({piece,button,size:obj.counters!,offset:new Point(27,-37)});
       }
@@ -3087,12 +3105,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const cell=tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!;
       const center=tcgMatLocal(cell.x,cell.y,seat);
       // Sit just above the deck corner so its top card cannot cover the arrow.
-      const point=tcgMatWorld(center.x+cell.width/2,center.y-cell.height/2-VIEW_BUTTON_RADIUS,seat);
+      // Pin the draw control to the actual top-right corner of the deck
+      // CARD, not the much larger grid cell or an extra radius above it.
+      const point=tcgMatWorld(center.x+TCG_MAT.cardWidth/2,
+        center.y-TCG_MAT.cardHeight/2,seat);
       const draw=new Container();draw.position.set(point.x,point.y);draw.rotation=cell.angle;
       draw.label='draw-control';
+      drawControlRef.current=draw;
+      draw.alpha=mergeOpacity;
       draw.eventMode='static';draw.cursor='pointer';draw.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       draw.addChild(woodenControl(VIEW_BUTTON_RADIUS,playmat.sideBoxStyle??'walnut'));
       draw.addChild(label('↓',26,0xf4e1b9,'bold'));
+      draw.on('pointerover',()=>{draw.alpha=Math.max(.68,mergeOpacity);});
+      draw.on('pointerout',()=>{draw.alpha=mergeOpacity;});
       draw.on('pointerdown',e=>{e.stopPropagation();controlPointer.current=e.pointerId;});
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
