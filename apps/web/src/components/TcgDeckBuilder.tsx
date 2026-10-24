@@ -1,6 +1,6 @@
 import {useDeferredValue,useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {ArrowDownToLine,BarChart3,Check,Download,FileInput,Filter,Layers,Plus,RefreshCw,Save,Search,Settings2,Trash2,Upload,X} from 'lucide-react';
-import {configFor,detailCard,loadTcgCatalog,TCGS,type CatalogCard,type CatalogUpdate,type TcgId} from '../lib/tcgCatalog';
+import {bestCardImage,configFor,detailCard,loadTcgCatalog,TCGS,type CatalogCard,type CatalogUpdate,type TcgId} from '../lib/tcgCatalog';
 import {changeDeckEntry,deckChecks,deckQuantity,deckStats,newDeck,patchDeckEntry,readDecks,saveDecks,toTextDeck,type SavedDeck} from '../lib/deckWorkspace';
 import {parseDeckImport,detectDeckGame,matchDeckImport,type ImportData,type ImportMatch,type Detection} from '../lib/universalDeckImport';
 type Props={onClose:()=>void;onLoadOnTable:(deck:SavedDeck)=>void;initialGame?:TcgId;
@@ -289,7 +289,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame=TCGS[0
     <div className={'tcgb-results tcgb-card-gallery'+(compact?' dense':'')} style={{'--cards-per-row':cardsPerRow} as React.CSSProperties}>
      {matches.slice((page-1)*PAGE,page*PAGE).map(c=><div className="tcgb-result" key={c.id}>
       <button className="tcgb-thumb" onClick={()=>chooseCard(c)} title="Card details">
-       {showImages&&c.image?<img src={c.image} loading="lazy" alt="" />:<span>✦</span>}</button>
+       {showImages&&c.image?<img src={bestCardImage(c.image)} loading="lazy" alt="" />:<span>✦</span>}</button>
       <button className="tcgb-result-text" onClick={()=>chooseCard(c)}>
        <strong>{c.name}</strong><small>{[c.set,c.number].filter(Boolean).join(' · ')}</small>
        <span>{[c.type,c.colors.join('/')].filter(Boolean).join(' · ')}</span>
@@ -449,7 +449,7 @@ export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame=TCGS[0
   {chosen&&!settingsOpen&&<div className="tcgb-preview-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setChosen(null);}}>
    <aside className="tcgb-preview"><header><b>{chosen.name}</b><button onClick={()=>setChosen(null)} aria-label="Close details"><X size={17}/></button></header>
     <div className="tcgb-preview-content">
-     {showImages&&chosen.image&&<img src={chosen.image} loading="lazy" alt={chosen.name}/>}
+     {showImages&&chosen.image&&<img src={bestCardImage(chosen.image)} loading="lazy" alt={chosen.name}/>}
      <div><small>{chosen.set} · {chosen.number}</small><p>{[chosen.type,chosen.colors.join('/'),chosen.rarity].filter(Boolean).join(' · ')}</p>
       {chosen.cost&&<p>Cost: {chosen.cost}</p>}
       {chosen.text&&<pre>{chosen.text}</pre>}
