@@ -619,21 +619,6 @@ function drawTcgMats(
       if(cell.column===0)text.rotation=-Math.PI/2;
       if(cell.column===2)text.rotation=Math.PI/2;
       surface.addChild(text);
-      if(cell.row===1&&cell.column===2){
-        // Match the two halves tested by tcgDropZone in local mat Y.
-        for(const bottom of [false,true]){
-          const chip=new Container();
-          chip.position.set(x+w/2,bottom?y+h-14:y+14);
-          const tint=bottom?0xffc97b:0x96f6d7;
-          chip.addChild(new Graphics()
-            .roundRect(-29,-9,58,18,6)
-            .fill({color:0x10241f,alpha:.92})
-            .stroke({color:tint,width:1.6,alpha:.95}));
-          const caption=label(bottom?'▼ BOTTOM':'▲ TOP',9,tint,'bold');
-          caption.eventMode='none';chip.addChild(caption);
-          chip.eventMode='none';surface.addChild(chip);
-        }
-      }
     }
     // No separate gold/yellow outer border beneath the mat: only the
     // central playing area keeps its colored guide lines.
@@ -3080,24 +3065,30 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
-          hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
-          hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
-            .fill({color:remove?0xff3b30:0xc7d8ac,alpha:.13})
-            .stroke({color:remove?0xff3b30:0xf6daa2,width:1.5,alpha:.75});
           const deckPocket=d.card?tcgDropZone(d.x,d.y,cell.seat):null;
-          if(deckPocket?.zone==='DECK'){
-            const bottom=deckPocket.deckBottom;
+          const deckDrop=deckPocket?.zone==='DECK';
+          hint.position.set(zone.x,zone.y);hint.rotation=zone.angle;
+          if(deckDrop){
+            // Show the target on the ACTUAL DECK CARD only while a card
+            // is being dragged over it. No always-on top/bottom labels.
+            const deckCell=tcgMatCells(cell.seat).find(c=>c.row===1&&c.column===2)!;
+            hint.position.set(deckCell.x,deckCell.y);hint.rotation=deckCell.angle;
+            const bottom=!!deckPocket?.deckBottom;
             const tint=bottom?0xffc16e:0x82ffcf;
-            const halfHeight=(zone.height-6)/2;
-            // Distinguish the destination visually: only the top OR
-            // bottom half is illuminated, not the whole deck pocket.
-            hint.roundRect(-zone.width/2+2,bottom?3:-halfHeight,
-              zone.width-4,halfHeight-2,5)
-              .fill({color:tint,alpha:.36})
-              .stroke({color:tint,width:3,alpha:1});
-            const marker=label(bottom?'▼ BOTTOM':'▲ TOP',10,tint,'bold');
-            marker.position.set(0,bottom?zone.height/4:-zone.height/4);
+            const width=TCG_MAT.cardWidth,height=TCG_MAT.cardHeight;
+            hint.roundRect(-width/2,-height/2,width,height,5)
+              .stroke({color:tint,width:1.5,alpha:.7});
+            hint.roundRect(-width/2+1,bottom?0:-height/2+1,
+              width-2,height/2-1,3)
+              .fill({color:tint,alpha:.38})
+              .stroke({color:tint,width:2.5,alpha:1});
+            const marker=label(bottom?'BOTTOM':'TOP',9,tint,'bold');
+            marker.position.set(0,bottom?height/4:-height/4);
             marker.eventMode='none';hint.addChild(marker);
+          }else{
+            hint.roundRect(-zone.width/2+3,-zone.height/2+3,zone.width-6,zone.height-6,5)
+              .fill({color:remove?0xff3b30:0xc7d8ac,alpha:.13})
+              .stroke({color:remove?0xff3b30:0xf6daa2,width:1.5,alpha:.75});
           }
           if(remove){
             const text=label('RELEASE TO REMOVE',7,0xff6b61,'bold');
