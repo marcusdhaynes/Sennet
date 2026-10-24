@@ -209,8 +209,14 @@ export function createStaticDice3D(
     mesh.position.set(0,0,(target.entry.altitude??radiusFor(target.entry.sides))*fittedScale);
     mesh.scale.setScalar(fittedScale);
     const element=topRenderer.domElement;
-    element.style.left=(rect.left+target.x-diameter/2)+'px';
-    element.style.top=(rect.top+target.y-diameter/2)+'px';
+    // Source geometry is rendered on THIS Three.js canvas. Use its own
+    // viewport rect rather than assuming the Pixi canvas shares identical
+    // CSS containment/letterboxing at deep play-area camera zoom.
+    const rendered=renderer.domElement.getBoundingClientRect();
+    const left=Number.isFinite(rendered.left)?rendered.left:rect.left;
+    const top=Number.isFinite(rendered.top)?rendered.top:rect.top;
+    element.style.left=(left+target.x-diameter/2)+'px';
+    element.style.top=(top+target.y-diameter/2)+'px';
     element.style.display='block';
     topRenderer.render(stage.scene,topCamera);
   };
