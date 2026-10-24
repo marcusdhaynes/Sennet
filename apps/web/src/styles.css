@@ -2790,11 +2790,13 @@ body>.reader-backdrop{
  overflow:visible!important;
 }
 
-/* Eye/Castle-matched walnut and brass stack control. Fixed CSS pixels:
-   zooming or panning the table changes its position, never its diameter. */
+/* Eye/Castle-matched walnut and brass stack control. The 34px base
+   is scaled in real time to precisely match the Eye button's projected
+   diameter at the current camera zoom (including Castle/mat scaling). */
 .sennet-stack-count{
  position:absolute;z-index:125;width:34px;height:34px;
  display:grid;place-items:center;transform:translate(-50%,-50%);
+ transform-origin:center center;will-change:transform;
  border:0;padding:0;border-radius:50%;cursor:pointer;touch-action:manipulation;
  background:
    radial-gradient(circle at 36% 27%,#bea37b 0 7%,transparent 25%),
