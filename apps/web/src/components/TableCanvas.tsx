@@ -679,7 +679,7 @@ function drawTcgMats(
       const index=centerMergeKey(seat,boundary);
       const merged=Boolean(state.centerMerges?.includes(index));
       const marker=new Container();
-      marker.label='locked-table-control';
+      marker.label='table-scale-control';
       const gapCenter=-TCG_MAT_HEIGHT/2+(boundary+1)*TCG_MAT.rowHeight+
         (boundary+.5)*TCG_MAT.gap;
       marker.position.set(0,gapCenter);
@@ -688,8 +688,7 @@ function drawTcgMats(
       marker.hitArea=new Circle(0,0,19);
       marker.cursor='default';
       marker.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',merged));
-      // Every seat's merge control must share the same screen-space size,
-      // including opponents whose mat is scaled down in Castle view.
+      // Merge artwork follows its owning mat, including Castle seat scaling.
       onMergeReady(marker);
       const sign=label(merged?'−':'+',29,0xf4e1b9,'bold');
       sign.eventMode='none';sign.position.set(0,-1);marker.addChild(sign);
@@ -771,20 +770,16 @@ function drawTcgMats(
     // Eye and Castle centers straddle the PLAY 03 top border,
     // symmetrically around the owning player's local mat center.
     if(seat===viewerSeat){
-      // One world-space anchor owns both controls. The wooden artwork
-      // is deliberately tiny (the former merge-button size), screen-
-      // fixed through the inverse mat transform in rescale().
+      // Eye and Castle inherit the table transform together, including spacing.
       const controls=new Container();
-      controls.label='locked-table-control';
+      controls.label='table-scale-control';
       const eyePosition=viewButtonPosition('eye');
       controls.position.set(0,eyePosition.y);
       mat.addChild(controls);
       const eye=new Container();
       eye.position.set(eyePosition.x,0);
       eye.eventMode='static';
-      // Initial hit region is updated to a constant minimum on-screen size
-      // after the seat transform/camera is applied. The wooden eye itself
-      // remains 32 units wide at every zoom.
+      // The artwork and hit region zoom naturally with the table.
       eye.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       onEyeReady(eye);
       eye.cursor='pointer';
@@ -905,7 +900,7 @@ function drawTcgMats(
       // It stays on the mat in every view, with the same 32-unit diameter
       // and 19-unit hit radius as Eye and Castle.
       const settings=new Container();
-      settings.label='locked-table-control';
+      settings.label='table-scale-control';
       const position=tcgSettingsButtonPosition();
       settings.position.set(position.x,position.y);
       settings.eventMode='static';
@@ -1988,6 +1983,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // No button x/y/rotation/pivot/anchor is ever changed.
         const fix=(node:Container,sourceDiameter:number)=>{
           if(node.destroyed||!node.parent)return;
+          // These four controls belong to the table, like the dice.
+          // Keep native artwork proportions and inherit the full camera transform.
+          if(node.label==='table-scale-control'){
+            node.scale.set(1);
+            return;
+          }
           const p=node.parent;
           const origin=p.toGlobal(new Point(0,0));
           const oneX=p.toGlobal(new Point(1,0));
@@ -1995,9 +1996,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const worldX=Math.hypot((oneX.x-origin.x)*sx,(oneX.y-origin.y)*sy);
           const worldY=Math.hypot((oneY.x-origin.x)*sx,(oneY.y-origin.y)*sy);
           if(!(worldX>0&&worldY>0))return;
-          // Only Eye/Castle, merges and Settings use the approved 28 CSS px.
-          // Other controls retain their existing session reference.
-          const desired=node.label==='locked-table-control'?28:referencePixels;
+          const desired=referencePixels;
           const factor=desired/sourceDiameter;
           const pxX=factor/worldX,pxY=factor/worldY;
           // Set absolute scales, never multiply an existing scale:
@@ -2007,8 +2006,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         };
         const eye=eyeHitTarget.current;
         if(eye&&!eye.destroyed&&eye.parent&&!eye.parent.destroyed){
-          // Eye and Castle share a single anchored group; its fixed
-          // outer circle and separation never depend on the camera.
+          // The shared group retains native scale for both buttons and spacing.
           fix(eye.parent,34);
           eye.scale.set(1);
           const castle=castleHitTarget.current;
