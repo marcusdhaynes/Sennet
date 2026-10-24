@@ -3340,7 +3340,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   },[actorId]);
 
   useEffect(()=>{
+    let lastSnapPreview='';
     const clearHighlight=()=>{
+      lastSnapPreview='';
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){hint.clear();hint.removeChildren().forEach(child=>child.destroy());}
     };
@@ -3408,7 +3410,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const hint=snapHighlight.current;
       if(hint&&!hint.destroyed){
         if(hint.parent!==parent)parent.addChild(hint);
-        hint.clear();hint.removeChildren().forEach(child=>child.destroy());
         const cardScale=currentState.current.objects.find(o=>o.id===d.id)?.scale??1;
         const dragged=currentState.current.objects.find(o=>o.id===d.id);
         const magnetic=dragged&&['card','deck','tile'].includes(dragged.kind);
@@ -3416,6 +3417,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           d.x,d.y,currentState.current.centerMerges,
           playmatRef.current.snapMerged,seatRef.current,cardScale,
           playmatRef.current.freePlacement,dragged?.rotation??0):null;
+        // Pointer position changes every event, but snap artwork only changes
+        // when the hovered cell or top/bottom drop target changes.
+        const pocket=cell&&d.card?tcgDropZone(d.x,d.y,cell.seat):null;
+        const signature=cell
+          ?[d.id,cell.seat,cell.row,cell.column,cell.slot,cell.x,cell.y,
+             pocket?.zone,pocket?.deckBottom,isTcgRemoveDrop(d.x,d.y,seatRef.current),cardScale].join('|')
+          :'';
+        if(signature!==lastSnapPreview){
+          lastSnapPreview=signature;
+          hint.clear();hint.removeChildren().forEach(child=>child.destroy());
         if(cell){
           const zone=tcgMatRegions(cell.seat,currentState.current.centerMerges).find(c=>c.row===cell.row&&c.column===cell.column)!;
           const remove=isTcgRemoveDrop(d.x,d.y,seatRef.current);
@@ -3459,6 +3470,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               .fill({color:0x83dfe7,alpha:.19})
               .stroke({color:0xbafaff,width:2,alpha:.96});
           }
+        }
         }
       }
     };
