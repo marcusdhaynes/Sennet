@@ -2789,3 +2789,44 @@ body>.reader-backdrop{
  pointer-events:none!important;
  overflow:visible!important;
 }
+
+/* Persistent stack count: stays over DOM card art, matching circular mat controls. */
+.sennet-stack-count{
+ position:absolute;z-index:125;width:25px;height:25px;display:grid;place-items:center;
+ transform:translate(-50%,-50%);border-radius:50%;cursor:pointer;pointer-events:auto;
+ background:radial-gradient(circle at 35% 25%,#52776c,#172e2c 72%);
+ border:2px solid #c9ad7d;color:#fff2cf;box-shadow:0 3px 10px #000b;
+ font:700 12px/1 'Inter',system-ui,sans-serif;padding:0;touch-action:manipulation;
+}
+.sennet-stack-count:hover,.sennet-stack-count:focus-visible{
+ background:#4c3a74;border-color:#e2c7ff;outline:2px solid #ad8bed;outline-offset:2px;
+}
+.sennet-stack-count.is-held{
+ border-color:#c793ff;background:#44305c;color:white;box-shadow:0 0 0 2px #ab75fb88;
+}
+.sennet-full-card-peek{
+ position:absolute;z-index:1005;inset:0;display:flex;justify-content:center;align-items:center;
+ background:#060b10d9;backdrop-filter:blur(6px);cursor:zoom-out;pointer-events:auto;
+}
+.sennet-full-card-peek img,.sennet-full-card-fallback{
+ display:block;width:auto;height:auto;max-width:90%;max-height:90%;object-fit:contain;
+ border-radius:9px;box-shadow:0 18px 55px #000d;
+}
+.sennet-full-card-fallback{aspect-ratio:62/88;width:min(50vw,57vh);padding:22px;
+ display:grid;place-items:center;background:#203935;border:4px solid #d1b781;
+ color:#fff3df;font:700 clamp(18px,3vw,42px)/1.2 'Inter',system-ui;text-align:center}
+.sennet-play00-actions{
+ position:absolute;z-index:110;left:0;top:0;display:flex;align-items:center;gap:4px;
+ transform:translate3d(var(--play00-x,0),var(--play00-y,0),0);
+ pointer-events:auto;max-width:85vw;overflow:visible;
+}
+.sennet-play00-actions button{
+ display:grid;place-items:center;flex:none;width:30px;height:30px;
+ padding:0;border:2px solid #ad88cf;border-radius:50%;cursor:pointer;
+ background:radial-gradient(circle at 30% 20%,#694aa0,#2c204e 72%);
+ color:#fff;box-shadow:0 2px 5px #000a;font:700 13px/1 system-ui;
+}
+.sennet-play00-actions button:hover,.sennet-play00-actions button:focus-visible{
+ background:#67409b;outline:2px solid #c8a5fa;outline-offset:1px;
+}
+.sennet-play00-actions button:disabled{opacity:.48;cursor:default}
