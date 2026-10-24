@@ -13,7 +13,7 @@ test('merge, Eye, Castle, stack controls use the same physical 34px diameter',()
   assert.equal(2*(VIEW_BUTTON_RADIUS+1),EYE_CONTROL_DIAMETER_PX);
   assert.match(table,/woodenControl\(VIEW_BUTTON_RADIUS,seatPlaymat\.sideBoxStyle\?\?'walnut',merged\)/);
   assert.match(table,/createEyeStyleCounter\(count,playmat\.sideBoxStyle/);
-  assert.match(table,/width:34px!important;height:34px!important/);
+  assert.match(styles,/width:34px!important;height:34px!important/);
   assert.equal(viewButtonPosition('eye').x,-22);
   assert.equal(viewButtonPosition('castle').x,22);
 });
