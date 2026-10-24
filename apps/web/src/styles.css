@@ -1072,14 +1072,19 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel.is-half.is-collapsed{clip-path:circle(18% at 50% 0%);}
 
 
-/* Full-art card gallery across desktop and mobile, never compressed into slivers. */
+/* Full-art gallery: wrapped FLEX ROWS instead of CSS Grid implicit rows.
+   With dozens of cards in a height-constrained scroll container, auto grid
+   tracks shrink to a few pixels when cards have min-height:0 and their img
+   is absolutely positioned. That caused every following card to cover most
+   of the one above. Flex wrap sizes each row to the ACTUAL tallest card. */
 .tcg-builder .tcgb-results.tcgb-card-gallery,
 .tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery,
 .tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery.dense{
- display:grid!important;
- grid-template-columns:repeat(var(--cards-per-row,2),minmax(0,1fr))!important;
- align-content:start!important;
- align-items:start!important;
+ display:flex!important;
+ flex-direction:row!important;
+ flex-wrap:wrap!important;
+ align-content:flex-start!important;
+ align-items:flex-start!important;
  gap:12px!important;
  padding:12px!important;
  overflow-y:auto!important;
@@ -1088,10 +1093,19 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tcg-builder .tcgb-card-gallery .tcgb-result,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery .tcgb-result,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery.dense .tcgb-result{
- display:flex!important;flex-direction:column!important;
- height:auto!important;min-height:0!important;
- padding:8px!important;gap:7px!important;overflow:visible!important;
- border:1px solid #536d58;border-radius:12px;
+ display:flex!important;
+ flex-direction:column!important;
+ flex:0 0 calc((100% - (var(--cards-per-row,2) - 1) * 12px) / var(--cards-per-row,2))!important;
+ width:calc((100% - (var(--cards-per-row,2) - 1) * 12px) / var(--cards-per-row,2))!important;
+ min-width:0!important;
+ height:auto!important;
+ min-height:max-content!important;
+ box-sizing:border-box!important;
+ padding:8px!important;
+ gap:7px!important;
+ overflow:hidden!important;
+ border:1px solid #536d58;
+ border-radius:12px;
  background:#20392d;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-thumb,
@@ -1109,6 +1123,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tcg-builder .tcgb-card-gallery .tcgb-thumb{
  position:relative!important;
  box-sizing:border-box!important;
+ display:block!important;
+ flex:0 0 auto!important;
+ aspect-ratio:5 / 7!important;
+ height:auto!important;
+ min-height:auto!important;
  isolation:isolate;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-thumb img{
