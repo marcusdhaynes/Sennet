@@ -3,22 +3,24 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {VIEW_BUTTON_RADIUS,viewButtonPosition,TCG_MAT_HEIGHT,TCG_MAT} from '../src/index.ts';
 import {
-  EYE_CONTROL_DIAMETER_PX,fixedMatControlScale,fitMatAttachedRadial
+  EYE_CONTROL_DIAMETER_PX,WOODEN_CONTROL_WORLD_DIAMETER,fixedMatControlScale,fitMatAttachedRadial
 } from '../../../apps/web/src/lib/actionRadialFit.ts';
 
 const table=readFileSync(new URL('../../../apps/web/src/components/TableCanvas.tsx',import.meta.url),'utf8');
 const styles=readFileSync(new URL('../../../apps/web/src/styles.css',import.meta.url),'utf8');
 
-test('merge, Eye, Castle, stack controls use the same physical 34px diameter',()=>{
-  assert.equal(2*(VIEW_BUTTON_RADIUS+1),EYE_CONTROL_DIAMETER_PX);
+test('merge, Eye, Castle, stack controls all use the same SMALL 16px diameter',()=>{
+  assert.equal(2*(VIEW_BUTTON_RADIUS+1),WOODEN_CONTROL_WORLD_DIAMETER);
+  assert.equal(EYE_CONTROL_DIAMETER_PX,16);
   assert.match(table,/woodenControl\(VIEW_BUTTON_RADIUS,seatPlaymat\.sideBoxStyle\?\?'walnut',merged\)/);
   assert.match(table,/createEyeStyleCounter\(count,playmat\.sideBoxStyle/);
-  assert.match(styles,/width:34px!important;height:34px!important/);
+  assert.match(styles,/width:16px!important;height:16px!important/);
+  assert.ok(!styles.includes('width:34px!important;height:34px!important'));
   assert.equal(viewButtonPosition('eye').x,-22);
   assert.equal(viewButtonPosition('castle').x,22);
 });
 
-test('Eye and Castle have one mat-attached anchor and constant 44px visual gap',()=>{
+test('Eye and Castle share a fixed playmat anchor, their size and separation never change',()=>{
   assert.match(table,/controls\.position\.set\(0,eyePosition\.y\)/);
   assert.match(table,/controls\.addChild\(eye\)/);
   assert.match(table,/controls\.addChild\(castle\)/);
@@ -27,8 +29,8 @@ test('Eye and Castle have one mat-attached anchor and constant 44px visual gap',
   assert.ok(!table.includes('castle.position.x=halfSpacing'));
   for(const zoom of [.035,.25,.5,1,1.5,4,12]){
     const scale=fixedMatControlScale(zoom);
-    assert.ok(Math.abs(zoom*scale*EYE_CONTROL_DIAMETER_PX-34)<1e-8);
-    assert.ok(Math.abs(zoom*scale*44-44)<1e-8);
+    assert.ok(Math.abs(zoom*scale*WOODEN_CONTROL_WORLD_DIAMETER-16)<1e-8);
+    assert.ok(Math.abs(zoom*scale*44-44*16/34)<1e-8);
   }
 });
 
