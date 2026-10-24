@@ -13,7 +13,7 @@ const button=(x:number,y:number,r:number,caption:string,callback:()=>void,color=
  root.addChild(disk);root.addChild(label(caption,Math.min(9,r*.91)));return root;
 };
 /** Styled, functional electronic life counter, with seven game selectors. */
-export function buildLifeCounter():Container{
+export function buildLifeCounter(seat=0):Container{
  const root=new Container();root.label='life-counter-device';
  const shadow=new Graphics().ellipse(4,7,48,51).fill({color:0x02040a,alpha:.35});
  const body=new Graphics().circle(-4,1,48).fill(0x080c13)
@@ -24,9 +24,16 @@ export function buildLifeCounter():Container{
  root.addChild(shadow,body);
  const turn=label('TURN 1',6);turn.y=-29;root.addChild(turn);
  const player=label('Player 1',7);player.y=-13;root.addChild(player);
- let total=40,round=1,active=0;
- const amount=label('40',23,0xf3ffff);amount.y=6;root.addChild(amount);
- const redraw=()=>{amount.text=String(total);turn.text='TURN '+round;};
+ const storageKey='sennet.life-counter.v1.'+seat;
+ let saved:{total:number;round:number;active:number}|null=null;
+ try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');}catch{/* private session */}
+ let total=Number.isFinite(saved?.total)?saved!.total:40;
+ let round=Number.isFinite(saved?.round)?saved!.round:1;
+ let active=Number.isInteger(saved?.active)?Math.max(0,Math.min(TCGS.length-1,saved!.active)):0;
+ const persist=()=>{try{localStorage.setItem(storageKey,JSON.stringify({total,round,active}));}catch{/* local-only */}};
+ const amount=label(String(total),23,0xf3ffff);amount.y=6;root.addChild(amount);
+ const redraw=()=>{amount.text=String(total);turn.text='TURN '+round;persist();};
+ turn.text='TURN '+round;
  root.addChild(button(-18,9,6,'−',()=>{total--;redraw();}));
  root.addChild(button(18,9,6,'+',()=>{total++;redraw();}));
  const next=button(0,30,10,'NEXT',()=>{round++;redraw();},0x395365);root.addChild(next);
@@ -35,10 +42,10 @@ export function buildLifeCounter():Container{
   const angle=(i*360/TCGS.length-90)*Math.PI/180;
   const x=Math.cos(angle)*30,y=Math.sin(angle)*30;
   // Keep the status text legible by placing icons slightly outside display.
-  const p=button(x,y,4.5,glyphs[i],()=>{active=i;gameName.text=game.name.slice(0,12);});
+  const p=button(x,y,4.5,glyphs[i],()=>{active=i;gameName.text=game.name.slice(0,12);persist();});
   p.alpha=i===active?1:.82;root.addChild(p);
  });
- const gameName=label(TCGS[0].name,4.3,0x65c9e4);gameName.y=20;root.addChild(gameName);
+ const gameName=label(TCGS[active].name.slice(0,12),4.3,0x65c9e4);gameName.y=20;root.addChild(gameName);
  // A contained external silhouette gives the housing depth above the drawer.
  root.eventMode='passive';
  return root;
