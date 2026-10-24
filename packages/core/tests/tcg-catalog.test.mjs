@@ -58,6 +58,12 @@ test('Provider adapters retain real card IDs, sets, art, colors, and specialized
 });
 test('High-resolution TCG imagery is preferred for existing source card links',async()=>{
  const {bestCardImage}=await import('../../../apps/web/src/lib/tcgCatalog.ts');
+ assert.equal(bestCardImage('https://cards.lorcast.io/card/digital/small/crd_mother_gothel.avif?123'),
+  'https://cards.lorcast.io/card/digital/large/crd_mother_gothel.avif?123');
+ assert.equal(bestCardImage('https://cards.lorcast.io/card/digital/normal/crd_mother_gothel.avif?123'),
+  'https://cards.lorcast.io/card/digital/large/crd_mother_gothel.avif?123');
+ assert.equal(bestCardImage('https://cards.lorcast.io/card/digital/large/crd_mother_gothel.avif?123'),
+  'https://cards.lorcast.io/card/digital/large/crd_mother_gothel.avif?123');
  assert.equal(bestCardImage('https://cards.scryfall.io/small/front/a/b/abc.jpg?123'),
   'https://cards.scryfall.io/png/front/a/b/abc.png?123');
  assert.equal(bestCardImage('https://assets.tcgdex.net/en/base/base1/4/low.webp'),
