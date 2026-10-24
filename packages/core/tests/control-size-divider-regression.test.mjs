@@ -93,3 +93,15 @@ test('opponent Sword/Shield, navigation, gears, and every merge register for inv
   assert.match(table,/onMergeReady\(button\)/);
   assert.ok(!table.includes('if(seat===viewerSeat)onMergeReady(marker)'));
 });
+
+test('radial hover modifies only the ORIGINAL wedge; no independent portal or giant preview',()=>{
+ const radial=readFileSync(new URL('../../../apps/web/src/components/CardRadialWheel.tsx',import.meta.url),'utf8');
+ assert.ok(!radial.includes('createPortal('));
+ assert.ok(!radial.includes('magnifierPortalRef'));
+ assert.ok(!radial.includes('sennet-radial-hover-top-layer'));
+ assert.ok(!radial.includes('document.body'));
+ assert.ok(!radial.includes('<use key={item.id}'));
+ assert.match(radial,/hoveredAction===act.id&&\!collapsed/);
+ assert.match(radial,/scale\(1\.45\)/);
+ assert.match(radial,/pointerEvents="none"/);
+});
