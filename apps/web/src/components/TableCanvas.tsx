@@ -2945,24 +2945,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           altitude:obj.throwAltitude,
           quantity:obj.throwQuantity,result:display});
       }
-      const old=oldLocations.current.get(obj.id);
-      // A physically settled die must remain EXACTLY where it landed.
-      // Never tween card position on state arrival: release and zone snap are immediate.
-      // A completed drag/drop must never interpolate backward from a stale
-      // position: the pointer already moved its sprite there in real time.
-      // Other remote/state-initiated moves may still use a short ease.
-      const locallyDropped=recentLocalDrops.current.has(obj.id);
-      if(false && !skipMassAnimations&&!locallyDropped&&!obj.throwDice&&old &&
-         (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
-        const start=performance.now(),duration=95;
-        const animate=(now:number)=>{
-          if(piece.destroyed)return;
-          const t=Math.min(1,(now-start)/duration),ease=1-Math.pow(1-t,3);
-          piece.position.set(old.x+(obj.x-old.x)*ease,old.y+(obj.y-old.y)*ease);
-          if(t<1)animations.current.push(requestAnimationFrame(animate));
-        };
-        animations.current.push(requestAnimationFrame(animate));
-      }
+      // No interpolation on state commits. The authoritative position is
+      // the displayed position on the same frame, including deck-zone snaps.
+      piece.position.set(obj.x,obj.y);
       // Honor the individual card's exact artwork: a flipped card uses
       // its own back, not the artwork of the card beneath it or the
       // current game's generic placeholder.
