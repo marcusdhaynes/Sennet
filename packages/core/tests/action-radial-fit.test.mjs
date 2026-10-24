@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fitDockedRadial,fitSelfMatWithHud,radialHoverMatrix} from '../../../apps/web/src/lib/actionRadialFit.ts';
+import {fitDockedRadial,fitSelfMatWithHud,fitBattleRadialZoom,fitMatAttachedRadial,radialHoverMatrix} from '../../../apps/web/src/lib/actionRadialFit.ts';
 function fullyVisible(fit,viewport){
   const r=fit.size/2;
   assert.ok(fit.x-r>=7.99,'radial left edge visible');
@@ -63,3 +63,25 @@ test('full radial hover magnifier preserves actual wheel center',()=>{
  assert.deepEqual({x:200*m.a+m.e,y:200*m.d+m.f},
   {x:200,y:195});
 });
+
+/* Camera fits around an immovable action radial, not the other way around. */
+for(const mode of ['eye','castle']){
+ for(const {width,height} of [{width:862,height:491},{width:390,height:740},
+  {width:1440,height:900},{width:1024,height:480}]){
+  test(`${mode} frame at ${width}x${height} includes the entire mat-attached radial`,()=>{
+   const matW=628,matH=444,pad=22;
+   const baseScale=Math.min(height/(2*matH+4*pad),width/(2*matW+3*pad));
+   const scale=fitBattleRadialZoom(baseScale,height,matW,matH,mode);
+   assert.ok(scale>0&&scale<=baseScale);
+   const radialDepth=matW*.15;
+   const bottom=mode==='eye'
+     ?height/2+scale*(matH+pad+radialDepth)
+     :height/2+height/4*(scale/baseScale)+scale*(matH/2+radialDepth);
+   assert.ok(bottom<=height-13.9,`Radial lower edge cropped: ${bottom} in height ${height}`);
+   const anchored=fitMatAttachedRadial(width/2,bottom-scale*radialDepth,scale*matW,width,height);
+   assert.equal(anchored.x,width/2,'No horizontal viewport redocking');
+   assert.equal(anchored.y,bottom-scale*radialDepth,'No vertical viewport redocking');
+   assert.ok(Math.abs(anchored.size/2-scale*radialDepth)<1e-8);
+  });
+ }
+}
