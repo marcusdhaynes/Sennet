@@ -772,8 +772,24 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel g[role=button]{outline:none;cursor:pointer}
 /* Hover magnification is a non-interactive copy of the selected 1-of-9
    radial action; it can cross neighboring wedges without stealing clicks. */
-.card-radial-wheel .sennet-sector-magnifier{
+/* All nine magnified action wedges are portaled directly under <body>.
+   The unscaled wedge still owns hit testing, while the visual copy paints
+   above all tabletop panels, drawers, overlays and camera clipping. */
+.sennet-radial-hover-top-layer{
+  position:fixed;left:0;top:0;
+  width:400px;height:400px;
+  transform-origin:0 0;
+  z-index:2147483647;
+  isolation:isolate;
+  overflow:visible;
   pointer-events:none!important;
+}
+.sennet-radial-hover-top-layer svg,
+.sennet-radial-hover-top-layer .sennet-sector-magnifier{
+  overflow:visible;
+  pointer-events:none!important;
+}
+.sennet-radial-hover-top-layer .sennet-sector-magnifier{
   filter:drop-shadow(0 6px 8px #090519dd);
 }
 .card-radial-wheel g[role=button]:focus-visible path{stroke:#ffe8a9;stroke-width:4}
