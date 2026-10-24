@@ -4,6 +4,7 @@ import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
+import {bestCardImage} from '../lib/tcgCatalog';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
 /** Hover-expanded book covers must paint above the player drawer, table and
  * every other interface layer. Keep the real cover as the only hit target
@@ -2394,7 +2395,12 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           preview.dataset.hover=el.dataset.hover??'0';
           const zoom=3;
           const xa=ax*zoom,xb=bx*zoom,xc=cx*zoom,xd=dy*zoom;
-          const originX=rect.left+p.x*sx,originY=rect.top+p.y*sy;
+          // Sample the LIVE source element's screen-space center rather
+          // than assuming the playmat canvas starts at viewport (0,0).
+          // This removes camera-zoom, CSS-scale and inset-pane offset.
+          const bounds=el.getBoundingClientRect();
+          const originX=bounds.left+bounds.width/2;
+          const originY=bounds.top+bounds.height/2;
           preview.style.transform=`matrix(${xa},${xb},${xc},${xd},${originX-18*(xa+xc)},${originY-18*(xb+xd)})`;
         }
       }
@@ -2494,7 +2500,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // Owners always see their own hands, including hands saved before
       // the face-up-on-draw correction. Opponents receive redacted faces
       // through projectForActor and cannot recover private front art.
-      const url=obj.faceUp ? (frame||obj.faceUrl) : (obj.backUrl||undefined);
+      // Render native full-resolution art, including saved/imported card
+      // records which still contain old thumbnail-sized provider URLs.
+      const url=bestCardImage(obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||''));
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
         // Reuse DOM card artwork across journal updates, particularly die
         // roll completion. Destroying/recreating every <img> made the ENTIRE
@@ -2512,7 +2520,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           img=document.createElement('img');
           img.draggable=false;img.decoding='async';img.loading='eager';
           img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
-            'display:none;pointer-events:none;user-select:none;object-fit:fill;'+
+            'display:none;pointer-events:none;user-select:none;object-fit:contain;'+
             'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:85';
           img.onload=()=>{if(img.isConnected)img.style.display='block';};
           img.onerror=()=>{img.style.display='none';};
