@@ -112,6 +112,115 @@ export function createStaticDice3D(
     const material=sprite.material as THREE.SpriteMaterial;
     material.map?.dispose();material.dispose();
   };
+
+  // The tabletop's Three canvas is confined beneath the HTML interface.
+  // Hovered dice therefore need an independent, pointer-transparent renderer
+  // appended to body. It reuses the actual die geometry/face textures and
+  // quaternion, but copies materials to remove the drawer clip plane.
+  // Unlike raising a z-index inside .pixi-host, this cannot be occluded by
+  // another stacking context (cards, drawers, modals or radial previews).
+  type HoverTarget={
+    visual:DieVisual;entry:StaticDiePlacement;
+    x:number;y:number;scale:number;
+  };
+  let hoverStage:{
+    renderer:THREE.WebGLRenderer;scene:THREE.Scene;
+    camera:THREE.OrthographicCamera;
+    mesh:THREE.Group|null;from:THREE.Group|null;
+  }|null=null;
+  const releaseHoverMesh=()=>{
+    if(!hoverStage?.mesh)return;
+    const stage=hoverStage;
+    stage.scene.remove(stage.mesh);
+    stage.mesh.traverse(obj=>{
+      if(obj instanceof THREE.Mesh||obj instanceof THREE.LineSegments){
+        const materials=Array.isArray(obj.material)?obj.material:[obj.material];
+        // Geometry and texture maps are shared with the canonical die.
+        // Only materials are unique to the hover copy.
+        for(const mat of materials)mat.dispose();
+      }
+    });
+    stage.mesh=null;stage.from=null;
+  };
+  const hideHoverPreview=()=>{
+    if(hoverStage)hoverStage.renderer.domElement.style.display='none';
+  };
+  const getHoverStage=()=>{
+    if(hoverStage)return hoverStage;
+    const topRenderer=new THREE.WebGLRenderer({
+      alpha:true,antialias:true,powerPreference:'low-power',
+      premultipliedAlpha:false
+    });
+    topRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.8));
+    topRenderer.setClearColor(0,0);
+    topRenderer.domElement.className='sennet-dice-hover-top-layer';
+    topRenderer.domElement.style.cssText=[
+      'position:fixed','left:0','top:0','width:128px','height:128px',
+      'z-index:2147483647','pointer-events:none','user-select:none',
+      'display:none','filter:drop-shadow(0 8px 12px #000d)'
+    ].join(';');
+    document.body.appendChild(topRenderer.domElement);
+    const topScene=new THREE.Scene();
+    installDiceLighting(topScene);
+    const topCamera=new THREE.OrthographicCamera(-64,64,64,-64,.1,1800);
+    topCamera.position.set(0,0,1100);
+    topCamera.lookAt(0,0,0);
+    hoverStage={renderer:topRenderer,scene:topScene,camera:topCamera,
+      mesh:null,from:null};
+    return hoverStage;
+  };
+  const drawHoverPreview=(target:HoverTarget|null,rect:DOMRect)=>{
+    if(!target){hideHoverPreview();return;}
+    const stage=getHoverStage();
+    if(stage.from!==target.visual.group||!stage.mesh){
+      releaseHoverMesh();
+      const copied=target.visual.group.clone(true);
+      copied.traverse(obj=>{
+        if(obj instanceof THREE.Mesh||obj instanceof THREE.LineSegments){
+          const cloneMaterial=(mat:THREE.Material)=>{
+            const cloned=mat.clone();
+            cloned.clippingPlanes=[];
+            return cloned;
+          };
+          obj.material=Array.isArray(obj.material)
+            ?obj.material.map(cloneMaterial):cloneMaterial(obj.material);
+        }
+      });
+      stage.mesh=copied;
+      stage.from=target.visual.group;
+      stage.scene.add(copied);
+    }
+    const zoomScale=target.scale*3;
+    const visualRadius=(radiusFor(target.entry.sides)+6)*zoomScale;
+    // Allow the 3x model enough transparent room for corner-to-corner
+    // rotation. At extraordinary camera zooms, cap framebuffer allocation.
+    const diameter=Math.round(Math.min(720,Math.max(112,visualRadius*2)));
+    const fittedScale=Math.min(zoomScale,
+      (diameter/2-8)/(radiusFor(target.entry.sides)+4));
+    const {renderer:topRenderer,camera:topCamera,mesh}=stage;
+    if(!mesh)return;
+    topRenderer.setSize(diameter,diameter,false);
+    topCamera.left=-diameter/2;topCamera.right=diameter/2;
+    topCamera.top=diameter/2;topCamera.bottom=-diameter/2;
+    topCamera.updateProjectionMatrix();
+    mesh.quaternion.copy(target.visual.group.quaternion);
+    mesh.position.set(0,0,(target.entry.altitude??radiusFor(target.entry.sides))*fittedScale);
+    mesh.scale.setScalar(fittedScale);
+    const element=topRenderer.domElement;
+    element.style.left=(rect.left+target.x-diameter/2)+'px';
+    element.style.top=(rect.top+target.y-diameter/2)+'px';
+    element.style.display='block';
+    topRenderer.render(stage.scene,topCamera);
+  };
+  const destroyHoverPreview=()=>{
+    releaseHoverMesh();
+    if(!hoverStage)return;
+    hoverStage.renderer.dispose();
+    hoverStage.renderer.forceContextLoss();
+    hoverStage.renderer.domElement.remove();
+    hoverStage=null;
+  };
+
   const visuals:DieVisual[]=[];
   let entries:StaticDiePlacement[]=[];
   let stopped=false,lastFrame=0,w=0,h=0;
@@ -151,6 +260,9 @@ export function createStaticDice3D(
   };
   const setEntries=(next:StaticDiePlacement[])=>{
     if(stopped)return;
+    // A refreshed table can dispose a model backing the magnified preview.
+    // Rebind the top-layer copy to the new source on the next sync.
+    releaseHoverMesh();
     const previous=new Map(visuals.map(visual=>[visual.id,visual]));
     const updated:DieVisual[]=[];
     for(const e of next){
@@ -244,6 +356,7 @@ export function createStaticDice3D(
     entriesRevision++;
   };
   const emphasized=new Set<string>();
+  let activeHoverId:string|null=null;
   const sync=(force=false)=>{
     if(stopped)return;
     const now=performance.now();
@@ -265,6 +378,7 @@ export function createStaticDice3D(
     const logical=pixiSize();
     const transform=diceToCssTransform(w,h,logical.width,logical.height);
     const xScale=transform.x,yScale=transform.y;
+    let hoverTarget:HoverTarget|null=null;
     for(let i=0;i<visuals.length;i++){
       const visual=visuals[i],entry=entries[i];
       // Sliding drawers can hide their entire subtree. A child may still
@@ -304,7 +418,9 @@ export function createStaticDice3D(
       // Source dice match the right-drawer coins; Pixi fallbacks, hit
       // targets and 3D meshes all use the same scale at any camera zoom.
       const rackScale=entry.source?DICE_SOURCE_RACK_SCALE:1;
-      const sf=scale*rackScale*(emphasized.has(entry.id)?3:1);
+      // Keep the canonical die at normal size. Only its top-level hover
+      // clone becomes 3x; the drawer label remains fixed to the source.
+      const sf=scale*rackScale;
       // A die's resting height is the support point of its actual convex
       // hull, not its bounding-sphere radius. Keep the height sampled from
       // the final Cannon frame to prevent the last-frame vertical jump.
@@ -321,6 +437,9 @@ export function createStaticDice3D(
         looseDieOpacity(Date.now()-(entry.shownAt??Date.now()),entry.fadeAfterMs??0);
       visual.group.visible=opacity>0;
       if(visual.caption)visual.caption.visible=opacity>0;
+      if(entry.id===activeHoverId&&opacity>0&&exposed){
+        hoverTarget={visual,entry,x,y,scale:sf};
+      }
       // Unlike hiding the whole canvas, material alpha fades only the
       // actual free die and preserves other dice and wooden drawer contents.
       if(opacity>0)visual.group.traverse(object=>{
@@ -357,11 +476,12 @@ export function createStaticDice3D(
       }
     }
     renderer.render(scene,camera);
+    drawHoverPreview(hoverTarget,rect);
     renderedRevision=entriesRevision;
   };
   const destroy=()=>{
     if(stopped)return;
-    stopped=true;clear();shadowTexture.dispose();
+    stopped=true;destroyHoverPreview();clear();shadowTexture.dispose();
     renderer.dispose();renderer.forceContextLoss();
     renderer.domElement.remove();
   };
@@ -373,7 +493,14 @@ export function createStaticDice3D(
     sync(true);
   };
   const setEmphasis=(id:string,highlight:boolean)=>{
-    if(highlight)emphasized.add(id);else emphasized.delete(id);
+    if(highlight){
+      emphasized.delete(id);
+      emphasized.add(id);
+      activeHoverId=id;
+    }else{
+      emphasized.delete(id);
+      if(activeHoverId===id)activeHoverId=[...emphasized].pop()??null;
+    }
     sync(true);
   };
   return {setEntries,sync,setSourceQuantity,setEmphasis,
