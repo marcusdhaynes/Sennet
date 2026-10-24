@@ -2737,9 +2737,19 @@ body>.reader-backdrop{
    and never capture taps, hover, scrolling or dragging. */
 .sennet-radial-hover-top-layer,
 .sennet-dice-hover-top-layer,
-.sennet-book-hover-top-layer{
+.sennet-book-hover-top-layer,
+.sennet-coin-hover-top-layer{
  z-index:2147483647!important;
  pointer-events:none!important;
+}
+.sennet-coin-above-card.sennet-coin-hover-top-layer{
+ position:fixed!important;
+ left:0;top:0;width:36px;height:36px;
+ transform-origin:0 0;
+ overflow:visible!important;
+ clip-path:none!important;
+ filter:drop-shadow(0 7px 10px #000c);
+ isolation:isolate;
 }
 .sennet-book-hover-top-layer{
  position:fixed!important;
