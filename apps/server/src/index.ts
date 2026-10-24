@@ -149,6 +149,13 @@ function setAppearance(room:string,actor:string,value:unknown){
   if(typeof raw.coinText==='string')next.coinText=raw.coinText.slice(0,20);
   if(typeof raw.coinValue==='number')next.coinValue=Math.max(1,Math.min(9999,Math.floor(raw.coinValue)));
   if(typeof raw.labelScale==='number')next.labelScale=Math.max(.75,Math.min(2,raw.labelScale||1.25));
+  if(['tiny','dragon','journal','arcane','strapped'].includes(String(raw.bookDesign)))next.bookDesign=raw.bookDesign as NonNullable<SharedAppearance['bookDesign']>;
+  if(['left','right','free'].includes(String(raw.bookDock)))next.bookDock=raw.bookDock as NonNullable<SharedAppearance['bookDock']>;
+  if(raw.bookOffset&&typeof raw.bookOffset==='object'){
+    const p=raw.bookOffset as Record<string,unknown>;
+    if(Number.isFinite(p.x)&&Number.isFinite(p.y))
+      next.bookOffset={x:Math.max(-400,Math.min(400,Number(p.x))),y:Math.max(-400,Math.min(400,Number(p.y)))};
+  }
   entry.state.appearances={...entry.state.appearances,[actor]:next};
   persist(room);
   for(const client of entry.sockets)projectedSnapshot(room,client);
