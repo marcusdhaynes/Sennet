@@ -2790,23 +2790,27 @@ body>.reader-backdrop{
  overflow:visible!important;
 }
 
-/* One unified Eye/Castle control face for stack and card numbers.
-   Its SVG is exactly 34 CSS pixels: all camera/object zoom changes
-   affect its position ONLY, never the control's size or geometry. */
+/* Match the OLD small merge-button look, not its 34-WORLD-UNIT
+   source geometry. Screen-space counters remain 16px in EVERY camera
+   and must never inherit CSS transform scaling from a Pixi object. */
 .sennet-stack-count{
- position:absolute;z-index:125;width:34px!important;height:34px!important;
- min-width:34px!important;min-height:34px!important;max-width:34px!important;max-height:34px!important;
+ position:absolute;z-index:125;
+ width:16px!important;height:16px!important;
+ min-width:16px!important;min-height:16px!important;
+ max-width:16px!important;max-height:16px!important;
  display:grid;place-items:center;transform:translate(-50%,-50%)!important;
  transform-origin:center center;flex:none;border:0!important;
  border-radius:50%;padding:0!important;overflow:visible;
  cursor:pointer;touch-action:manipulation;
  background:transparent!important;box-shadow:none!important;
- color:#fff2cd;font:800 13px/1 'Inter',system-ui,sans-serif;
+ color:#fff2cd;font:800 8px/1 'Inter',system-ui,sans-serif;
 }
 .sennet-stack-count svg{
- display:block;width:34px;height:34px;min-width:34px;min-height:34px;
+ display:block;width:16px!important;height:16px!important;
+ min-width:16px!important;min-height:16px!important;
+ max-width:16px!important;max-height:16px!important;
  pointer-events:none;overflow:visible;
- filter:drop-shadow(0 2px 2px #0008);
+ filter:drop-shadow(0 1px 1px #0008);
 }
 .sennet-stack-count:hover,.sennet-stack-count:focus-visible{
  outline:2px solid #f4dc9e;outline-offset:2px;
