@@ -38,6 +38,9 @@ const ROTATE_45_CLOCKWISE_ICON_PATH='M50.4,63.3 49.9,70.4 51.9,70.9 53.2,70 54.7
 // Vector-traced directly from the supplied white 45° closing icon.
 // The independent path preserves the pair of closing arrows and the angle.
 const ROTATE_45_COUNTERCLOCKWISE_ICON_PATH='M40.6,59.1 L40.3,64.2 L41.9,64.3 L42.7,63.8 L43.7,63.7 L44.7,64.4 L44.8,66 L43.7,67.1 L42.4,66.9 L41.8,66 L40,66.1 L40.5,67.4 L41.8,68.4 L44.7,68.4 L46.4,66.9 L46.8,65.7 L46.6,64.3 L46.2,63.3 L45.3,62.5 L43.1,62.3 L42.2,62.8 L42.2,60.5 L46.1,60.4 L46.2,59.1Z M36.2,59.1 L32.2,65.1 L32.2,66.5 L36.3,66.6 L36.4,68.4 L38.1,68.5 L38.1,66.7 L39.4,66.6 L39.4,65.2 L38.1,65.1 L38.1,59.1Z M36.4,60.9 L36.4,65.1 L33.8,65.2Z M49,59.1 L48,60.1 L48,61.9 L49.2,63 L50.6,63 L51.8,62 L51.8,60 L50.6,59Z M49.4,59.9 L50.3,59.9 L51,60.5 L51,61.4 L50,62.2 L49.4,62.1 L48.8,61.3 L48.8,60.6Z M91.8,54.7 L90.4,55.3 L86.3,61.9 L86.4,62.8 L86.8,63.2 L88,63.3 L90.8,59.7 L90.7,64.4 L89.4,68.9 L88.2,71.4 L85.7,74.8 L79.8,80.1 L79.7,81 L80.2,81.8 L81.7,81.7 L84.5,79.5 L87.5,76.4 L89.8,73.5 L91.2,70.9 L92.4,67.7 L93.1,64.4 L93.2,61.5 L94.9,63.4 L95.8,63.4 L96.5,62.9 L96.6,62 L92.6,55.3Z M61.1,21.4 L60.2,21 L58.8,21.3 L3.5,76.7 L3.2,77.4 L3.5,78.7 L4.6,79.3 L69.4,79.1 L70,78.4 L70.2,77.2 L69.4,76.2 L68.6,76 L9,75.9 L61.2,23.7 L61.5,22.3Z M67.2,18.1 L66.8,19.2 L67.4,20.1 L72.2,22.6 L76.8,25.6 L80.1,28.4 L83.4,31.9 L87,37.7 L88.3,42 L85.5,39.5 L84.4,39.7 L83.9,40.9 L89.3,47.1 L90.7,47.2 L91.2,46.6 L94.2,40 L94.1,38.7 L93.5,38.2 L92.3,38.5 L90.8,41.5 L89.4,37.2 L87.4,33.3 L84.7,29.6 L81.6,26.4 L77.6,23.1 L74,20.8 L68.7,18Z';
+// White silhouette traced from the supplied card-tapping/turning icon.
+// Behind it, two muted dashed outlines depict the card's prior orientation.
+const TAP_CARD_ICON_PATH='M242.0,400.0 L239.0,410.0 L239.0,644.0 L246.0,661.0 L265.0,677.0 L381.0,681.0 L749.0,680.0 L770.0,670.0 L781.0,655.0 L784.0,645.0 L784.0,411.0 L773.0,389.0 L756.0,377.0 L274.0,375.0 L254.0,384.0Z M269.0,413.0 L280.0,404.0 L743.0,404.0 L755.0,417.0 L754.0,642.0 L743.0,651.0 L280.0,651.0 L268.0,638.0Z M286.0,432.0 L284.0,616.0 L290.0,628.0 L299.0,634.0 L721.0,635.0 L737.0,623.0 L739.0,439.0 L734.0,428.0 L724.0,421.0 L302.0,420.0Z M295.0,438.0 L302.0,431.0 L720.0,431.0 L728.0,439.0 L728.0,617.0 L721.0,624.0 L303.0,624.0 L295.0,616.0Z M431.0,484.0 L414.0,516.0 L416.0,547.0 L434.0,574.0 L469.0,595.0 L503.0,602.0 L554.0,595.0 L588.0,575.0 L607.0,547.0 L610.0,521.0 L601.0,496.0 L582.0,475.0 L554.0,460.0 L520.0,453.0 L487.0,455.0 L457.0,465.0Z M430.0,513.0 L450.0,487.0 L471.0,475.0 L499.0,468.0 L524.0,468.0 L552.0,475.0 L573.0,487.0 L593.0,513.0 L595.0,534.0 L586.0,555.0 L566.0,573.0 L531.0,586.0 L492.0,586.0 L457.0,573.0 L437.0,555.0 L428.0,534.0Z M330.0,264.0 L332.0,277.0 L348.0,282.0 L392.0,244.0 L448.0,214.0 L503.0,200.0 L559.0,199.0 L601.0,207.0 L636.0,220.0 L675.0,243.0 L706.0,271.0 L649.0,259.0 L640.0,268.0 L645.0,284.0 L735.0,309.0 L744.0,309.0 L753.0,300.0 L732.0,215.0 L725.0,201.0 L712.0,199.0 L705.0,204.0 L706.0,232.0 L679.0,212.0 L639.0,191.0 L595.0,177.0 L556.0,171.0 L490.0,174.0 L433.0,190.0 L375.0,222.0Z';
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
 // text stays inside the narrowest 40-degree wedge at compact sizes.
@@ -149,7 +152,20 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     {act.id==='rotate-ccw'
+     {act.id==='tap-toggle'
+       ? <svg x={p.x-(half?24:35)} y={p.y-(half?24:35)}
+           width={half?48:70} height={half?48:70}
+           viewBox="130 110 730 720" aria-hidden="true"
+           style={{pointerEvents:'none',overflow:'visible'}}>
+           <rect x="389" y="296" width="246" height="430" rx="26"
+             fill="none" stroke="#666" strokeWidth="17"
+             strokeLinecap="round" strokeDasharray="20 15"/>
+           <rect x="414" y="321" width="197" height="378" rx="4"
+             fill="none" stroke="#666" strokeWidth="8"
+             strokeLinecap="round" strokeDasharray="15 13"/>
+           <path d={TAP_CARD_ICON_PATH} fill="#fff" fillRule="evenodd"/>
+         </svg>
+       : act.id==='rotate-ccw'
        ? <svg x={p.x-(half?24:35)} y={p.y-(half?24:35)}
            width={half?48:70} height={half?48:70}
            viewBox="0 0 100 100" aria-hidden="true"
