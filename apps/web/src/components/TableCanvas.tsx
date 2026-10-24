@@ -1415,7 +1415,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
   const diceTrayMat=useRef<Container|null>(null);
-  const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number}|null>(null);
+  const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number;timer?:number;ghost?:Container;held?:boolean}|null>(null);
   const diceThrowAnimation=useRef<number|null>(null);
   const staticDice3D=useRef<StaticDice3DRenderer|null>(null);
   const staticDiceEntries=useRef<StaticDiePlacement[]>([]);
@@ -2515,9 +2515,24 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           e.stopPropagation();
           controlPointer.current=e.pointerId;
           staticDice3D.current?.setEmphasis('source-'+sides,true);
-          dicePointer.current={
-            pointerId:e.pointerId,sides,startX:e.clientX,startY:e.clientY,at:performance.now()
-          };
+          const held={pointerId:e.pointerId,sides,startX:e.clientX,startY:e.clientY,
+            at:performance.now(),held:false,ghost:undefined as Container|undefined,
+            timer:undefined as number|undefined};
+          // A sustained press lifts a visual copy off the dice rack before
+          // the throw begins. The generator itself never leaves the drawer.
+          held.timer=window.setTimeout(()=>{
+            if(dicePointer.current!==held||!session.current)return;
+            held.held=true;
+            const ghost=makeDie(sides);
+            ghost.alpha=.96;
+            ghost.scale.set(DICE_SOURCE_RACK_SCALE*1.18);
+            ghost.eventMode='none';
+            ghost.position.copyFrom(board.toLocal(source.toGlobal(new Point(0,0))));
+            board.addChild(ghost);
+            held.ghost=ghost;
+            staticDice3D.current?.setEmphasis('source-'+sides,true);
+          },170);
+          dicePointer.current=held;
         });
       });
     }
@@ -3275,21 +3290,31 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const d=dicePointer.current;
       if(!d||d.pointerId!==e.pointerId)return;
       dicePointer.current=null;
+      if(d.timer!==undefined)window.clearTimeout(d.timer);
+      d.ghost?.destroy({children:true});
+      staticDice3D.current?.setEmphasis('source-'+d.sides,false);
       if(controlPointer.current===e.pointerId)controlPointer.current=null;
       if(!commit)return;
       const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
-      if(Math.hypot(dx,dy)<10)addDiceCount(d.sides);
-      else{
-        // Include the source die in the throw even if it was not clicked
-        // first. Previously selected denominations join automatically.
-        throwDiceNow.current(d.sides,dx,dy,performance.now()-d.at);
-      }
+      if(!d.held&&Math.hypot(dx,dy)<10)addDiceCount(d.sides);
+      else throwDiceNow.current(d.sides,dx,dy,performance.now()-d.at);
+    };
+    const move=(e:PointerEvent)=>{
+      const d=dicePointer.current;
+      if(!d||d.pointerId!==e.pointerId||!d.held||!d.ghost||!session.current)return;
+      const app=session.current.app,rect=app.canvas.getBoundingClientRect();
+      if(!rect.width||!rect.height)return;
+      const point=new Point((e.clientX-rect.left)*app.renderer.width/rect.width,
+        (e.clientY-rect.top)*app.renderer.height/rect.height);
+      d.ghost.position.copyFrom(session.current.board.toLocal(point,app.stage));
     };
     const up=(e:PointerEvent)=>end(e,true);
     const cancel=(e:PointerEvent)=>end(e,false);
+    window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',up);
     window.addEventListener('pointercancel',cancel);
     return()=>{
+      window.removeEventListener('pointermove',move);
       window.removeEventListener('pointerup',up);
       window.removeEventListener('pointercancel',cancel);
     };
