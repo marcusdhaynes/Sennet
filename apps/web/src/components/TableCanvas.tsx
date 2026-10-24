@@ -1744,6 +1744,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     rollBubbles.current.set(id,{node,timer});
   };
 
+  const recentLocalDrops=useRef(new Set<string>());
   const oldLocations=useRef(new Map<string,{x:number;y:number}>());
   const animations=useRef<number[]>([]);
 
@@ -2900,9 +2901,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
       const old=oldLocations.current.get(obj.id);
       // A physically settled die must remain EXACTLY where it landed.
-      if(!skipMassAnimations&&!obj.throwDice&&old &&
+      // A completed drag/drop must never interpolate backward from a stale
+      // position: the pointer already moved its sprite there in real time.
+      // Other remote/state-initiated moves may still use a short ease.
+      const locallyDropped=recentLocalDrops.current.has(obj.id);
+      if(!skipMassAnimations&&!locallyDropped&&!obj.throwDice&&old &&
          (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
-        const start=performance.now(),duration=220;
+        const start=performance.now(),duration=95;
         const animate=(now:number)=>{
           if(piece.destroyed)return;
           const t=Math.min(1,(now-start)/duration),ease=1-Math.pow(1-t,3);
@@ -3128,6 +3133,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // Rendering on state change intentionally reconstructs a small scene. Large games will use
     // keyed incremental sprites and texture budgets without changing the core state protocol.
     oldLocations.current=new Map(state.objects.map(o=>[o.id,{x:o.x,y:o.y}]));
+    recentLocalDrops.current.clear();
     // Layers are appended last, after unlayered felt and table geometry.
     // Castle opponents' playmat backings render BELOW every other layer.
     // Objects, controls, dice, book and our own mat remain above them.
@@ -3506,6 +3512,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         return;
       }
       lastTap.current=null;
+      for(const member of d.members.length?d.members:[{id:d.id}])recentLocalDrops.current.add(member.id);
       const dx=d.x-d.startX,dy=d.y-d.startY;
       if(d.selection&&d.members.length>0){
         for(const m of d.members)oldLocations.current.set(m.id,{x:m.x+dx,y:m.y+dy});
