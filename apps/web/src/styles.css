@@ -2830,3 +2830,32 @@ body>.reader-backdrop{
  background:#67409b;outline:2px solid #c8a5fa;outline-offset:1px;
 }
 .sennet-play00-actions button:disabled{opacity:.48;cursor:default}
+
+/* Real shuffle feedback: three cards riffle apart and settle back together. */
+.sennet-shuffle-fx{
+ position:absolute;z-index:121;pointer-events:none;width:70px;height:96px;
+ transform:translate(-50%,-50%);animation:sennet-shuffle-flash .67s ease-out both;
+}
+.sennet-shuffle-fx::before,.sennet-shuffle-fx::after{
+ content:'';position:absolute;inset:3px 7px;border-radius:5px;
+ background:linear-gradient(130deg,#f5d6a0,#7b60ab 45%,#2b254a);
+ border:2px solid #f5dfae;box-shadow:0 5px 16px #000a;
+}
+.sennet-shuffle-fx::before{animation:sennet-riffle-left .62s cubic-bezier(.3,.7,.2,1) both}
+.sennet-shuffle-fx::after{animation:sennet-riffle-right .62s cubic-bezier(.3,.7,.2,1) both}
+@keyframes sennet-riffle-left{
+ 0%{opacity:0;transform:translate(0,0) rotate(0)}
+ 25%{opacity:1;transform:translate(-21px,-5px) rotate(-16deg)}
+ 60%{opacity:1;transform:translate(12px,-4px) rotate(14deg)}
+ 100%{opacity:0;transform:translate(0,0) rotate(0)}
+}
+@keyframes sennet-riffle-right{
+ 0%{opacity:0;transform:translate(0,0) rotate(0)}
+ 25%{opacity:1;transform:translate(21px,3px) rotate(16deg)}
+ 60%{opacity:1;transform:translate(-12px,4px) rotate(-12deg)}
+ 100%{opacity:0;transform:translate(0,0) rotate(0)}
+}
+@keyframes sennet-shuffle-flash{0%{opacity:.35}15%{opacity:1}78%{opacity:1}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){
+ .sennet-shuffle-fx,.sennet-shuffle-fx::before,.sennet-shuffle-fx::after{animation-duration:.15s}
+}
