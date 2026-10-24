@@ -38,6 +38,12 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
   if(!g)throw Error('Canvas drawing is unavailable');
   const gold=style.foil;
   g.clearRect(0,0,768,1024);
+  // Real embossed relief: the dark offset silhouette persists when the
+  // 768px foil texture is downsampled onto its miniature tabletop cover.
+  g.shadowColor='rgba(4,6,5,.96)';
+  g.shadowBlur=19;
+  g.shadowOffsetX=7;
+  g.shadowOffsetY=10;
   // Framed blind embossing: double gilt rules, rounded corner ornaments,
   // spine-side hinge and fine binding filigree.
   g.strokeStyle=gold;g.lineJoin='round';
@@ -52,10 +58,10 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
     g.restore();
   }
   g.globalAlpha=1;g.fillStyle=gold;g.textAlign='center';
-   g.shadowColor=gold;g.shadowBlur=13;
+  // Every letter and ornamental stroke shares the same deep inset shadow,
+  // not just SENNET; retain the colored foil above the relief.
   g.font='bold 132px Georgia, Times New Roman, serif';
   g.fillText('SENNET',384,304);
-   g.shadowBlur=0;
   g.globalAlpha=.96;g.font='bold 40px Georgia, serif';
   g.fillText('SETTINGS',384,357);
   g.lineWidth=3;g.beginPath();g.moveTo(221,388);g.lineTo(547,388);g.stroke();
