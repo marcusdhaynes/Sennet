@@ -15,6 +15,32 @@ const SHUFFLE_DECK_ICON_PATH='M84,47 72,58 52,80 34,77 9,70 4,76 4,89 5,91 45,10
 // White vector trace of the user-supplied hands-revealing-a-card icon.
 // Its transparent path contains no eye glyph or background square.
 const REVEAL_HANDS_ICON_PATH='M0,226 L0,230 L3,234 L10,234 L24,203 L34,189 L51,173 L69,162 L88,155 L103,152 L163,152 L171,158 L174,164 L173,173 L167,180 L163,182 L112,182 L108,184 L106,188 L109,204 L121,219 L136,226 L200,227 L207,234 L207,242 L202,248 L197,250 L177,250 L173,253 L173,260 L177,263 L184,264 L189,269 L191,275 L188,282 L183,286 L162,286 L156,290 L156,296 L159,299 L166,300 L172,305 L174,310 L173,316 L167,322 L143,323 L139,327 L140,334 L152,338 L156,343 L157,349 L152,357 L149,359 L21,359 L15,363 L15,368 L19,372 L151,372 L161,367 L167,360 L170,351 L167,336 L176,332 L185,321 L187,309 L184,300 L195,294 L202,284 L204,274 L201,263 L211,258 L219,247 L219,226 L293,227 L291,232 L292,247 L300,258 L310,263 L307,274 L309,284 L316,294 L327,300 L324,309 L326,321 L335,332 L344,336 L341,345 L342,355 L346,363 L353,369 L360,372 L492,372 L496,368 L496,363 L490,359 L423,358 L426,348 L424,338 L415,327 L406,323 L409,312 L406,299 L400,292 L389,286 L392,277 L391,267 L384,256 L372,250 L375,242 L373,227 L393,226 L405,249 L416,260 L432,269 L455,273 L460,270 L461,265 L457,260 L444,259 L431,254 L414,239 L405,218 L405,188 L403,184 L399,182 L348,182 L338,173 L338,161 L348,152 L408,152 L433,158 L460,173 L476,188 L487,203 L499,232 L504,235 L508,234 L511,230 L511,226 L500,199 L489,183 L477,170 L463,159 L432,144 L410,139 L343,140 L334,145 L326,156 L324,171 L327,182 L184,182 L187,171 L185,156 L177,145 L168,140 L101,139 L73,146 L56,154 L34,170 L11,199Z M354,346 L357,340 L364,336 L403,336 L411,342 L412,352 L404,359 L362,359 L356,354Z M337,310 L343,301 L349,299 L384,299 L390,301 L394,305 L396,312 L394,317 L389,322 L348,323 L344,322 L338,316Z M320,275 L322,269 L330,263 L369,263 L376,267 L379,274 L377,281 L371,286 L328,286 L323,282Z M304,234 L308,229 L316,226 L350,226 L356,228 L361,233 L362,240 L359,246 L352,250 L314,250 L305,244Z M279,196 L391,195 L392,212 L280,213Z M245,196 L265,195 L266,212 L246,213Z M121,196 L231,195 L232,212 L138,213 L131,210 L123,202Z';
+/** Three illustrated Scale tools, drawn like Shuffle rather than font glyphs.
+ * All remain visual-only: the existing radial sectors own pointer events. */
+function ScaleCardIcon({kind}:{kind:'scale-bigger'|'scale-smaller'|'scale-original'}){
+ const common={fill:'none',stroke:'#ffffff',strokeWidth:4.8,strokeLinecap:'round' as const,strokeLinejoin:'round' as const};
+ if(kind==='scale-bigger')return <g {...common}>
+  <rect x="8" y="32" width="32" height="42" rx="3" transform="rotate(-10 24 53)" strokeOpacity=".65"/>
+  <rect x="35" y="19" width="40" height="53" rx="4" fill="#ffffff" fillOpacity=".13"/>
+  <rect x="42" y="27" width="26" height="37" rx="2" strokeWidth="2.8" strokeOpacity=".9"/>
+  <path d="M57 19 83 5 M68 5h15v15" strokeWidth="5.8"/>
+  <path d="M83 43v20 M73 53h20" strokeWidth="6.8"/>
+ </g>;
+ if(kind==='scale-smaller')return <g {...common}>
+  <rect x="8" y="8" width="47" height="60" rx="4" fill="#ffffff" fillOpacity=".14"/>
+  <rect x="15" y="15" width="33" height="46" rx="2" strokeWidth="2.7" strokeOpacity=".9"/>
+  <rect x="49" y="42" width="31" height="40" rx="3"/>
+  <path d="M74 13 50 36 M50 23v13h14" strokeWidth="5.8"/>
+  <path d="M11 82h23" strokeWidth="6.2"/>
+ </g>;
+ return <g {...common}>
+  <rect x="23" y="20" width="49" height="63" rx="4" fill="#ffffff" fillOpacity=".13"/>
+  <rect x="30" y="27" width="35" height="49" rx="2" strokeWidth="2.8"/>
+  <path d="M13 38 A38 38 0 0 1 84 30" strokeWidth="5.8"/>
+  <path d="m70 27 17 5 1-18" strokeWidth="5.8"/>
+  <path d="M40 47h16 M40 55h16" strokeWidth="4.6"/>
+ </g>;
+}
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
 // text stays inside the narrowest 40-degree wedge at compact sizes.
@@ -140,6 +166,13 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
            viewBox="0 105 512 300" aria-hidden="true"
            style={{pointerEvents:'none',overflow:'visible'}}>
            <path d={REVEAL_HANDS_ICON_PATH} fill="#fff" fillRule="evenodd"/>
+         </svg>
+       : (act.id==='scale-bigger'||act.id==='scale-smaller'||act.id==='scale-original')
+       ? <svg x={p.x-(half?26:35)} y={p.y-(half?26:35)}
+           width={half?52:70} height={half?52:70}
+           viewBox="0 0 100 100" aria-hidden="true"
+           style={{pointerEvents:'none',overflow:'visible'}}>
+           <ScaleCardIcon kind={act.id}/>
          </svg>
        : act.id==='flip'
        ? <svg x={p.x-(half?26:35)} y={p.y-(half?26:35)}
