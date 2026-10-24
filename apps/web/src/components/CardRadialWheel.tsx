@@ -32,6 +32,9 @@ function ScaleCardIcon({kind}:{kind:'scale-bigger'|'scale-smaller'|'scale-origin
     strokeLinecap="round"/>
  </g>;
 }
+// High-contrast, transparent vector trace of the supplied +45° angle icon.
+// Kept separate from the rotate-ccw symbol and the radial hit-test model.
+const ROTATE_45_CLOCKWISE_ICON_PATH='M50.4,63.3 49.9,70.4 51.9,70.9 53.2,70 54.7,70.1 55.9,71.3 56,72.8 55.7,73.5 54.2,74.5 52.6,74.3 51.6,73.1 49.5,73.9 49.5,74.4 50.4,75.7 52.4,76.7 54.3,76.8 56.1,76.3 57.4,75.3 58.3,73.8 58.5,71.2 58.2,70.2 57.2,68.8 56,68.1 53.7,67.9 52.5,68.3 52.7,65.5 57.6,65.5 57.6,63.3Z M44.4,63.3 37.9,71.2 37.8,73.4 44.3,73.4 44.4,76.5 46.9,76.5 46.9,73.5 48.5,73.4 48.5,71.3 46.9,71.2 46.9,63.3Z M44.3,67 44.4,71.2 41,71.3 40.9,70.9Z M61.5,62.8 59.8,63.9 59.3,65.9 60.5,67.8 62.6,68.2 64.3,67.1 64.7,64.9 63.4,63.1Z M61.8,64 62.7,64.2 63.4,65 63.4,66 62.4,67 61.3,66.8 60.6,65.9 60.8,64.7Z M88.1,10.3 86.7,9.5 84.6,10 5.4,87.6 5,88.5 5.3,89.7 6.5,90.5 93.3,90.5 94.3,90 94.9,89 94.8,87.7 93.1,86.5 69.6,86.4 74.9,82.6 74.7,81.9 72.6,81.2 73.9,73.8 73.8,68.4 72.7,62.7 71.2,58.4 69.3,54.8 66.3,50.7 63.7,48.1 66.1,45.9 66.1,45.4 58.7,43.9 57.8,44.1 57.2,45.1 59.3,52.2 60.1,52.5 61.7,50 63.7,51.8 67.7,57.3 70.5,64.3 71.4,70.1 71.3,74.8 70.7,78.4 70.1,80.3 67.5,79.2 66.9,79.5 68.5,86.5 12.5,86.5 88.2,12.7 88.5,11.2Z';
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
 // text stays inside the narrowest 40-degree wedge at compact sizes.
@@ -143,7 +146,16 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     {act.id==='shuffle'
+     {act.id==='rotate-cw'
+       ? <svg x={p.x-(half?24:35)} y={p.y-(half?24:35)}
+           width={half?48:70} height={half?48:70}
+           viewBox="0 0 100 100" aria-hidden="true"
+           style={{pointerEvents:'none',overflow:'visible'}}>
+           <path d={ROTATE_45_CLOCKWISE_ICON_PATH}
+             fill="#fff" fillRule="evenodd" stroke="#181225"
+             strokeWidth=".65" strokeLinejoin="round" paintOrder="stroke"/>
+         </svg>
+       : act.id==='shuffle'
        ? <svg x={p.x-(half?24:33)} y={p.y-(half?24:33)}
            width={half?48:66} height={half?48:66}
            viewBox="0 0 104 106" aria-hidden="true"
