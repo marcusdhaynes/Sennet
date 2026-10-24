@@ -85,7 +85,7 @@ export function makeCoin(value:number|string,style:CoinAppearance,source=false,s
     .stroke({color:shaded(selectedTint,.47),width:.65});
   coin.addChild(disk);
   const str=String(value);
-  const text=fillText(str,str.length>12?4.5:str.length>8?5:str.length>4?6.1:str.length>3?7.1:str.length>2?8:8.8,
+  const text=fillText(str,(str.length>12?4.5:str.length>8?5:str.length>4?6.1:str.length>3?7.1:str.length>2?8:8.8)*.75,
     ((((selectedTint>>16)&255)*.2126+((selectedTint>>8)&255)*.7152+
       (selectedTint&255)*.0722)>145)?0x233027:0xfff7e8);
   // Glyphs may scale, but the text can NEVER resize the circular metal.
