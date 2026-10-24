@@ -738,7 +738,7 @@ export default function App(){
             if(!anchor||anchor.matSeat!==seat)return;
             const expanded=cardStackMembers(current.current,anchor.id)
               .filter(card=>card.matSeat===seat&&card.zone===anchor.zone&&
-                (!card.owner||card.owner===actorId||card.owner==='local'));
+                (!card.owner||card.owner===actor||card.owner==='local'));
             ids=(expanded.length?expanded:[anchor]).map(card=>card.id);
           }
           // One authoritative event applies to the ENTIRE selection.
