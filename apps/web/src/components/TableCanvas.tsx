@@ -2077,6 +2077,29 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
     const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number;source:boolean}[]=[];
+    // Only the VISUAL copy is magnified. Every source or placed coin keeps
+    // its Pixi pointer hit area, center click and drag behavior unchanged.
+    // Append the 3x preview directly to <body>, beside the top-tier dice and
+    // radial previews, not under the card-image or drawer stacking contexts.
+    let hoveredCoin:{piece:Container;el:HTMLDivElement;preview:HTMLDivElement}|null=null;
+    const clearCoinHover=(piece?:Container)=>{
+      if(!hoveredCoin||(piece&&hoveredCoin.piece!==piece))return;
+      hoveredCoin.preview.remove();hoveredCoin=null;
+    };
+    const setCoinHover=(piece:Container,el:HTMLDivElement)=>{
+      if(hoveredCoin?.piece===piece)return;
+      clearCoinHover();
+      const preview=el.cloneNode(true) as HTMLDivElement;
+      preview.classList.add('sennet-coin-hover-top-layer');
+      // Source drawer labels should stay on their normal rack baseline.
+      preview.querySelector('.sennet-drawer-coin-caption')?.remove();
+      preview.setAttribute('aria-hidden','true');
+      preview.style.cssText='position:fixed;left:0;top:0;width:36px;height:36px;'+
+        'transform-origin:0 0;clip-path:none;pointer-events:none;user-select:none;'+
+        'display:block;will-change:transform;';
+      document.body.appendChild(preview);
+      hoveredCoin={piece,el,preview};
+    };
     const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1,style:CoinAppearance=coinAppearance,caption?:string)=>{
       const el=coinDomVisual(value,sign,source,style,color,editable,caption);
       mount.current?.appendChild(el);
@@ -2213,12 +2236,17 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           coinHighlight(highlight,side);
           coinOverlay.dataset.hover=String(side);
         };
-        source.on('pointerover',e=>highlightSide(e.global));
+        source.on('pointerover',e=>{
+          highlightSide(e.global);
+          setCoinHover(source,coinOverlay);
+        });
         source.on('pointermove',e=>highlightSide(e.global));
         source.on('pointerout',()=>{
           coinHighlight(highlight,0);
           coinOverlay.dataset.hover='0';
+          clearCoinHover(source);
         });
+        source.on('pointercancel',()=>clearCoinHover(source));
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
@@ -2317,7 +2345,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           }
           ancestor=ancestor.parent;
         }
-        if(!visible){el.style.display='none';continue;}
+        if(!visible){
+          el.style.display='none';
+          clearCoinHover(piece);
+          continue;
+        }
         el.style.display='block';
         const p=piece.toGlobal(new Point(0,0));
         const right=piece.toGlobal(new Point(1,0));
@@ -2339,7 +2371,19 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           const clipLeft=Math.max(0,Math.min(36,18+(edge-x)/displayScale));
           el.style.clipPath=`inset(0 0 0 ${clipLeft}px)`;
         }else el.style.clipPath='none';
+        if(hoveredCoin?.piece===piece){
+          const preview=hoveredCoin.preview;
+          // The preview retains the face color, material, value, orientation
+          // and hover-side highlight. It ignores drawer clipping entirely.
+          // Multiply the exact camera/object matrix by 3 around the center.
+          preview.dataset.hover=el.dataset.hover??'0';
+          const zoom=3;
+          const xa=ax*zoom,xb=bx*zoom,xc=cx*zoom,xd=dy*zoom;
+          const originX=rect.left+p.x*sx,originY=rect.top+p.y*sy;
+          preview.style.transform=`matrix(${xa},${xb},${xc},${xd},${originX-18*(xa+xc)},${originY-18*(xb+xd)})`;
+        }
       }
+      if(hoveredCoin&&!hoveredCoin.el.isConnected)clearCoinHover();
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
         const piece=visuals.current.get(id);
@@ -2385,7 +2429,14 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       paintLayers.objects.attach(piece);
-      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.coinText??obj.value??1,obj.tokenSign??1,false,obj.color,obj.coinText!==undefined,1,objectCoin);
+      if(obj.tokenCoin){
+        const visual=showCoinAboveArtwork(piece,obj.coinText??obj.value??1,
+          obj.tokenSign??1,false,obj.color,obj.coinText!==undefined,1,objectCoin);
+        piece.on('pointerover',()=>setCoinHover(piece,visual));
+        piece.on('pointerout',()=>clearCoinHover(piece));
+        piece.on('pointerupoutside',()=>clearCoinHover(piece));
+        piece.on('pointercancel',()=>clearCoinHover(piece));
+      }
       if(obj.throwDice){
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
@@ -2602,6 +2653,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       staticDiceEntries.current=[];
       // Card images are intentionally retained across state changes.
       // They are released only when removed from the game or on unmount.
+      clearCoinHover();
       for(const {el} of coinLayers)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
