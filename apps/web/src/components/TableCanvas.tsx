@@ -2328,11 +2328,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     // Use browser <img> elements for actual card art, just like the Deck
     // Builder. Third-party card art often disallows WebGL/CORS texture uploads
     // even while rendering perfectly in an ordinary HTML image.
-    // Rasterize full-resolution card artwork at 12x the card's native
-    // tabletop pixel footprint. The inverse CSS matrix retains the exact
-    // same physical coordinates at any camera zoom, without enlarging a
-    // low-resolution 62x88 bitmap during close inspection.
-    const CARD_ART_RASTER_SCALE=12;
     const artLayers:{piece:Container;img:HTMLImageElement}[]=[];
     const visibleArtworkIds=new Set<string>();
     const imagesRoot=mount.current;
@@ -2353,8 +2348,12 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // every Pixi camera/mat/seat/selection transform.
         const tx=p.x*sx-31*aa-44*cc;
         const ty=p.y*sy-31*bb-44*dd;
-        const sharp=CARD_ART_RASTER_SCALE;
-        img.style.transform=`matrix(${aa/sharp},${bb/sharp},${cc/sharp},${dd/sharp},${tx},${ty})`;
+        // Native 62x88 CSS geometry is vital here: enlarging thousands of
+        // offscreen image elements to 12x caused oversized raster surfaces
+        // and could make cards vanish or exhaust browser graphics memory.
+        // The browser samples their original high-resolution SOURCE image
+        // at the real on-table card dimensions and any camera zoom.
+        img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
       }
       // A separate DOM layer at z-index 6 keeps every coin above every
       // imported card image (z-index 5), even during camera or card motion.
@@ -2508,7 +2507,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       // through projectForActor and cannot recover private front art.
       // Render native full-resolution art, including saved/imported card
       // records which still contain old thumbnail-sized provider URLs.
-      const url=bestCardImage(obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||''));
+      const originalUrl=obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||'');
+      const url=bestCardImage(originalUrl);
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
         // Reuse DOM card artwork across journal updates, particularly die
         // roll completion. Destroying/recreating every <img> made the ENTIRE
@@ -2519,17 +2519,33 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         if(cached){
           img=cached.img;
           if(cached.url!==url){
-            cached.url=url;img.style.display='none';img.src=url;
+            cached.url=url;
+            img.dataset.originalUrl=originalUrl;
+            img.dataset.fallbackAttempted='0';
+            img.style.display='none';img.src=url;
           }
           if(!img.isConnected)imagesRoot.appendChild(img);
         }else{
           img=document.createElement('img');
           img.draggable=false;img.decoding='async';img.loading='eager';
-          img.style.cssText=`position:absolute;left:0;top:0;width:${62*CARD_ART_RASTER_SCALE}px;height:${88*CARD_ART_RASTER_SCALE}px;`+
+          img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
             'display:none;pointer-events:none;user-select:none;object-fit:contain;image-rendering:auto;'+
             'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:85';
+          img.dataset.originalUrl=originalUrl;
+          img.dataset.fallbackAttempted='0';
           img.onload=()=>{if(img.isConnected)img.style.display='block';};
-          img.onerror=()=>{img.style.display='none';};
+          img.onerror=()=>{
+            // Some sources do not offer a full-resolution format for every
+            // card printing. Restore its original proven URL instead of
+            // silently hiding that card.
+            const original=img.dataset.originalUrl||'';
+            if(img.dataset.fallbackAttempted!=='1'&&original&&img.src!==original){
+              img.dataset.fallbackAttempted='1';
+              img.src=original;
+              return;
+            }
+            img.style.display='none';
+          };
           imagesRoot.appendChild(img);
           artworkCache.current.set(obj.id,{img,url});
           img.src=url;
