@@ -99,7 +99,8 @@ import {expandDiceSources} from '../lib/diceSourceExpansion';
 import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
-import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom} from '../lib/actionRadialFit';
+import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom,
+  EYE_CONTROL_DIAMETER_PX,fixedMatControlScale,fixedMatControlHalfSpacing} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
@@ -144,7 +145,8 @@ function createEyeStyleCounter(value:number,finish:string,selectable=true,held=f
   if(!selectable){button.tabIndex=-1;button.style.pointerEvents='none';}
   const svg=document.createElementNS(ns,'svg');
   svg.setAttribute('viewBox','0 0 34 34');
-  svg.setAttribute('width','34');svg.setAttribute('height','34');
+  svg.setAttribute('width',String(EYE_CONTROL_DIAMETER_PX));
+  svg.setAttribute('height',String(EYE_CONTROL_DIAMETER_PX));
   svg.setAttribute('aria-hidden','true');
   const circle=(cx:number,cy:number,r:number,fill:string,stroke?:string,width?:number)=>{
     const node=document.createElementNS(ns,'circle');
@@ -1975,9 +1977,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const pixelPerMatUnit=Math.hypot(unit.x-origin.x,unit.y-origin.y)*
             (rect.width/app.renderer.width);
           if(Number.isFinite(pixelPerMatUnit)&&pixelPerMatUnit>0){
-            const inverse=1/pixelPerMatUnit;
+            const inverse=fixedMatControlScale(pixelPerMatUnit);
             eye.scale.set(inverse);castle.scale.set(inverse);
-            const halfSpacing=Math.max(22,22/pixelPerMatUnit);
+            const halfSpacing=fixedMatControlHalfSpacing(pixelPerMatUnit);
             eye.position.x=-halfSpacing;castle.position.x=halfSpacing;
           }
         }
