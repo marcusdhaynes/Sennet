@@ -170,7 +170,7 @@ function applyAction(room:string,actor:string,rawAction:Command){
   entry.history.push(record);entry.seen.add(record.id);
   if(entry.history.length>4000)entry.history=entry.history.slice(-3000);
   persist(room);
-  if(['DRAW','SHUFFLE','SET_ZONE','MOVE','MOVE_STACK','FLIP','BATCH_CARD_ACTION'].includes(command.type)){
+  if(['DRAW','SHUFFLE','SET_ZONE','MOVE','MOVE_STACK','FLIP','BATCH_CARD_ACTION','ADD_MANY'].includes(command.type)){
     for(const client of entry.sockets)projectedSnapshot(room,client);
   }else broadcast(room,{type:'event',event:record});
   return record;
