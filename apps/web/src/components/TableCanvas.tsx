@@ -130,8 +130,8 @@ const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 /** Unified walnut/brass button casing, matching the actual wooden side drawers
  * and the action-screen frame. Preserve original radii, hitboxes and gestures. */
-/** The same five concentric Eye/Castle walnut rings, at a fixed 34px.
- * The stack's digit is the only difference. No camera-scaled layer. */
+/** The ORIGINAL tiny merge silhouette: the same concentric walnut rings,
+ * rendered as a fixed 16px overlay. Nothing here inherits camera scale. */
 function createEyeStyleCounter(value:number,finish:string,selectable=true,held=false):HTMLButtonElement{
   const p=drawerPalette(finish),ns='http://www.w3.org/2000/svg';
   const button=document.createElement('button');
@@ -168,7 +168,7 @@ function createEyeStyleCounter(value:number,finish:string,selectable=true,held=f
   const num=String(value);
   text.textContent=num;text.setAttribute('x','17');text.setAttribute('y','18');
   text.setAttribute('text-anchor','middle');text.setAttribute('dominant-baseline','middle');
-  text.setAttribute('font-size',num.length>=4?'8':num.length===3?'10.5':'13');
+  text.setAttribute('font-size',num.length>=4?'11':num.length===3?'14':'19');
   text.setAttribute('font-family','Inter,system-ui,sans-serif');
   text.setAttribute('font-weight','800');text.setAttribute('fill','#fff1d0');
   text.setAttribute('stroke',p.deep);text.setAttribute('stroke-width','.45');
@@ -767,9 +767,9 @@ function drawTcgMats(
     // Eye and Castle centers straddle the PLAY 03 top border,
     // symmetrically around the owning player's local mat center.
     if(seat===viewerSeat){
-      // A single fixed anchor at the PLAY 03 boundary owns BOTH controls.
-      // Scaling this parent inversely to camera zoom preserves their
-      // fixed-size 34px faces and 44px gap, without moving either button.
+      // One world-space anchor owns both controls. The wooden artwork
+      // is deliberately tiny (the former merge-button size), screen-
+      // fixed through the inverse mat transform in rescale().
       const controls=new Container();
       const eyePosition=viewButtonPosition('eye');
       controls.position.set(0,eyePosition.y);
@@ -1967,8 +1967,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
-        // Fixed-size controls: Eye, Castle, merge buttons and stack counters
-        // all have the SAME 34px wooden outer silhouette at every zoom.
+        // Fixed-size controls: Eye, Castle, merge and counters all have
+        // the SAME SMALL 16px silhouette at every zoom.
         // Their anchor positions NEVER change. Only the Pixi container
         // scale is inverse to the camera; the DOM stack badge is already
         // screen-space. No per-frame X/Y offsets or hit-area inflation.
@@ -1983,8 +1983,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             (unit.y-origin.y)*rect.height/app.renderer.height);
           if(Number.isFinite(pxPerWorld)&&pxPerWorld>0){
             const inverse=fixedMatControlScale(pxPerWorld);
-            // Eye/Castle share one group, ensuring both their radius AND
-            // separation stay invariant while the anchor stays on the mat.
+            // Camera scale cancels against 16/34. The fixed group
+            // stays at its original world anchor, with no X/Y edits.
             group.scale.set(inverse);
             for(const button of [control,castleHitTarget.current]){
               if(!button||button.destroyed)continue;
