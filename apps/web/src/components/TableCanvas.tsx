@@ -1045,9 +1045,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
       .rect(-span/2,-BOARD_W,span,BOARD_W)
         .fill({color:0x203b35})
       .rect(-span/2,0,span,BOARD_W)
-        .fill({color:0x24443b})
-      .moveTo(-span/2,0).lineTo(span/2,0)
-        .stroke({color:0xbc9a62,width:2.4,alpha:.86}));
+        .fill({color:0x24443b}));
     board.addChild(panels);
   }else{
     const radius=TABLE_APOTHEM/Math.cos(Math.PI/12);
@@ -3728,8 +3726,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const fit=Math.min(host.clientWidth/(TABLE_VIEW_RADIUS*2),
         host.clientHeight/(TABLE_VIEW_RADIUS*2));
       const newScale=fit*after;
-      c.panX=x-localX*newScale-(host.clientWidth/2-BOARD_CENTER*newScale);
-      c.panY=y-localY*newScale-(host.clientHeight/2-BOARD_CENTER*newScale);
+      if(isBattleView(kind)){
+        // Eye/Castle have a SCREEN-CENTERED dividing boundary. Allow
+        // magnification without introducing cursor-relative panning:
+        // if the camera origin moves, the colored halves and divider
+        // immediately separate from their respective player mats.
+        c.panX=0;c.panY=0;
+      }else{
+        c.panX=x-localX*newScale-(host.clientWidth/2-BOARD_CENTER*newScale);
+        c.panY=y-localY*newScale-(host.clientHeight/2-BOARD_CENTER*newScale);
+      }
       updateView.current();
     };
     const pan=(dx:number,dy:number)=>{
