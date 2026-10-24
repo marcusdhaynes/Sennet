@@ -24,7 +24,7 @@ test('Eye and Castle share a fixed playmat anchor, their size and separation nev
   assert.match(table,/controls\.position\.set\(0,eyePosition\.y\)/);
   assert.match(table,/controls\.addChild\(eye\)/);
   assert.match(table,/controls\.addChild\(castle\)/);
-  assert.match(table,/group\.scale\.set\(inverse\)/);
+  assert.match(table,/fix\(eye.parent,34\)/);
   assert.ok(!table.includes('eye.position.x=-halfSpacing'));
   assert.ok(!table.includes('castle.position.x=halfSpacing'));
   for(const zoom of [.035,.25,.5,1,1.5,4,12]){
@@ -39,7 +39,7 @@ test('merge positions remain in their true playmat gutters',()=>{
     (boundary+1)*TCG_MAT.rowHeight+(boundary+.5)*TCG_MAT.gap);
   assert.ok(y[0]<y[1]&&y[1]<y[2]);
   assert.match(table,/marker\.position\.set\(0,gapCenter\)/);
-  assert.match(table,/merge\.scale\.set\(fixedMatControlScale\(matPx,targetPixels\)\)/);
+  assert.match(table,/fix\(button,34\)/);
   assert.ok(!table.includes('merge.position.x='));
 });
 
@@ -62,19 +62,21 @@ test('action radial cannot be moved separately from the physical playmat',()=>{
 });
 
 test('all tabletop controls use CSS pixel scale, never physical framebuffer resolution',()=>{
-  assert.match(table,/rect\.width\/app\.screen\.width/);
-  assert.match(table,/rect\.height\/app\.screen\.height/);
-  const controls=table.split('const control=eyeHitTarget.current;')[1]
-    .split('const hand=tcgMatCells')[0];
-  assert.ok(!controls.includes('rect.width/app.renderer.width'));
-  assert.ok(!controls.includes('rect.height/app.renderer.height'));
+  const controls=table.split('const normalizeFixedControls=()=>{')[1]
+    .split('syncFixedControls.current=normalizeFixedControls;')[0];
+  assert.match(controls,/const sx=canvas.width\/app.screen.width/);
+  assert.match(controls,/const sy=canvas.height\/app.screen.height/);
+  assert.ok(!controls.includes('/app.renderer.width'));
+  assert.ok(!controls.includes('/app.renderer.height'));
   assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:var\(--sennet-control-size,16px\)!important/s);
 });
 
 test('mat controls only change inverse scale; world anchor and merge positions remain immutable',()=>{
-  const fragment=table.split('const control=eyeHitTarget.current;')[1].split('const hand=tcgMatCells')[0];
-  assert.match(fragment,/group\.scale\.set\(inverse\)/);
-  assert.match(fragment,/merge\.scale\.set\(fixedMatControlScale\(matPx,targetPixels\)\)/);
+  const fragment=table.split('const normalizeFixedControls=()=>{')[1]
+    .split('syncFixedControls.current=normalizeFixedControls;')[0];
+  assert.match(fragment,/fix\(eye.parent,34\)/);
+  assert.match(fragment,/fix\(button,34\)/);
+  assert.match(fragment,/node.scale.set\(pxX,pxY\)/);
   assert.ok(!/\.position\.set|\.position\.x\s*=|\.position\.y\s*=/.test(fragment));
 });
 
@@ -82,9 +84,9 @@ test('one session reference uses the opponent Sword/Shield size in initial Eye v
   assert.match(table,/controlReferencePixels=useRef<number\|null>\(null\)/);
   assert.match(table,/if\(controlReferencePixels\.current===null\)\{/);
   assert.match(table,/eyeOpponentReferencePixels\(/);
-  assert.match(table,/mount\.current\.style\.setProperty\('--sennet-control-size'/);
-  assert.match(table,/fixedMatControlScale\(pxPerWorld,targetPixels\)/);
-  assert.match(table,/fixedMatControlScale\(matPx,targetPixels\)/);
+  assert.match(table,/host\.style\.setProperty\('--sennet-control-size'/);
+  assert.match(table,/const factor=desired\/sourceDiameter/);
+  assert.match(table,/const pxX=factor\/worldX,pxY=factor\/worldY/);
 });
 
 test('opponent Sword/Shield, navigation, gears, and every merge register for inverse scaling',()=>{
@@ -104,4 +106,31 @@ test('radial hover modifies only the ORIGINAL wedge; no independent portal or gi
  assert.match(radial,/hoveredAction===act.id&&\!collapsed/);
  assert.match(radial,/scale\(1\.45\)/);
  assert.match(radial,/pointerEvents="none"/);
+});
+
+test('fixed controls are normalized on every frame, every camera change and before redraw',()=>{
+  assert.match(table,/app\.ticker\.add\(normalizeFixedControls\)/);
+  assert.match(table,/unregisterFixedControls=\(\)=>app\.ticker\.remove\(normalizeFixedControls\)/);
+  assert.match(table,/normalizeFixedControls\(\);\s*const hand=tcgMatCells/);
+  assert.match(table,/board\.addChild\(\.\.\.TABLE_PAINT_ORDER\.map\(name=>paintLayers\[name\]\)\);\s*\/\/[\s\S]*?syncFixedControls\.current\(\);\s*app\.renderer\.render/);
+  const fragment=table.split('const normalizeFixedControls=()=>{')[1]
+    .split('syncFixedControls.current=normalizeFixedControls;')[0];
+  assert.ok(!/\.position\.(?:set|x|y)\s*\(/.test(fragment));
+  assert.match(fragment,/Math\.abs\(node\.scale\.x-pxX\)/);
+  // Simulated camera+seat scales in BOTH directions cancel exactly.
+  // None of the circular buttons inherit the camera's zoom factor.
+  const desired=18.75;
+  for(const camera of [.012,.08,.3,1,2,4,15,30]){
+    for(const seatScale of [.04,.2,.65,1,1.25,3]){
+      for(const dpr of [1,1.25,2,3]){
+        const x=camera*seatScale*dpr;
+        const y=x;
+        const sourceDiameter=34;
+        const inverseX=(desired/sourceDiameter)/x;
+        const inverseY=(desired/sourceDiameter)/y;
+        assert.ok(Math.abs(sourceDiameter*x*inverseX-desired)<1e-8);
+        assert.ok(Math.abs(sourceDiameter*y*inverseY-desired)<1e-8);
+      }
+    }
+  }
 });
