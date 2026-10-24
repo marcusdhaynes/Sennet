@@ -25,5 +25,6 @@ export function fitMatAttachedRadial(
   viewportWidth:number,viewportHeight:number
 ):{x:number;y:number;size:number}{
   const diameter=Math.max(1,Number.isFinite(visibleMatWidth)?visibleMatWidth*.30:1);
-  return fitDockedRadial(handCenterX,handBottomY,diameter,viewportWidth,viewportHeight);
+  // Always stay physically attached to the playmat, regardless of viewport edges.
+  return {x:handCenterX,y:handBottomY,size:diameter};
 }
