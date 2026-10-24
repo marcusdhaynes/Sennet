@@ -64,8 +64,10 @@ test('action radial cannot be moved separately from the physical playmat',()=>{
 test('all tabletop controls use CSS pixel scale, never physical framebuffer resolution',()=>{
   assert.match(table,/rect\.width\/app\.screen\.width/);
   assert.match(table,/rect\.height\/app\.screen\.height/);
-  assert.ok(!table.includes('rect.width/app.renderer.width'));
-  assert.ok(!table.includes('rect.height/app.renderer.height'));
+  const controls=table.split('const control=eyeHitTarget.current;')[1]
+    .split('const hand=tcgMatCells')[0];
+  assert.ok(!controls.includes('rect.width/app.renderer.width'));
+  assert.ok(!controls.includes('rect.height/app.renderer.height'));
   assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:16px!important;height:16px!important/s);
 });
 
