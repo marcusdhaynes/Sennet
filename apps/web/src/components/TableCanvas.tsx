@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
@@ -1453,6 +1453,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const [gestureMenu,setGestureMenu]=useState<{id:string;x:number;y:number;inspect:boolean}|null>(null);
   const [selectedIds,setSelectedIds]=useState<string[]>([]);
   const [cardPeek,setCardPeek]=useState<string|null>(null);
+  const [heldHandDrag,setHeldHandDrag]=useState<{id:string;x:number;y:number}|null>(null);
+  const handPointerCleanup=useRef<()=>void>(()=>{});
+  useEffect(()=>()=>handPointerCleanup.current(),[]);
   const selectIdleTimer=useRef<number|null>(null);
   const selectionOptions=useRef({autoDeselect,deselectMs,cardViewHoldMs,holdSelectStacks});
   selectionOptions.current={autoDeselect,deselectMs,cardViewHoldMs,holdSelectStacks};
@@ -2108,6 +2111,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     }
     const byId=new Map(state.objects.map(o=>[o.id,o]));
     const visible=state.objects.filter(o=>{
+      // In Held Hand View the player's private cards are represented by
+      // their interactive near-player fan rather than duplicate miniatures
+      // in the distant HAND pocket. This is local presentation only.
+      if(handHoldView&&o.zone==='HAND'&&(o.matSeat===seat||o.owner===actorId))
+        return false;
       // Carried tokens remain attached to cards in hands and decks, but a
       // hidden carrier must never leave floating coins exposed on the table.
       let ancestor=o;
@@ -2891,7 +2899,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       for(const {button} of stackBadges)button.remove();
       for(const {el} of shuffleFx)el.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs,handPlayMode]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs,handPlayMode,handHoldView]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
@@ -3787,6 +3795,89 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       window.removeEventListener('keydown',key);
     };
   },[]);
+  // Private player-facing hand: pointer movements are converted from
+  // viewport pixels into the same world coordinates as normal Pixi drags.
+  // A drop into the mat is one authoritative MOVE command, so deck/zone
+  // rules, replay, ownership and network synchronization stay unchanged.
+  const beginHeldHandDrag=(event:ReactPointerEvent<HTMLButtonElement>,id:string)=>{
+    if(event.button!==0||readonly)return;
+    const object=state.objects.find(o=>o.id===id);
+    if(!object||object.locked||
+       (object.owner&&object.owner!==actorId&&object.owner!=='local'))return;
+    event.preventDefault();event.stopPropagation();
+    handPointerCleanup.current();
+    const pointerId=event.pointerId;
+    const startX=event.clientX,startY=event.clientY;
+    let moved=false,inspecting=false,done=false;
+    const timer=window.setTimeout(()=>{
+      if(done||moved)return;
+      inspecting=true;setCardPeek(id);
+    },cardViewHoldMs);
+    const clear=()=>{
+      if(done)return;
+      done=true;window.clearTimeout(timer);
+      window.removeEventListener('pointermove',move,true);
+      window.removeEventListener('pointerup',finish,true);
+      window.removeEventListener('pointercancel',finish,true);
+      window.removeEventListener('blur',blur,true);
+      handPointerCleanup.current=()=>{};
+      setHeldHandDrag(null);
+      if(inspecting)setCardPeek(null);
+    };
+    const move=(e:PointerEvent)=>{
+      if(e.pointerId!==pointerId||done)return;
+      if(!moved&&Math.hypot(e.clientX-startX,e.clientY-startY)>9){
+        moved=true;window.clearTimeout(timer);
+        if(inspecting){inspecting=false;setCardPeek(null);}
+      }
+      if(moved){
+        setHeldHandDrag({id,x:e.clientX,y:e.clientY});
+        restartSelectionIdle.current();
+      }
+    };
+    const finish=(e:PointerEvent)=>{
+      if(e.pointerId!==pointerId||done)return;
+      const wasMoved=moved;
+      clear();
+      if(wasMoved){
+        const current=session.current,host=mount.current;
+        if(!current||!host)return;
+        const rect=current.app.canvas.getBoundingClientRect();
+        const handArea=Math.min(190,Math.max(118,rect.height*.22));
+        // Releasing back on the held fan simply cancels the play.
+        if(e.clientY>rect.bottom-handArea||
+          e.clientY<rect.top||e.clientX<rect.left||e.clientX>rect.right)return;
+        const stage=new Point(
+          (e.clientX-rect.left)*current.app.renderer.width/rect.width,
+          (e.clientY-rect.top)*current.app.renderer.height/rect.height);
+        const world=current.board.toLocal(stage,current.app.stage);
+        callbacks.current.onMove(id,Math.round(world.x),Math.round(world.y));
+        updateSelection([]);
+        return;
+      }
+      if(!inspecting){
+        updateSelection(selectedSet.current.has(id)
+          ?[...selectedSet.current].filter(other=>other!==id)
+          :[...selectedSet.current,id]);
+        callbacks.current.onSelect(id);
+      }
+    };
+    const blur=()=>clear();
+    window.addEventListener('pointermove',move,true);
+    window.addEventListener('pointerup',finish,true);
+    window.addEventListener('pointercancel',finish,true);
+    window.addEventListener('blur',blur,true);
+    handPointerCleanup.current=clear;
+  };
+  const localHeldCards=handHoldView&&state.kind==='tcg'
+    ?state.objects.filter(o=>o.kind==='card'&&o.zone==='HAND'&&
+      (o.matSeat===seat||o.owner===actorId)&&
+      (!o.owner||o.owner===actorId||o.owner==='local'))
+      .sort((a,b)=>tcgMatLocal(a.x,a.y,seat).x-
+        tcgMatLocal(b.x,b.y,seat).x||a.order-b.order||a.id.localeCompare(b.id))
+    :[];
+  const fanSpacing=Math.min(73,Math.max(13,
+    (Math.max(180,viewport.width)-110)/Math.max(1,localHeldCards.length-1)));
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
     {cardPeek&&(()=>{
@@ -3797,6 +3888,42 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         aria-label={'Viewing '+item.name} onPointerDown={e=>e.stopPropagation()}
         onClick={()=>setCardPeek(null)}>
         {url?<img src={url} alt={item.name}/>:<div className="sennet-full-card-fallback">{item.faceUp?item.name:'Card back'}</div>}
+      </div>;
+    })()}
+    {handHoldView&&state.kind==='tcg'&&!readonly&&
+      <div className="sennet-held-hand" role="region"
+        aria-label={'Your held hand, '+localHeldCards.length+' cards'}>
+        {localHeldCards.map((card,index)=>{
+          const mid=(localHeldCards.length-1)/2;
+          const offset=(index-mid)*fanSpacing;
+          const angle=Math.max(-12,Math.min(12,(index-mid)*2.5));
+          const art=bestCardImage(card.faceUrl||card.backUrl||'');
+          const isDragging=heldHandDrag?.id===card.id;
+          return <button type="button" key={card.id}
+            className={'sennet-held-card'+(selectedSet.current.has(card.id)?' is-selected':'')+
+              (isDragging?' is-dragging':'')}
+            style={{left:`calc(50% + ${offset}px)`,
+              transform:`translateX(-50%) rotate(${angle}deg)`,
+              zIndex:10+index} as React.CSSProperties}
+            title={card.name} aria-label={'Hand card '+card.name}
+            onPointerDown={e=>beginHeldHandDrag(e,card.id)}
+            onContextMenu={e=>e.preventDefault()}>
+            {art?<img draggable={false} src={art} alt={card.name}/>:
+              <span className="sennet-held-card-placeholder">{card.name}</span>}
+          </button>;
+        })}
+        {localHeldCards.length>0&&<div className="sennet-held-hand-count"
+          aria-hidden="true">{localHeldCards.length} in hand</div>}
+      </div>}
+    {heldHandDrag&&(()=>{
+      const card=state.objects.find(o=>o.id===heldHandDrag.id);
+      if(!card)return null;
+      const art=bestCardImage(card.faceUrl||card.backUrl||'');
+      const rect=mount.current?.getBoundingClientRect();
+      return <div className="sennet-held-drag-ghost" aria-hidden="true"
+        style={{left:heldHandDrag.x-(rect?.left??0),
+          top:heldHandDrag.y-(rect?.top??0)}}>
+        {art?<img src={art} alt=""/>:<span>{card.name}</span>}
       </div>;
     })()}
     {coinEditing&&<input autoFocus className="sennet-coin-editor" type="text" inputMode="text" maxLength={20}
