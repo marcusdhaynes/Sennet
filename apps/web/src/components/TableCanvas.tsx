@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel from './CardRadialWheel';
+import {RADIAL_ACTIONS,type RadialAction} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
@@ -263,7 +264,8 @@ function drawTcgMats(
   onEyeTap:()=>void,onEyeHold:()=>void,onCastleTap:()=>void,onCastleHold:()=>void,onOpenTcgSettings:()=>void,castleActive:boolean,castleMode:CastleMode|'focus',castleBaseMode:CastleMode,focused:Readonly<CastleSideFocus>,onCycleOpponent:(direction:'left'|'right',sourceSeat:number)=>void,onControlDown:(pointerId:number)=>void,
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
   eyeHoldMs:number,selectedEnemy:number|null,
-  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,
+  handPlayMode:boolean
 ){
   const drawnSeats=seatLayers
     ? [...seatLayers.keys()]
@@ -605,7 +607,9 @@ function drawTcgMats(
         grid.stroke({color:accent,alpha:merged?.08:.03,width:.5});
         grid.eventMode='none';surface.addChild(grid);
       }
-      const text=label(tcgRegionLabel(cell.row,cell.column,cell.lastRow),(cell.column!==1?8:merged?12:10)*regionTextScale,accent, 'bold');
+      const regionName=handPlayMode&&seat===viewerSeat&&cell.row===3&&cell.column===1&&cell.lastRow===3
+        ?'PLAY 00':tcgRegionLabel(cell.row,cell.column,cell.lastRow);
+      const text=label(regionName,(cell.column!==1?8:merged?12:10)*regionTextScale,accent, 'bold');
       text.style.fontFamily='Orbitron, '+FONT;
       // Keep the etched letter edges crisp while a wider, soft shadow
       // falls off gradually across busy felt textures and artwork.
@@ -975,7 +979,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   viewport:{width:number;height:number},
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
   selectedEnemy:number|null,
-  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void):Map<number,Container>|null{
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,handPlayMode:boolean):Map<number,Container>|null{
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   if(duelOpponent!==null||castleActive){
@@ -1022,7 +1026,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,seatLayers,
-    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer,onEyeReady);
+    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer,onEyeReady,handPlayMode);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -1424,6 +1428,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const selectedRef=useRef(selected);selectedRef.current=selected;
   const mount=useRef<HTMLDivElement>(null);
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
+  const play00ToolbarRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const eyeHitTarget=useRef<Container|null>(null);
@@ -1934,9 +1939,24 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           }
           // Keep the action display alongside this same playmat, not
           // beside a floating screen-corner radial.
-          const display=fitActionScreenToWheel(
+          const normalDisplay=fitActionScreenToWheel(
             projectedLeft.x,projectedRight.x,next.x,next.size,
             screen.y,matScreenWidth/TCG_MAT_WIDTH);
+          const matUpperLeft=tcgMatWorld(-TCG_MAT_WIDTH/2+8,-TCG_MAT_HEIGHT/2+13,seatRef.current);
+          const upperLeft=parent.toGlobal(new Point(matUpperLeft.x,matUpperLeft.y));
+          const display=handPlayMode?{
+            ...normalDisplay,left:upperLeft.x,y:upperLeft.y,
+            width:Math.max(125,Math.min(matScreenWidth*.38,240)),
+            heightScale:Math.max(.65,Math.min(1,matScreenWidth/TCG_MAT_WIDTH)),
+            visible:true}:normalDisplay;
+          const castle=viewButtonPosition('castle');
+          const world=tcgMatWorld(castle.x+34,castle.y,seatRef.current);
+          const toolbarPoint=parent.toGlobal(new Point(world.x,world.y));
+          const toolbar=play00ToolbarRef.current;
+          if(toolbar){
+            const size=Math.max(.45,Math.min(2.1,matScreenWidth/TCG_MAT_WIDTH));
+            toolbar.style.transform=`translate3d(${toolbarPoint.x}px,${toolbarPoint.y-15*size}px,0) scale(${size})`;
+          }
           actionScreenLatest.current=display;
           if(actionLcdRef.current){
             const lcd=actionLcdRef.current;
@@ -2037,7 +2057,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       {ally:eyeView.castleFocusedAlly??null,enemy:eyeView.castleFocusedEnemy??null},
       viewport,relations,250,eyeView.castleSelectedEnemy??null,
       boxClosed,drawerGroups.current,drawerTabs.current,toggleBox,
-      button=>{eyeHitTarget.current=button;});
+      button=>{eyeHitTarget.current=button;},handPlayMode);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
@@ -2522,7 +2542,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const count=stacks.get(stackKey(obj))?.length??1;
       const stackSelected=count>1&&(stacks.get(stackKey(obj))??[])
         .every(card=>selectedSet.current.has(card.id));
-      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),objectCoin,stackSelected);
+      const piece=createPiece(handPlayMode&&obj.zone==='HAND'&&obj.matSeat===seat
+        ?{...obj,faceUp:false}:obj,
+        obj.id===selected||selectedSet.current.has(obj.id),objectCoin,stackSelected);
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
         drag.current.visual=piece;
@@ -2606,7 +2628,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // through projectForActor and cannot recover private front art.
       // Render native full-resolution art, including saved/imported card
       // records which still contain old thumbnail-sized provider URLs.
-      const originalUrl=obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||'');
+      const play00Concealed=handPlayMode&&obj.zone==='HAND'&&obj.matSeat===seat;
+      const originalUrl=!play00Concealed&&obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||'');
       const url=bestCardImage(originalUrl);
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot&&
          !(obj.zone==='DECK'&&deckTop.get(pileKey(obj))?.id!==obj.id)){
@@ -2647,7 +2670,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           artworkCache.current.set(obj.id,{img,url});
           loadProgressiveCardArt(img,originalUrl,url);
         }
-        img.alt=obj.faceUp?obj.name:obj.name+' card back';
+        img.alt=play00Concealed?'Face-down Play 00 card':obj.faceUp?obj.name:obj.name+' card back';
         artLayers.push({piece,img});
       }else if(url){
         Assets.load(url).then(texture=>{
@@ -2805,7 +2828,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       for(const {el} of coinLayers)el.remove();
       for(const {button} of stackBadges)button.remove();
     };
-  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
+  },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs,handPlayMode]);
 
   useEffect(()=>{
     if(!ready||!session.current||!mount.current)return;
@@ -3723,6 +3746,21 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         if(e.key==='Escape')setCoinEditing(null);
       }}/>}
 
+    {state.kind==='tcg'&&handPlayMode&&!readonly&&
+      <div className="sennet-play00-actions" ref={play00ToolbarRef}
+        style={{transformOrigin:'left top'}}
+        role="toolbar" aria-label="Play 00 card actions"
+        onPointerDown={event=>event.stopPropagation()}>
+        {RADIAL_ACTIONS.flat().map(action=><button key={action.id}
+          type="button" title={action.id.replaceAll('-',' ')}
+          aria-label={action.id.replaceAll('-',' ')}
+          disabled={selectedIds.length===0&&!selected}
+          onClick={()=>{
+            const ids=selectedIds.length?selectedIds:selected?[selected]:[];
+            if(ids.length)callbacks.current.onRadialAction(ids,action.id as RadialAction);
+            restartSelectionIdle.current();
+          }}>{action.label}</button>)}
+      </div>}
     {state.kind==='tcg'&&actionScreenVisible&&
       <div ref={node=>{
         actionLcdRef.current=node;
@@ -3819,7 +3857,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
-    {state.kind==='tcg'&&!readonly&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
+    {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
         ref={node=>{
           dockedWheelRef.current=wheelMode==='docked'?node:null;
