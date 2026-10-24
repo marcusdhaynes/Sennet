@@ -2001,7 +2001,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const face=makeDie(sides,undefined,badge);
         face.scale.set(DICE_SOURCE_RACK_SCALE);
         source.addChild(face);
-        const name=label(diceLabel(sides),8,0xffedbe,'bold');
+        const name=label(diceLabel(sides),8.8,0xffedbe,'bold');
         name.position.set(0,15);
         source.addChild(name);
         // Live-updated badge is a separate child so click counting does
@@ -2034,10 +2034,13 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         source.on('pointerout',()=>{
           source.cursor='grab';staticDice3D.current?.setEmphasis('source-'+sides,false);
         });
+        source.on('pointerupoutside',()=>staticDice3D.current?.setEmphasis('source-'+sides,false));
+        source.on('pointercancel',()=>staticDice3D.current?.setEmphasis('source-'+sides,false));
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
           controlPointer.current=e.pointerId;
+          staticDice3D.current?.setEmphasis('source-'+sides,true);
           dicePointer.current={
             pointerId:e.pointerId,sides,startX:e.clientX,startY:e.clientY,at:performance.now()
           };
@@ -2353,6 +2356,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         if(obj.kind==='die'||obj.throwDice){
           piece.on('pointerover',()=>staticDice3D.current?.setEmphasis(obj.id,true));
           piece.on('pointerout',()=>staticDice3D.current?.setEmphasis(obj.id,false));
+          piece.on('pointerupoutside',()=>staticDice3D.current?.setEmphasis(obj.id,false));
+          piece.on('pointercancel',()=>staticDice3D.current?.setEmphasis(obj.id,false));
         }
         piece.eventMode='static';piece.cursor=obj.throwDice?'pointer':obj.locked?'pointer':'grab';
         piece.on('pointerdown',(e)=>{
@@ -2361,6 +2366,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           cancelActiveDrag.current();
           if(obj.throwDice){
             if(obj.locked||obj.owner&&obj.owner!==actorId)return;
+            staticDice3D.current?.setEmphasis(obj.id,true);
             const old=rerollPointer.current;
             if(old)window.clearTimeout(old.timer);
             const held={
