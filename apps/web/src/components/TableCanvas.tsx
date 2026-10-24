@@ -2800,9 +2800,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           preview.style.transform=`matrix(${xa},${xb},${xc},${xd},${originX-18*(xa+xc)},${originY-18*(xb+xd)})`;
         }
       }
-      if(hoveredCoin&&
-         (!hoveredCoin.el.isConnected||coinOverlapsStackCounter(hoveredCoin.piece)))
-        clearCoinHover();
+      // A single coin hover remains active across its complete silhouette.
+      // Do not let unrelated stack badge proximity kill its zoom preview.
+      if(hoveredCoin&&!hoveredCoin.el.isConnected)clearCoinHover();
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
         const piece=visuals.current.get(id);
