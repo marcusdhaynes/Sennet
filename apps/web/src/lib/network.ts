@@ -16,6 +16,29 @@ type RoomMessage={
   state?:GameState;event?:EventRecord;players?:Player[];
 };
 const LOOP=1800;
+/** Image data is uploaded as tiny preview textures, never unbounded originals.
+ * The owner's full-resolution local playmat remains untouched. */
+async function compactAppearance(appearance:SharedAppearance):Promise<SharedAppearance>{
+  if(!appearance.playmat)return appearance;
+  const images:Record<string,string>={};
+  for(const [id,url] of Object.entries(appearance.playmat.images??{})){
+    if(!url.startsWith('data:image/')||url.length<24000){images[id]=url;continue;}
+    try{
+      const image=new Image();
+      image.src=url;
+      await image.decode();
+      const aspect=image.naturalWidth/Math.max(1,image.naturalHeight);
+      const canvas=document.createElement('canvas');
+      canvas.width=Math.max(1,Math.round(aspect>=1?320:320*aspect));
+      canvas.height=Math.max(1,Math.round(aspect>=1?320/aspect:320));
+      canvas.getContext('2d')?.drawImage(image,0,0,canvas.width,canvas.height);
+      const preview=canvas.toDataURL('image/webp',.66);
+      if(preview.length<60000)images[id]=preview;
+    }catch{/* Preserve other image settings even if this source cannot decode. */}
+  }
+  return {...appearance,playmat:{...appearance.playmat,images}};
+}
+
 
 /** WSS preferred; same-origin HTTPS requests are the VPN-friendly fallback.
  * Server authority is identical for both paths. Player secrets travel in POST
@@ -32,6 +55,7 @@ export class RoomConnection {
   private failures=0;
   private appearance:SharedAppearance|null=null;
   private lastCosmetics='';
+  private appearanceRevision=0;
   private readonly httpRoot:string;
   private readonly payload:JoinMessage;
   private readonly handlers:RoomCallbacks;
@@ -145,14 +169,17 @@ export class RoomConnection {
   publishAppearance(appearance:SharedAppearance){
     this.appearance=appearance;
     if(!this.joined)return;
-    if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN){
-      this.ws.send(JSON.stringify({type:'appearance',appearance}));return;
-    }
-    if(this.mode==='http'){
-      void this.post('appearance',{appearance}).then(msg=>{
-        if(!this.stopped&&msg.state)this.receiveSnapshot(msg.state);
-      }).catch(error=>this.handlers.onError('Could not sync appearance: '+String(error)));
-    }
+    const revision=++this.appearanceRevision;
+    void compactAppearance(appearance).then(compact=>{
+      if(this.stopped||!this.joined||revision!==this.appearanceRevision)return;
+      if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN){
+        this.ws.send(JSON.stringify({type:'appearance',appearance:compact}));
+      }else if(this.mode==='http'){
+        void this.post('appearance',{appearance:compact}).then(msg=>{
+          if(!this.stopped&&msg.state)this.receiveSnapshot(msg.state);
+        }).catch(error=>this.handlers.onError('Could not sync appearance: '+String(error)));
+      }
+    }).catch(error=>this.handlers.onError('Unable to prepare shared artwork: '+String(error)));
   }
   requestSnapshot(){
     if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN)
