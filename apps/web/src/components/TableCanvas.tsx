@@ -1,4 +1,3 @@
-import {CONTROL_PIXELS} from '../lib/controlPixels';
 import {useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
@@ -8,6 +7,67 @@ import {RADIAL_ACTIONS} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
+/** Hover-expanded book covers must paint above the player drawer, table and
+ * every other interface layer. Keep the real cover as the only hit target
+ * and mirror its enlarged appearance in a pointer-transparent body overlay. */
+function installTopLayerBookHover(){
+ let active:HTMLElement|null=null;
+ let wrapper:HTMLDivElement|null=null;
+ let raf=0;
+ const remove=()=>{
+  active=null;
+  if(raf)window.cancelAnimationFrame(raf);
+  raf=0;
+  wrapper?.remove();
+  wrapper=null;
+ };
+ const sync=()=>{
+  if(!active||!active.isConnected||!wrapper){remove();return;}
+  const rect=active.getBoundingClientRect();
+  const preview=wrapper.firstElementChild as HTMLElement|null;
+  if(preview){
+   preview.style.width=rect.width+'px';
+   preview.style.height=rect.height+'px';
+   preview.style.filter=getComputedStyle(active).filter;
+  }
+  wrapper.style.left=rect.left+'px';
+  wrapper.style.top=rect.top+'px';
+  raf=window.requestAnimationFrame(sync);
+ };
+ const enter=(event:PointerEvent)=>{
+  if(!(event.target instanceof Element))return;
+  const original=event.target.closest<HTMLElement>('.player-hub .table-book');
+  if(!original||original===active)return;
+  remove();
+  active=original;
+  wrapper=document.createElement('div');
+  wrapper.className='sennet-book-hover-top-layer';
+  const clone=original.cloneNode(true) as HTMLElement;
+  clone.removeAttribute('id');
+  clone.setAttribute('aria-hidden','true');
+  clone.setAttribute('tabindex','-1');
+  clone.inert=true;
+  clone.style.cssText='position:relative;display:block;left:0;top:0;margin:0;'+
+   'transform:none!important;transition:none!important;'+
+   'pointer-events:none!important;touch-action:none;';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  sync();
+ };
+ const leave=(event:PointerEvent)=>{
+  if(!active||!(event.target instanceof Node)||!active.contains(event.target))return;
+  const next=event.relatedTarget;
+  if(next instanceof Node&&active.contains(next))return;
+  remove();
+ };
+ document.addEventListener('pointerover',enter,true);
+ document.addEventListener('pointerout',leave,true);
+ return ()=>{
+  document.removeEventListener('pointerover',enter,true);
+  document.removeEventListener('pointerout',leave,true);
+  remove();
+ };
+}
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 // Display numerals are deliberately separate from the numeric action values.
@@ -37,10 +97,10 @@ import {formatDiceSelection} from '../lib/actionDisplay';
 import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {expandDiceSources} from '../lib/diceSourceExpansion';
 import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '../lib/diceCoordinates';
-import {bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
-import {actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
+import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
+import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
 import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom,
-  EYE_CONTROL_DIAMETER_PX} from '../lib/actionRadialFit';
+  EYE_CONTROL_DIAMETER_PX,eyeOpponentReferencePixels} from '../lib/actionRadialFit';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -251,7 +311,7 @@ function drawTcgMats(
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
   eyeHoldMs:number,selectedEnemy:number|null,
   drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,
-  onCastleReady:(button:Container)=>void,onMergeReady:(button:Container,screenScale?:number)=>void,handPlayMode:boolean
+  onCastleReady:(button:Container)=>void,onMergeReady:(button:Container)=>void,handPlayMode:boolean
 ){
   const drawnSeats=seatLayers
     ? [...seatLayers.keys()]
@@ -340,13 +400,7 @@ function drawTcgMats(
         const drawerGroup=new Container();
         drawerGroup.eventMode='auto';
         drawerGroup.addChild(tray);
-        const drawerFrame=new Container();
-        const anchorX=side*(TCG_MAT_WIDTH/2+3);
-        drawerFrame.position.set(anchorX,trayTop);
-        drawerFrame.pivot.set(anchorX,trayTop);
-        drawerFrame.addChild(drawerGroup);
-        mat.addChild(drawerFrame);
-        onMergeReady(drawerFrame,CONTROL_PIXELS.drawerScale);
+        mat.addChild(drawerGroup);
         layers.accessories.attach(drawerGroup);
         if(seat===viewerSeat)drawerGroups.set(side,drawerGroup);
         // The drawer slides UNDER the mat. Only the genuine outer wooden
@@ -358,7 +412,7 @@ function drawTcgMats(
         mask.rect(clipX,-TCG_MAT_HEIGHT/2-25,180,TCG_MAT_HEIGHT+50)
           .fill(0xffffff);
         mask.eventMode='none';
-        drawerFrame.addChild(mask);
+        mat.addChild(mask);
         // A regular scene-tree stencil clips the drawer in accessory layer 4.
         drawerGroup.mask=mask;
         const bodyOuterX=cx+side*(trayW+24)/2;
@@ -445,7 +499,6 @@ function drawTcgMats(
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
       const by=trayBottom-bh*.44-10+bookOffset.y;
       const book=makePseudo3DBook(bookDesign,bw,bh);
-      onMergeReady(book,CONTROL_PIXELS.bookArtScale);
       book.position.set(bx,by);
       // A physical book can be loose on the felt OR stowed in EITHER
       // drawer. Test its footprint against the actual inner wooden walls;
@@ -492,9 +545,8 @@ function drawTcgMats(
         const homeDrawer=previouslyStowed!==null?drawerGroups.get(previouslyStowed):null;
         // Lift out of the clipped drawer BEFORE dragging. The book now
         // remains selectable across the drawer wall and entire playmat.
-        const stowedPosition=book.position.clone();
-        const onMat=mat.toLocal(book.toGlobal(new Point(0,0)));
-        const originalX=onMat.x,originalY=onMat.y;
+        const originalX=book.position.x+(homeDrawer?.position.x??0);
+        const originalY=book.position.y;
         if(previouslyStowed!==null)free(originalX,originalY);
         let moved=false;
         const onMove=(event:PointerEvent)=>{
@@ -521,7 +573,7 @@ function drawTcgMats(
           if(event.type==='pointercancel'||!moved){
             free(originalX,originalY);
             if(previouslyStowed!==null&&homeDrawer)
-              stow(previouslyStowed,stowedPosition.x,stowedPosition.y);
+              stow(previouslyStowed,bookOpenPoseX(originalX,homeDrawer.position.x),originalY);
             if(event.type!=='pointercancel')onBookOpen();
             return;
           }
@@ -529,10 +581,9 @@ function drawTcgMats(
           // inside the wooden walls snaps it to the original bottom-center
           // seat, regardless of where it was picked up or its old offset.
           const rightDrawer=drawerGroups.get(1);
-          const global=book.toGlobal(new Point(0,0));
-          const rightPoint=rightDrawer?.toLocal(global);
-          const insideRight=rightPoint&&!drawerState.right&&
-            isBookCenterWithinDrawer(rightPoint.x,rightPoint.y,wellFor(1),0);
+          const insideRight=rightDrawer&&!drawerState.right&&
+            isBookCenterWithinDrawer(book.position.x,book.position.y,
+              wellFor(1),rightDrawer.position.x);
           if(insideRight){
             const homeX=wellFor(1).x;
             const homeY=trayBottom-bh*.44-10;
@@ -545,13 +596,12 @@ function drawTcgMats(
           // Outside both drawers the book remains a free movable object.
           const target=([-1,1] as const).find(s=>{
             const drawer=drawerGroups.get(s);
-            const point=drawer?.toLocal(global);
-            return point&&!(s===-1?drawerState.left:drawerState.right)&&
-              fits(s,point.x,point.y);
+            return drawer&&!(s===-1?drawerState.left:drawerState.right)&&
+              fits(s,book.position.x,book.position.y,drawer.position.x);
           });
-          const dropped=target===undefined?book.position:
-            drawerGroups.get(target)!.toLocal(global);
-          const visibleY=dropped.y,openX=dropped.x;
+          const visibleX=book.position.x,visibleY=book.position.y;
+          const openX=target===undefined?visibleX:
+            bookOpenPoseX(visibleX,drawerGroups.get(target)?.position.x??0);
           if(target!==undefined)stow(target,openX,visibleY);
           // bx/by already contain the prior offset. Preserve it when saving
           // the movement delta, otherwise every drop jumps on scene rebuild.
@@ -890,10 +940,6 @@ function drawTcgMats(
     // Shield controls. The Eye remains exclusive to the viewer's mat.
     // These are local display choices, not multiplayer game commands.
     if(seatLayers&&seat!==viewerSeat){
-        const relationControls=new Container();
-        relationControls.position.set(0,opponentRelationButtonPosition('enemy').y);
-        mat.addChild(relationControls);
-        onMergeReady(relationControls);
         for(const choice of ['enemy','ally'] as const){
           const isSword=choice==='enemy';
           const active=relations[seat]===choice;
@@ -904,11 +950,12 @@ function drawTcgMats(
           // Anchor to THIS opponent's own PLAY 03 top line, not the
           // viewer's screen edge or central battlefield divider.
           const position=opponentRelationButtonPosition(choice,enemySide);
-          button.position.set(position.x,0);
+          button.position.set(position.x,position.y);
           button.eventMode='static';
           button.cursor='pointer';
           button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
           button.addChild(woodenControl(OPPONENT_RELATION_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',active));
+          onMergeReady(button);
           const glyph=new Graphics();
           if(isSword){
             // Single upright sword: blade, crossguard, grip, pommel.
@@ -940,7 +987,7 @@ function drawTcgMats(
             e.stopPropagation();
             onToggleRelation(seat,choice);
           });
-          relationControls.addChild(button);
+          mat.addChild(button);
           layers.buttons.attach(button);
         }
     }
@@ -990,7 +1037,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
   selectedEnemy:number|null,
   drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,
-  onCastleReady:(button:Container)=>void,onMergeReady:(button:Container,screenScale?:number)=>void,handPlayMode:boolean):Map<number,Container>|null{
+  onCastleReady:(button:Container)=>void,onMergeReady:(button:Container)=>void,handPlayMode:boolean):Map<number,Container>|null{
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   if(duelOpponent!==null||castleActive){
@@ -1039,7 +1086,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
-    if(seatLayers||i===seat)continue;
+    if(seatLayers)continue;
     const angle=i*Math.PI/6-Math.PI/2;
     const x=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.cos(angle);
     const y=BOARD_CENTER+(TABLE_APOTHEM+34)*Math.sin(angle);
@@ -1057,7 +1104,6 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     chair.addChild(seatText);
     board.addChild(chair);
     layers.labels.attach(chair);
-    onMergeReady(chair,CONTROL_PIXELS.playerWidth/156);
   }
   return seatLayers;
 }
@@ -1390,7 +1436,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
-  // coordinates. Its size is fixed in CSS pixels.
+  // coordinates, not viewport dimensions. Camera zoom is its only scaling.
   // HUD geometry is stored without a React rerender per pan/zoom frame.
   // Only visibility changes need to trigger a React render.
   const [actionScreenVisible,setActionScreenVisible]=useState(false);
@@ -1449,11 +1495,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const eyeHitTarget=useRef<Container|null>(null);
   const castleHitTarget=useRef<Container|null>(null);
   const mergeHitTargets=useRef<Container[]>([]);
-  const sizedControlTargets=useRef<{node:Container;screenScale:number}[]>([]);
-  const drawHitTarget=useRef<Container|null>(null);
+  // Exactly one reference diameter per mounted session: the actual
+  // initial Eye-view opponent button footprint, not a guessed 16/34px.
+  const controlReferencePixels=useRef<number|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
-
+  useEffect(()=>installTopLayerBookHover(),[]);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
   // Every Pixi control is normalized in ONE place before each render.
@@ -1499,8 +1546,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const openCoinMenu=(piece:Container,type:'source'|'copy',id?:string,index?:number)=>{
     const current=session.current;if(!current)return;
     const p=piece.toGlobal(new Point(0,0)),rect=current.app.canvas.getBoundingClientRect();
-    setCoinMenu({type,id,index,x:p.x*rect.width/current.app.screen.width,
-      y:p.y*rect.height/current.app.screen.height});setCoinColorsOpen(false);
+    setCoinMenu({type,id,index,x:p.x*rect.width/current.app.renderer.width,
+      y:p.y*rect.height/current.app.renderer.height});setCoinColorsOpen(false);
   };
   const applyCoinAction=(index:number)=>{
     const m=coinMenu;if(!m)return;
@@ -1670,8 +1717,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     if(piece&&!piece.destroyed&&app){
       const pos=piece.toGlobal(new Point(0,0));
       const rect=app.canvas.getBoundingClientRect();
-      const x=pos.x*rect.width/app.screen.width;
-      const y=pos.y*rect.height/app.screen.height;
+      const x=pos.x*rect.width/app.renderer.width;
+      const y=pos.y*rect.height/app.renderer.height;
       const edge=piece.toGlobal(new Point(1,0));
       const sc=Math.hypot(edge.x-pos.x,edge.y-pos.y);
       node.style.left=x+'px';
@@ -1703,7 +1750,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     if(!mat||!types.length)return;
     const {app,board}=current;
     const rect=app.canvas.getBoundingClientRect();
-    const sx=rect.width/app.screen.width,sy=rect.height/app.screen.height;
+    const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
     if(rect.width<=0||rect.height<=0)return;
     const convert=(point:{x:number;y:number})=>({x:point.x*sx,y:point.y*sy});
     const origin=tcgMatOrigin(seatRef.current);
@@ -1794,7 +1841,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     dice3DStop.current?.();dice3DStop.current=null;
     const {app,board}=current,rect=app.canvas.getBoundingClientRect();
     if(rect.width<=0||rect.height<=0)return;
-    const sx=rect.width/app.screen.width,sy=rect.height/app.screen.height;
+    const sx=rect.width/app.renderer.width,sy=rect.height/app.renderer.height;
     const pos=visual.toGlobal(new Point(0,0));
     // Screen-space cursor release is authoritative; never use the die's
     // old position or an arbitrary center-of-screen destination.
@@ -1919,7 +1966,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         if(!host||!app.canvas.isConnected)return;
         const width=host.clientWidth,height=host.clientHeight;
         if(width<=0||height<=0)return;
-        const desired=CONTROL_PIXELS.circle;
+        if(controlReferencePixels.current===null){
+          const bounds=battlefieldFitBounds(1,BATTLEFIELD_PLAYMAT_PADDING,true);
+          controlReferencePixels.current=eyeOpponentReferencePixels(
+            width,height,bounds,TCG_MAT_WIDTH,TCG_MAT_HEIGHT);
+          // This is set ONCE. It never changes with camera/view zoom,
+          // including Castle all-grid and distant overview views.
+          host.style.setProperty('--sennet-control-size',
+            controlReferencePixels.current+'px');
+        }
+        const desired=controlReferencePixels.current;
         const canvas=app.canvas.getBoundingClientRect();
         const sx=canvas.width/app.screen.width;
         const sy=canvas.height/app.screen.height;
@@ -1927,7 +1983,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Global transform is measured on each control's PARENT,
         // which excludes that control's own inverse-scale correction.
         // No button x/y/rotation/pivot/anchor is ever changed.
-        const fix=(node:Container,sourceDiameter:number,screenScale=desired/sourceDiameter)=>{
+        const fix=(node:Container,sourceDiameter:number)=>{
           if(node.destroyed||!node.parent)return;
           const p=node.parent;
           const origin=p.toGlobal(new Point(0,0));
@@ -1936,16 +1992,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const worldX=Math.hypot((oneX.x-origin.x)*sx,(oneX.y-origin.y)*sy);
           const worldY=Math.hypot((oneY.x-origin.x)*sx,(oneY.y-origin.y)*sy);
           if(!(worldX>0&&worldY>0))return;
-          const factor=screenScale;
+          const factor=desired/sourceDiameter;
           const pxX=factor/worldX,pxY=factor/worldY;
           // Set absolute scales, never multiply an existing scale:
           // otherwise a camera animation accumulates enlargement.
           if(Math.abs(node.scale.x-pxX)>1e-6||Math.abs(node.scale.y-pxY)>1e-6)
             node.scale.set(pxX,pxY);
         };
-        // Normalize containing panels before their child controls.
-        for(const {node,screenScale} of sizedControlTargets.current)fix(node,1,screenScale);
-        if(drawHitTarget.current)fix(drawHitTarget.current,21,CONTROL_PIXELS.draw/21);
         const eye=eyeHitTarget.current;
         if(eye&&!eye.destroyed&&eye.parent&&!eye.parent.destroyed){
           // Eye and Castle share a single anchored group; its fixed
@@ -2001,36 +2054,45 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const panelY=actionScreenContactCenter(TCG_MAT_HEIGHT);
           const matLeft=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
           const matRight=tcgMatWorld(TCG_MAT_WIDTH/2,panelY,seatRef.current);
+          const anchor=tcgMatWorld(0,panelY,seatRef.current);
+          const screen=parent.toGlobal(new Point(anchor.x,anchor.y));
           const projectedLeft=parent.toGlobal(new Point(matLeft.x,matLeft.y));
           const projectedRight=parent.toGlobal(new Point(matRight.x,matRight.y));
           const matScreenWidth=Math.hypot(
             projectedRight.x-projectedLeft.x,projectedRight.y-projectedLeft.y);
-          // Only the anchor follows the mat. Pixel sizes match the reference.
+          // Original radial diameter = 30% of the visible playmat width.
+          // Measure the real transformed mat, so 1v1/Castle use the same
+          // relationship even when the seat has a separate view transform.
+          // ALWAYS use the mat-projected center and original size.
+          // Never clamp, slide, or shrink the radial to fit the viewport.
+          // Eye/Castle camera framing is responsible for its visibility.
           const next=fitMatAttachedRadial(
             projected.x,projected.y,matScreenWidth,w,h);
           dockedWheelGeometry.current=next;
           const dock=dockedWheelRef.current;
           if(dock){
-            dock.style.transform=`translate3d(${next.x-CONTROL_PIXELS.radial/2}px,${next.y}px,0)`;
+            const factor=next.size/180;
+            dock.style.transform=`translate3d(${next.x-90*factor}px,${next.y}px,0) scale(${factor})`;
           }
           // Keep the action display alongside this same playmat, not
           // beside a floating screen-corner radial.
-          const normalDisplay={left:Math.min(projectedLeft.x,projectedRight.x),
-            y:projected.y+CONTROL_PIXELS.displayHeight/2,width:CONTROL_PIXELS.displayWidth,
-            heightScale:1,visible:true};
+          const normalDisplay=fitActionScreenToWheel(
+            projectedLeft.x,projectedRight.x,next.x,next.size,
+            screen.y,matScreenWidth/TCG_MAT_WIDTH);
           const matUpperLeft=tcgMatWorld(-TCG_MAT_WIDTH/2+8,-TCG_MAT_HEIGHT/2+13,seatRef.current);
           const upperLeft=parent.toGlobal(new Point(matUpperLeft.x,matUpperLeft.y));
           const display=handPlayModeRef.current?{
             ...normalDisplay,left:upperLeft.x,y:upperLeft.y,
-            heightScale:1,
+            width:Math.max(125,Math.min(matScreenWidth*.38,240)),
+            heightScale:Math.max(.65,Math.min(1,matScreenWidth/TCG_MAT_WIDTH)),
             visible:true}:normalDisplay;
           const castle=viewButtonPosition('castle');
           const world=tcgMatWorld(castle.x+34,castle.y,seatRef.current);
           const toolbarPoint=parent.toGlobal(new Point(world.x,world.y));
           const toolbar=play00ToolbarRef.current;
           if(toolbar){
-            const size=1;
-            toolbar.style.transform=`translate3d(${toolbarPoint.x}px,${toolbarPoint.y-15*size}px,0)`;
+            const size=Math.max(.45,Math.min(2.1,matScreenWidth/TCG_MAT_WIDTH));
+            toolbar.style.transform=`translate3d(${toolbarPoint.x}px,${toolbarPoint.y-15*size}px,0) scale(${size})`;
           }
           actionScreenLatest.current=display;
           if(actionLcdRef.current){
@@ -2038,7 +2100,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             lcd.style.left=display.left+'px';
             lcd.style.top=display.y+'px';
             lcd.style.width=(display.width/Math.max(.0001,display.heightScale))+'px';
-            lcd.style.transform=`translateY(-50%)`;
+            lcd.style.transform=`translateY(-50%) scale(${display.heightScale})`;
           }
           setActionScreenVisible(previous=>previous===display.visible?previous:display.visible);
         }
@@ -2053,10 +2115,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Player labels belong exclusively to the physical table, never to
         // Castle/Eye opponent or viewer playmat layers.
         const point=board.toGlobal(localChair);
-        if(point.x>=0&&point.x<=w&&point.y>=0&&point.y<=h){
-          point.x=Math.max(84,Math.min(w-84,point.x));
-          point.y=Math.max(30,Math.min(h-30,point.y));
-        }
         const tableCenter=board.toGlobal(new Point(BOARD_CENTER,BOARD_CENTER));
         const dx=point.x-tableCenter.x,dy=point.y-tableCenter.y;
         const outward=Math.abs(dx)>Math.abs(dy)?(dx>0?'right' as const:'left' as const):(dy>0?'bottom' as const:'top' as const);
@@ -2120,8 +2178,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     drawerGroups.current.clear();drawerTabs.current.clear();
     eyeHitTarget.current=null;castleHitTarget.current=null;
     mergeHitTargets.current=[];
-    sizedControlTargets.current=[];
-    drawHitTarget.current=null;
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
@@ -2144,8 +2200,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       boxClosed,drawerGroups.current,drawerTabs.current,toggleBox,
       button=>{eyeHitTarget.current=button;},
       button=>{castleHitTarget.current=button;},
-      (button,screenScale)=>{if(screenScale===undefined)mergeHitTargets.current.push(button);
-        else sizedControlTargets.current.push({node:button,screenScale});},handPlayMode);
+      button=>{mergeHitTargets.current.push(button);},handPlayMode);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
@@ -2265,7 +2320,51 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // are efficiently culled from Pixi and the browser's image compositor.
     const stackBadges:{piece:Container;button:HTMLButtonElement;size:number;offset:Point}[]=[];
     const shuffleFx:{piece:Container;el:HTMLDivElement}[]=[];
-    // A single DOM coin follows its Pixi anchor and fixed drawer scale.
+    // Only the VISUAL copy is magnified. Every source or placed coin keeps
+    // its Pixi pointer hit area, center click and drag behavior unchanged.
+    // Append the 3x preview directly to <body>, beside the top-tier dice and
+    // radial previews, not under the card-image or drawer stacking contexts.
+    let hoveredCoin:{piece:Container;el:HTMLDivElement;preview:HTMLDivElement}|null=null;
+    const clearCoinHover=(piece?:Container)=>{
+      if(!hoveredCoin||(piece&&hoveredCoin.piece!==piece))return;
+      hoveredCoin.preview.remove();hoveredCoin=null;
+    };
+    const coinOverlapsStackCounter=(piece:Container)=>{
+      if(!session.current||!stackBadges.length)return false;
+      const canvas=session.current.app.canvas;
+      const rect=canvas.getBoundingClientRect();
+      const at=piece.toGlobal(new Point(0,0));
+      const cx=rect.left+at.x*rect.width/session.current.app.screen.width;
+      const cy=rect.top+at.y*rect.height/session.current.app.screen.height;
+      return stackBadges.some(({button})=>{
+        if(!button.isConnected)return false;
+        const area=button.getBoundingClientRect();
+        const bx=area.left+area.width/2,by=area.top+area.height/2;
+        return Math.hypot(cx-bx,cy-by)<Math.max(14,area.width/2+10);
+      });
+    };
+    const setCoinHover=(piece:Container,el:HTMLDivElement)=>{
+      // A real coin may be placed ON a stack-count marker. When the
+      // marker takes pointer focus Pixi can retain coin-hover state,
+      // leaving a giant 3x coin over the tiny count control. Never let
+      // the coin magnifier obscure the stack's clickable counter.
+      if(coinOverlapsStackCounter(piece)){
+        clearCoinHover();
+        return;
+      }
+      if(hoveredCoin?.piece===piece)return;
+      clearCoinHover();
+      const preview=el.cloneNode(true) as HTMLDivElement;
+      preview.classList.add('sennet-coin-hover-top-layer');
+      // Source drawer labels should stay on their normal rack baseline.
+      preview.querySelector('.sennet-drawer-coin-caption')?.remove();
+      preview.setAttribute('aria-hidden','true');
+      preview.style.cssText='position:fixed;left:0;top:0;width:36px;height:36px;'+
+        'transform-origin:0 0;clip-path:none;pointer-events:none;user-select:none;'+
+        'display:block;will-change:transform;';
+      document.body.appendChild(preview);
+      hoveredCoin={piece,el,preview};
+    };
     const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1,style:CoinAppearance=coinAppearance,caption?:string)=>{
       const el=coinDomVisual(value,sign,source,style,color,editable,caption);
       mount.current?.appendChild(el);
@@ -2289,7 +2388,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Never hide a whole source when the drawer starts moving.
         // Pixi's stencil reveals it incrementally past the felt edge.
         source.visible=true;
-        source.scale.set(CONTROL_PIXELS.toolArtScale);
         // Fixed, real right-drawer coordinates. Zoom and camera changes
         // never edit their physical slot positions.
         source.position.set(slots[index].x,slots[index].y);
@@ -2361,7 +2459,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Its metal face is clipped against the moving playmat edge,
         // not made visible all at once after the drawer finishes sliding.
         source.visible=true;
-        source.scale.set(CONTROL_PIXELS.toolArtScale);
         // Match the LEFT dice rack's 25-unit top row and 18-unit label
         // offset. Small physical coins share one row inside the narrow felt.
         source.position.set(boxX+(index===0?-15:15),top+25);
@@ -2406,12 +2503,15 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         };
         source.on('pointerover',e=>{
           highlightSide(e.global);
+          setCoinHover(source,coinOverlay);
         });
         source.on('pointermove',e=>highlightSide(e.global));
         source.on('pointerout',()=>{
           coinHighlight(highlight,0);
           coinOverlay.dataset.hover='0';
+          clearCoinHover(source);
         });
+        source.on('pointercancel',()=>clearCoinHover(source));
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
@@ -2423,8 +2523,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             // Upper/lower rims still initiate the existing coin drag.
             const projected=source.toGlobal(new Point(0,0));
             const rect=app.canvas.getBoundingClientRect();
-            const x=projected.x*rect.width/app.screen.width;
-            const y=projected.y*rect.height/app.screen.height;
+            const x=projected.x*rect.width/app.renderer.width;
+            const y=projected.y*rect.height/app.renderer.height;
             if(index===0){
               setCoinMenu(null);setCoinColorsOpen(false);
               setCoinDraft(customCoinText);
@@ -2560,6 +2660,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         }
         if(!visible){
           el.style.display='none';
+          clearCoinHover(piece);
           continue;
         }
         el.style.display='block';
@@ -2580,10 +2681,29 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const drawer=piece.parent;
           const edge=TCG_MAT_WIDTH/2+4;
           const x=piece.position.x+drawer.position.x;
-          const clipLeft=Math.max(0,Math.min(36,18+(edge-x)/(displayScale*piece.scale.x)));
+          const clipLeft=Math.max(0,Math.min(36,18+(edge-x)/displayScale));
           el.style.clipPath=`inset(0 0 0 ${clipLeft}px)`;
         }else el.style.clipPath='none';
+        if(hoveredCoin?.piece===piece){
+          const preview=hoveredCoin.preview;
+          // The preview retains the face color, material, value, orientation
+          // and hover-side highlight. It ignores drawer clipping entirely.
+          // Multiply the exact camera/object matrix by 3 around the center.
+          preview.dataset.hover=el.dataset.hover??'0';
+          const zoom=3;
+          const xa=ax*zoom,xb=bx*zoom,xc=cx*zoom,xd=dy*zoom;
+          // Sample the LIVE source element's screen-space center rather
+          // than assuming the playmat canvas starts at viewport (0,0).
+          // This removes camera-zoom, CSS-scale and inset-pane offset.
+          const bounds=el.getBoundingClientRect();
+          const originX=bounds.left+bounds.width/2;
+          const originY=bounds.top+bounds.height/2;
+          preview.style.transform=`matrix(${xa},${xb},${xc},${xd},${originX-18*(xa+xc)},${originY-18*(xb+xd)})`;
+        }
       }
+      if(hoveredCoin&&
+         (!hoveredCoin.el.isConnected||coinOverlapsStackCounter(hoveredCoin.piece)))
+        clearCoinHover();
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
         const piece=visuals.current.get(id);
@@ -2593,8 +2713,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         }
         const pos=piece.toGlobal(new Point(0,0));
         const rect=app.canvas.getBoundingClientRect();
-        const x=pos.x*rect.width/app.screen.width;
-        const y=pos.y*rect.height/app.screen.height;
+        const x=pos.x*rect.width/app.renderer.width;
+        const y=pos.y*rect.height/app.renderer.height;
         bubble.node.style.left=x+'px';
         bubble.node.style.top=(y-27*Math.max(.6,Math.min(1.5,Math.hypot(
           piece.toGlobal(new Point(1,0)).x-pos.x,
@@ -2640,8 +2760,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
          (obj.zone!=='DECK'||deckTop.get(pileKey(obj))?.id===obj.id)){
         const group=stacks.get(stackKey(obj))??[];
         const button=createEyeStyleCounter(count,playmat.sideBoxStyle??'walnut',true,stackSelected);
+        button.addEventListener('pointerenter',()=>clearCoinHover());
+        button.addEventListener('pointermove',()=>clearCoinHover());
         button.addEventListener('pointerdown',e=>{
           e.stopPropagation();
+          clearCoinHover();
           restartSelectionIdle.current();
         });
         button.addEventListener('click',e=>{
@@ -2661,8 +2784,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         stackBadges.push({piece,button,size:obj.counters!,offset:new Point(27,-37)});
       }
       if(obj.tokenCoin){
-        showCoinAboveArtwork(piece,obj.coinText??obj.value??1,
+        const visual=showCoinAboveArtwork(piece,obj.coinText??obj.value??1,
           obj.tokenSign??1,false,obj.color,obj.coinText!==undefined,1,objectCoin);
+        piece.on('pointerover',()=>setCoinHover(piece,visual));
+        piece.on('pointerout',()=>clearCoinHover(piece));
+        piece.on('pointerupoutside',()=>clearCoinHover(piece));
+        piece.on('pointercancel',()=>clearCoinHover(piece));
       }
       if(obj.throwDice){
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
@@ -2877,7 +3004,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
       paintLayers.buttons.attach(draw);
-      drawHitTarget.current=draw;
     }
     // Animate the shuffling pile, not the whole table. The animation is
     // local-only and does not reorder server-authoritative game objects.
@@ -2928,6 +3054,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       staticDiceEntries.current=[];
       // Card images are intentionally retained across state changes.
       // They are released only when removed from the game or on unmount.
+      clearCoinHover();
       for(const {el} of coinLayers)el.remove();
       for(const {button} of stackBadges)button.remove();
       for(const {el} of shuffleFx)el.remove();
@@ -2943,8 +3070,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const renderer=createStaticDice3D(
           mount.current,session.current.app.canvas,
           ()=>({
-            width:session.current?.app.screen.width??0,
-            height:session.current?.app.screen.height??0
+            width:session.current?.app.renderer.width??0,
+            height:session.current?.app.renderer.height??0
           })
         );
         staticDice3D.current=renderer;
@@ -2996,8 +3123,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const rect=current.app.canvas.getBoundingClientRect();
       if(rect.width<=0||rect.height<=0)return;
       const stagePoint=new Point(
-        (e.clientX-rect.left)*current.app.screen.width/rect.width,
-        (e.clientY-rect.top)*current.app.screen.height/rect.height);
+        (e.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (e.clientY-rect.top)*current.app.renderer.height/rect.height);
       const local=piece.parent.toLocal(stagePoint,current.app.stage);
       // The model center itself remains exactly at the pointer.
       piece.position.set(local.x,local.y);
@@ -3045,8 +3172,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const rect=current.app.canvas.getBoundingClientRect();
       if(rect.width<=0||rect.height<=0)return null;
       return new Point(
-        (event.clientX-rect.left)*current.app.screen.width/rect.width,
-        (event.clientY-rect.top)*current.app.screen.height/rect.height);
+        (event.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (event.clientY-rect.top)*current.app.renderer.height/rect.height);
     };
     const finish=(event:PointerEvent,commit:boolean)=>{
       const d=tokenDrag.current;
@@ -3161,8 +3288,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // Subtract that deadzone from pointer delta so cards NEVER jump.
       const rect=current.app.canvas.getBoundingClientRect();
       const coord=(clientX:number,clientY:number)=>new Point(
-        (clientX-rect.left)*current.app.screen.width/rect.width,
-        (clientY-rect.top)*current.app.screen.height/rect.height);
+        (clientX-rect.left)*current.app.renderer.width/rect.width,
+        (clientY-rect.top)*current.app.renderer.height/rect.height);
       const parent=d.visual.parent??current.board;
       const origin=parent.toLocal(coord(d.startClientX,d.startClientY),current.app.stage);
       const point=parent.toLocal(coord(event.clientX,event.clientY),current.app.stage);
@@ -3259,8 +3386,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             ?currentVisual.toGlobal(new Point(0,0)):d.coinAnchor;
           if(coords&&app){
             const rect=app.canvas.getBoundingClientRect();
-            const x=coords.x*rect.width/app.screen.width;
-            const y=coords.y*rect.height/app.screen.height;
+            const x=coords.x*rect.width/app.renderer.width;
+            const y=coords.y*rect.height/app.renderer.height;
             if(object?.coinText!==undefined){
               setCoinDraft(object.coinText);
               setCoinEditing({id:d.id,x,y});
@@ -3629,8 +3756,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const rect=current.app.canvas.getBoundingClientRect();
       if(rect.width<=0||rect.height<=0)return;
       const point=new Point(
-        (event.clientX-rect.left)*current.app.screen.width/rect.width,
-        (event.clientY-rect.top)*current.app.screen.height/rect.height);
+        (event.clientX-rect.left)*current.app.renderer.width/rect.width,
+        (event.clientY-rect.top)*current.app.renderer.height/rect.height);
       const local=current.board.toLocal(point,current.app.stage);
       const target=opponentAtTablePoint(local.x,local.y,seatRef.current);
       if(target===null)return;
@@ -3914,8 +4041,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         if(e.clientY>rect.bottom-handArea||
           e.clientY<rect.top||e.clientX<rect.left||e.clientX>rect.right)return;
         const stage=new Point(
-          (e.clientX-rect.left)*current.app.screen.width/rect.width,
-          (e.clientY-rect.top)*current.app.screen.height/rect.height);
+          (e.clientX-rect.left)*current.app.renderer.width/rect.width,
+          (e.clientY-rect.top)*current.app.renderer.height/rect.height);
         const world=current.board.toLocal(stage,current.app.stage);
         callbacks.current.onMove(id,Math.round(world.x),Math.round(world.y));
         updateSelection([]);
@@ -3944,16 +4071,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     :[];
   const fanSpacing=Math.min(73,Math.max(13,
     (Math.max(180,viewport.width)-110)/Math.max(1,localHeldCards.length-1)));
-  return <div ref={mount} style={{
-    '--sennet-control-size':CONTROL_PIXELS.circle+'px',
-    '--sennet-radial-size':CONTROL_PIXELS.radial+'px',
-    '--sennet-display-width':CONTROL_PIXELS.displayWidth+'px',
-    '--sennet-display-height':CONTROL_PIXELS.displayHeight+'px',
-    '--sennet-display-key':CONTROL_PIXELS.displayKey+'px',
-    '--sennet-toolbar-key':CONTROL_PIXELS.toolbarKey+'px',
-    '--sennet-player-width':CONTROL_PIXELS.playerWidth+'px',
-    '--sennet-player-height':CONTROL_PIXELS.playerHeight+'px',
-  } as React.CSSProperties} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
+  return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
     {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
     {cardPeek&&(()=>{
       const item=state.objects.find(o=>o.id===cardPeek);
@@ -4034,7 +4152,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           node.style.left=geometry.left+'px';
           node.style.top=geometry.y+'px';
           node.style.width=(geometry.width/Math.max(.0001,geometry.heightScale))+'px';
-          node.style.transform=`translateY(-50%)`;
+          node.style.transform=`translateY(-50%) scale(${geometry.heightScale})`;
         }
       }} className="sennet-action-lcd" style={{transformOrigin:'left center'}}
       role="group" aria-label="Latest action with undo and redo"
@@ -4121,18 +4239,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           (coinMenu.index===0?'#c4d8d9':'#d8b979')}
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
-    {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':1,'--drawer-width':'320px'} as React.CSSProperties}>{drawer}</div>}
+    {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
         ref={node=>{
           dockedWheelRef.current=wheelMode==='docked'?node:null;
           if(node&&wheelMode==='docked'){
             const geometry=dockedWheelGeometry.current;
-            node.style.transform=`translate3d(${geometry.x-CONTROL_PIXELS.radial/2}px,${geometry.y}px,0)`;
+            const factor=geometry.size/180;
+            node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
           }
         }}>
       <CardRadialWheel
-        x={wheelMode==='docked'?CONTROL_PIXELS.radial/2:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?CONTROL_PIXELS.radial:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}

@@ -1,4 +1,3 @@
-import {CONTROL_PIXELS} from './controlPixels.ts';
 /** Keep the EXPANDED action radial inside the screen even when the
  * playmat is enlarged by 1v1 or Castle camera framing. The docked radial
  * is a semicircle (180 × 90 logical px) originating at the hand edge. */
@@ -17,12 +16,15 @@ export function fitDockedRadial(
   return {x:cx,y:cy,size};
 }
 
-/** Project the mat anchor while keeping the approved CSS pixel diameter. */
+/** The radial is physically attached to the bottom center of the mat.
+ * Original diameter: 30% of the on-screen mat width, including any
+ * 1v1/Castle seat transform; no fixed corner docking or independent size.
+ * Fit only when needed to keep the expanded semicircle visible. */
 export function fitMatAttachedRadial(
-  handCenterX:number,handBottomY:number,_visibleMatWidth:number,
-  _viewportWidth:number,_viewportHeight:number
+  handCenterX:number,handBottomY:number,visibleMatWidth:number,
+  viewportWidth:number,viewportHeight:number
 ):{x:number;y:number;size:number}{
-  const diameter=CONTROL_PIXELS.radial;
+  const diameter=Math.max(1,Number.isFinite(visibleMatWidth)?visibleMatWidth*.30:1);
   // Always stay physically attached to the playmat, regardless of viewport edges.
   return {x:handCenterX,y:handBottomY,size:diameter};
 }
@@ -44,14 +46,12 @@ export function fitSelfMatWithHud(
   const w=Math.max(1,viewportWidth),h=Math.max(1,viewportHeight);
   const reserve=Math.max(0,Math.min(h*.65,heldHandPixels));
   const top=Math.max(0,topControlReach);
-  const fixedDepth=CONTROL_PIXELS.radial/2;
+  const bottom=Math.max(matWidth*.15,lcdReach);
   const usableH=Math.max(1,h-reserve-padding*2);
   const usableW=Math.max(1,w-padding*2);
-  const silhouette=matHeight+top;
+  const silhouette=matHeight+top+bottom;
   const scale=Math.min(usableW/Math.max(1,completeMatWidth),
-    Math.max(1,usableH-fixedDepth)/Math.max(1,silhouette),
-    usableH/Math.max(1,silhouette+lcdReach));
-  const bottom=Math.max(fixedDepth/scale,lcdReach);
+    usableH/Math.max(1,silhouette));
   // The mat occupies the center of the free viewport (above the held hand).
   // The radial extends farther below the mat than the Eye extends above.
   const offsetY=(top-bottom)*scale/2-reserve/2;
@@ -84,19 +84,41 @@ export function fitBattleRadialZoom(
 ):number{
   if(![baseScale,height,matWidth,matHeight].every(Number.isFinite)||
     baseScale<=0||height<=0||matWidth<=0||matHeight<=0)return Math.max(0,baseScale)||1;
-  const radius=CONTROL_PIXELS.radial/2;
-  const eyeBottomDistance=baseScale*(matHeight+22);
-  const castleBottomDistance=height/4+baseScale*matHeight/2;
+  const radius=matWidth*.15; // expanded half-wheel depth
+  const eyeBottomDistance=baseScale*(matHeight+22+radius);
+  const castleBottomDistance=height/4+baseScale*(matHeight/2+radius);
   const distance=mode==='castle'?castleBottomDistance:eyeBottomDistance;
-  const room=Math.max(1,height/2-padding-radius);
+  const room=Math.max(1,height/2-padding);
   return baseScale*Math.min(1,room/Math.max(1,distance));
 }
 
-/** Small circular controls match the approved screenshot, in CSS pixels. */
-export const EYE_CONTROL_DIAMETER_PX=CONTROL_PIXELS.circle;
+/** The ORIGINAL merge buttons were visually small. The earlier 34px
+ * "fix" turned their 34-world-unit ART dimensions into giant CSS pixels.
+ * Shared geometry for every small circular tabletop control:
+ * - Pixi woodenControl has a 34-WORLD-UNIT outer silhouette.
+ * - Its inverse camera scale must therefore include 16/34.
+ * - DOM count badges are exactly 16 CSS pixels, without inherited scale.
+ * - Their anchors are game-world positions, NEVER viewport re-docked.
+ */
+export const EYE_CONTROL_DIAMETER_PX=16;
 export const WOODEN_CONTROL_WORLD_DIAMETER=34;
-/** Screen-fixed visual scaling. The target is the
- * approved screenshot. */
+/** Match the on-screen diameter that a normal opponent Sword/Shield
+ * has in the INITIAL Eye view. Compute once for the viewport, then keep
+ * the answer unchanged through all camera zooms and game view changes.
+ * This is a reference measurement, not a new arbitrary button size. */
+export function eyeOpponentReferencePixels(
+  viewportWidth:number,viewportHeight:number,
+  eyeBounds:{width:number;height:number},
+  matWidth:number,matHeight:number
+):number{
+  const base=Math.min(Math.max(1,viewportWidth)/eyeBounds.width,
+    Math.max(1,viewportHeight)/eyeBounds.height);
+  const eyeScale=fitBattleRadialZoom(base,viewportHeight,matWidth,matHeight,'eye');
+  const pixels=WOODEN_CONTROL_WORLD_DIAMETER*eyeScale;
+  return Number.isFinite(pixels)&&pixels>0?pixels:EYE_CONTROL_DIAMETER_PX;
+}
+/** Screen-fixed visual scaling. The target is the opponent Eye-view
+ * reference for this session, not a fixed guessed CSS dimension. */
 export function fixedMatControlScale(pxPerWorldUnit:number,targetPixels=EYE_CONTROL_DIAMETER_PX):number{
   const pixels=Number.isFinite(targetPixels)&&targetPixels>0
     ?targetPixels:EYE_CONTROL_DIAMETER_PX;
