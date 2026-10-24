@@ -2331,6 +2331,22 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     const artLayers:{piece:Container;img:HTMLImageElement}[]=[];
     const visibleArtworkIds=new Set<string>();
     const imagesRoot=mount.current;
+    const loadProgressiveCardArt=(img:HTMLImageElement,original:string,preferred:string)=>{
+      // Show the smallest available card image IMMEDIATELY. Upgrade only
+      // once the high-resolution replacement has finished downloading.
+      // This prevents blank decks on slow networks or large tables.
+      img.dataset.originalUrl=original;
+      img.dataset.fallbackAttempted='0';
+      img.src=original;
+      if(preferred!==original){
+        const upgrade=new Image();
+        upgrade.decoding='async';
+        upgrade.onload=()=>{
+          if(img.isConnected&&img.dataset.originalUrl===original)img.src=preferred;
+        };
+        upgrade.src=preferred;
+      }
+    };
     const syncCardArtwork=()=>{
       const root=mount.current;
       if(!root||!session.current)return;
@@ -2520,9 +2536,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           img=cached.img;
           if(cached.url!==url){
             cached.url=url;
-            img.dataset.originalUrl=originalUrl;
-            img.dataset.fallbackAttempted='0';
-            img.style.display='none';img.src=url;
+            img.style.display='none';
+            loadProgressiveCardArt(img,originalUrl,url);
           }
           if(!img.isConnected)imagesRoot.appendChild(img);
         }else{
@@ -2531,8 +2546,6 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
             'display:none;pointer-events:none;user-select:none;object-fit:contain;image-rendering:auto;'+
             'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:85';
-          img.dataset.originalUrl=originalUrl;
-          img.dataset.fallbackAttempted='0';
           img.onload=()=>{if(img.isConnected)img.style.display='block';};
           img.onerror=()=>{
             // Some sources do not offer a full-resolution format for every
@@ -2548,7 +2561,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           };
           imagesRoot.appendChild(img);
           artworkCache.current.set(obj.id,{img,url});
-          img.src=url;
+          loadProgressiveCardArt(img,originalUrl,url);
         }
         img.alt=obj.faceUp?obj.name:obj.name+' card back';
         artLayers.push({piece,img});
