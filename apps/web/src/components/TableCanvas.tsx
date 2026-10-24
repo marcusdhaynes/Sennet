@@ -1049,8 +1049,8 @@ function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAp
   center.className='sennet-coin-above-card-number';
   const text=String(value);
   center.textContent=text;
-  center.style.fontSize=String(text.length>12?4.2:text.length>9?5.2:text.length>6?6.4:
-    text.length>4?8:text.length===4?10.2:text.length===3?12:text.length===2?13.6:15)+'px';
+  center.style.fontSize=String((text.length>12?4.2:text.length>9?5.2:text.length>6?6.4:
+    text.length>4?8:text.length===4?10.2:text.length===3?12:text.length===2?13.6:15)*.75)+'px';
   face.append(center);root.appendChild(face);
   return root;
 }
