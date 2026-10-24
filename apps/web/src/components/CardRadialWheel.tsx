@@ -18,27 +18,13 @@ const REVEAL_HANDS_ICON_PATH='M0,226 L0,230 L3,234 L10,234 L24,203 L34,189 L51,1
 /** Three illustrated Scale tools, drawn like Shuffle rather than font glyphs.
  * All remain visual-only: the existing radial sectors own pointer events. */
 function ScaleCardIcon({kind}:{kind:'scale-bigger'|'scale-smaller'|'scale-original'}){
- const common={fill:'none',stroke:'#ffffff',strokeWidth:4.8,strokeLinecap:'round' as const,strokeLinejoin:'round' as const};
- if(kind==='scale-bigger')return <g {...common}>
-  <rect x="8" y="32" width="32" height="42" rx="3" transform="rotate(-10 24 53)" strokeOpacity=".65"/>
-  <rect x="35" y="19" width="40" height="53" rx="4" fill="#ffffff" fillOpacity=".13"/>
-  <rect x="42" y="27" width="26" height="37" rx="2" strokeWidth="2.8" strokeOpacity=".9"/>
-  <path d="M57 19 83 5 M68 5h15v15" strokeWidth="5.8"/>
-  <path d="M83 43v20 M73 53h20" strokeWidth="6.8"/>
- </g>;
- if(kind==='scale-smaller')return <g {...common}>
-  <rect x="8" y="8" width="47" height="60" rx="4" fill="#ffffff" fillOpacity=".14"/>
-  <rect x="15" y="15" width="33" height="46" rx="2" strokeWidth="2.7" strokeOpacity=".9"/>
-  <rect x="49" y="42" width="31" height="40" rx="3"/>
-  <path d="M74 13 50 36 M50 23v13h14" strokeWidth="5.8"/>
-  <path d="M11 82h23" strokeWidth="6.2"/>
- </g>;
- return <g {...common}>
-  <rect x="23" y="20" width="49" height="63" rx="4" fill="#ffffff" fillOpacity=".13"/>
-  <rect x="30" y="27" width="35" height="49" rx="2" strokeWidth="2.8"/>
-  <path d="M13 38 A38 38 0 0 1 84 30" strokeWidth="5.8"/>
-  <path d="m70 27 17 5 1-18" strokeWidth="5.8"/>
-  <path d="M40 47h16 M40 55h16" strokeWidth="4.6"/>
+ const symbol=kind==='scale-bigger'?'+':kind==='scale-smaller'?'−':'=';
+ return <g stroke="#fff" strokeLinejoin="round">
+  <rect x="22" y="10" width="56" height="80" rx="6"
+    fill="#fff" fillOpacity=".08" strokeWidth="5"/>
+  <text x="50" y="51" textAnchor="middle" dominantBaseline="central"
+    fontFamily="Inter,system-ui,sans-serif" fontSize="49" fontWeight="800"
+    stroke="none" fill="#fff">{symbol}</text>
  </g>;
 }
 const cx=200,cy=200;
