@@ -2477,23 +2477,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
       for(const {piece,button,size} of stackBadges){
         if(piece.destroyed||!button.isConnected)continue;
+        // Follow the card's position only. The counter is a screen-space
+        // control, never transformed with card, seat or camera zoom.
         const p=piece.toGlobal(new Point(29,41));
         button.style.left=(p.x*sx)+'px';
         button.style.top=(p.y*sy)+'px';
-        // The stack badge belongs to the PLAYMAT, not the browser HUD.
-        // Match the Eye's actual 34-world-unit wooden face in CSS pixels.
-        // Derive magnification from the parent mat transform instead of
-        // the piece itself: 50%-size cards must NOT shrink their counter.
-        // This also follows Camera, Eye, and Castle zoom automatically.
-        const parent=piece.parent;
-        if(parent){
-          const origin=parent.toGlobal(new Point(0,0));
-          const edge=parent.toGlobal(new Point((VIEW_BUTTON_RADIUS+1)*2,0));
-          const eyeDiameter=Math.hypot((edge.x-origin.x)*sx,(edge.y-origin.y)*sy);
-          const badgeScale=eyeDiameter/34;
-          if(Number.isFinite(badgeScale)&&badgeScale>0)
-            button.style.transform=`translate(-50%,-50%) scale(${badgeScale})`;
-        }
         button.style.display=size>1?'grid':'none';
       }
       for(const {piece,img} of artLayers){
