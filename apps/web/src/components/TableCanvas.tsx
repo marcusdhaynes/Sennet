@@ -310,7 +310,7 @@ function drawTcgMats(
   hoverTimers:Set<number>,seatLayers:Map<number,Container>|null,
   eyeHoldMs:number,selectedEnemy:number|null,
   drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,
-  handPlayMode:boolean
+  onCastleReady:(button:Container)=>void,handPlayMode:boolean
 ){
   const drawnSeats=seatLayers
     ? [...seatLayers.keys()]
@@ -827,6 +827,7 @@ function drawTcgMats(
       castle.cursor='pointer';
       castle.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       castle.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',castleActive));
+      onCastleReady(castle);
       const castleMark=new Graphics();
       // Crenellated wall with two towers and a dark arched gate.
       castleMark
@@ -1024,7 +1025,8 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
   viewport:{width:number;height:number},
   relations:Readonly<Record<number,OpponentRelation>>,eyeHoldMs:number,
   selectedEnemy:number|null,
-  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,handPlayMode:boolean):Map<number,Container>|null{
+  drawerState:{left:boolean;right:boolean},drawerGroups:Map<number,Container>,drawerTabs:Map<number,Container>,onToggleDrawer:(side:-1|1)=>void,onEyeReady:(button:Container)=>void,
+  onCastleReady:(button:Container)=>void,handPlayMode:boolean):Map<number,Container>|null{
   const backdrop=new Graphics().rect(0,0,BOARD_W,BOARD_W).fill(0x142723);
   board.addChild(backdrop);
   if(duelOpponent!==null||castleActive){
@@ -1071,7 +1073,7 @@ function drawBackground(board:Container,layers:TablePaintLayers,state:GameState,
     onToggleRelation,onFocusCastleSeat,duelOpponent,relations,onMerge,
     onEyeTap,onEyeHold,onCastleTap,onCastleHold,onOpenTcgSettings,castleActive,castleMode,
     castleBaseMode,focused,onCycleOpponent,onControlDown,hoverTimers,seatLayers,
-    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer,onEyeReady,handPlayMode);
+    eyeHoldMs,selectedEnemy,drawerState,drawerGroups,drawerTabs,onToggleDrawer,onEyeReady,onCastleReady,handPlayMode);
   for(let i=0;i<12;i++){
     // Retractable HTML edge labels replace physical chair/name blocks
     // in the versus mode, preserving the full play area for cards.
@@ -1482,6 +1484,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const battleMinZoom=useRef(1);
   const eyeHitTarget=useRef<Container|null>(null);
+  const castleHitTarget=useRef<Container|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   useEffect(()=>installTopLayerBookHover(),[]);
@@ -1959,17 +1962,33 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
-        // The Eye icon becomes tiny at overview zoom. Grow its invisible
-        // target to at least 48 × 44 screen pixels while extending away
-        // from Castle, whose center is only 44 playmat units to its right.
-        // Use actual local-to-screen size, including 1v1/Castle seat scale.
-        const eye=eyeHitTarget.current;
-        if(eye&&!eye.destroyed){
-          const center=eye.toGlobal(new Point(0,0));
-          const unit=eye.toGlobal(new Point(1,0));
+        // Eye, Castle and stack badges are ONE control system: identical
+        // 34px diameter regardless of zoom, playmat, or opponent view.
+        // Eye and Castle keep Pixi hit testing, but their local scales are
+        // inverse to their parent mat's camera transform. Spread their
+        // centers only when the mat is very small to prevent overlap.
+        const eye=eyeHitTarget.current,castle=castleHitTarget.current;
+        if(eye&&!eye.destroyed&&castle&&!castle.destroyed&&eye.parent){
+          const origin=eye.parent.toGlobal(new Point(0,0));
+          const unit=eye.parent.toGlobal(new Point(1,0));
+          const rect=app.canvas.getBoundingClientRect();
+          const pixelPerMatUnit=Math.hypot(unit.x-origin.x,unit.y-origin.y)*
+            (rect.width/app.renderer.width);
+          if(Number.isFinite(pixelPerMatUnit)&&pixelPerMatUnit>0){
+            const inverse=1/pixelPerMatUnit;
+            eye.scale.set(inverse);castle.scale.set(inverse);
+            const halfSpacing=Math.max(22,22/pixelPerMatUnit);
+            eye.position.x=-halfSpacing;castle.position.x=halfSpacing;
+          }
+        }
+        // A constant-size eye still has a generous, matching hit target.
+        const actualEye=eye;
+        if(actualEye&&!actualEye.destroyed){
+          const center=actualEye.toGlobal(new Point(0,0));
+          const unit=actualEye.toGlobal(new Point(1,0));
           const pixelScale=Math.hypot(unit.x-center.x,unit.y-center.y);
           const bounds=eyeHitBounds(pixelScale);
-          eye.hitArea=new Rectangle(bounds.x,bounds.y,bounds.width,bounds.height);
+          actualEye.hitArea=new Rectangle(bounds.x,bounds.y,bounds.width,bounds.height);
         }
         const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
         if(hand){
@@ -2103,7 +2122,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     hoverTimers.current.clear();
     board.removeChildren().forEach(child=>child.destroy({children:true}));
     diceSources.current.clear();diceBadges.current.clear();diceTrayMat.current=null;
-    drawerGroups.current.clear();drawerTabs.current.clear();eyeHitTarget.current=null;
+    drawerGroups.current.clear();drawerTabs.current.clear();
+    eyeHitTarget.current=null;castleHitTarget.current=null;
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
@@ -2124,7 +2144,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       {ally:eyeView.castleFocusedAlly??null,enemy:eyeView.castleFocusedEnemy??null},
       viewport,relations,250,eyeView.castleSelectedEnemy??null,
       boxClosed,drawerGroups.current,drawerTabs.current,toggleBox,
-      button=>{eyeHitTarget.current=button;},handPlayMode);
+      button=>{eyeHitTarget.current=button;},
+      button=>{castleHitTarget.current=button;},handPlayMode);
     duelLayers.current=seatGroups;
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
