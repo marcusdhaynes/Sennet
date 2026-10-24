@@ -1,4 +1,5 @@
-import {useEffect,useId,useRef,useState} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
@@ -65,6 +66,8 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // The artwork for each sector can be duplicated visually without cloning
  // its pointer handlers or changing the wheel's original hit geometry.
  const wheelId=useId().replace(/:/g,'');
+ const svgRef=useRef<SVGSVGElement|null>(null);
+ const magnifierPortalRef=useRef<HTMLDivElement|null>(null);
  const [collapsed,setCollapsed]=useState(false);
  const toggleCollapsed=()=>{
    const next=!collapsed;
@@ -124,10 +127,28 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
+ // Render the zoomed wedge in document.body, outside the wheel's clipping
+ // and every playmat, modal, drawer and camera stacking context. getScreenCTM
+ // also preserves camera movement, rotation, zoom and half-wheel geometry.
+ // The portal is purely visual; the original unscaled wedge owns all input.
+ useLayoutEffect(()=>{
+  if(!hoveredAction||collapsed)return;
+  let frame=0;
+  const syncMagnifier=()=>{
+   const matrix=svgRef.current?.getScreenCTM();
+   const portal=magnifierPortalRef.current;
+   if(portal&&matrix){
+    portal.style.transform=`matrix(${matrix.a},${matrix.b},${matrix.c},${matrix.d},${matrix.e},${matrix.f})`;
+   }
+   frame=window.requestAnimationFrame(syncMagnifier);
+  };
+  syncMagnifier();
+  return ()=>window.cancelAnimationFrame(frame);
+ },[hoveredAction,collapsed]);
  return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')+(half?' is-half':'')+(hoveredAction?' has-sector-preview':'')} style={{width:size,height:half?size/2:size,left:(dragOffset?.x??x)-size/2,top:half?y:(dragOffset?.y??y)-size/2,transition:half||dragOffset?'none':'left .38s cubic-bezier(.18,.82,.2,1), top .38s cubic-bezier(.18,.82,.2,1)'}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
-  <svg viewBox={half?"0 200 400 200":"0 0 400 400"} role="img" aria-label="Position, Scale and State action wheel">
+  <svg ref={svgRef} viewBox={half?"0 200 400 200":"0 0 400 400"} role="img" aria-label="Position, Scale and State action wheel">
    <g className="sennet-radial-rings" aria-hidden={collapsed} style={{pointerEvents:collapsed?'none':'auto'}}>
    <circle cx={200} cy={200} r={198} fill="#0c1016" fillOpacity=".42"/>
    {RADIAL_CATEGORIES.map((name,i)=>{
@@ -231,20 +252,6 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      </g>
     </g>;
    }))}
-   {/* The selected artwork is enlarged exactly 3x over the wheel, in a
-       visual-only SVG clone. Real sectors stay unmoved at their original
-       dimensions, so pointer hit areas and actions cannot drift or flicker. */}
-   {hoveredAction&&!collapsed&&
-     <g className="sennet-sector-magnifier" pointerEvents="none" aria-hidden="true">
-       {RADIAL_ACTIONS.flatMap((actions,i)=>actions.map((item,j)=>{
-         if(item.id!==hoveredAction)return null;
-         const mid=half?90+i*60+j*20+10:i*120+j*40+20;
-         const p=point(157,mid);
-         return <use key={item.id} href={'#'+wheelId+'-'+item.id}
-           pointerEvents="none"
-           transform={`translate(${p.x} ${p.y}) scale(3) translate(${-p.x} ${-p.y})`}/>;
-       }))}
-     </g>}
    </g>
    <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Hold to expand the action radial':'Hold to collapse the action radial'}
      onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
@@ -299,7 +306,22 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800" fontSize={half?21:22} textAnchor="middle">{count} Selected</text>
    </g>
   </svg>
-  
-
+  {hoveredAction&&!collapsed&&typeof document!=='undefined'&&createPortal(
+   <div ref={magnifierPortalRef} className="sennet-radial-hover-top-layer"
+     aria-hidden="true">
+    <svg viewBox="0 0 400 400" width="400" height="400"
+      style={{display:'block',overflow:'visible',pointerEvents:'none'}}>
+     <g className="sennet-sector-magnifier" pointerEvents="none">
+      {RADIAL_ACTIONS.flatMap((actions,i)=>actions.map((item,j)=>{
+       if(item.id!==hoveredAction)return null;
+       const mid=half?90+i*60+j*20+10:i*120+j*40+20;
+       const p=point(157,mid);
+       return <use key={item.id} href={'#'+wheelId+'-'+item.id}
+         pointerEvents="none"
+         transform={`translate(${p.x} ${p.y}) scale(3) translate(${-p.x} ${-p.y})`}/>;
+      }))}
+     </g>
+    </svg>
+   </div>,document.body)}
  </div>;
 }
