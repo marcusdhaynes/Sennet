@@ -58,7 +58,7 @@ test('action radial cannot be moved separately from the physical playmat',()=>{
   const p=fitMatAttachedRadial(21,455,620,250,300);
   assert.equal(p.x,21);
   assert.equal(p.y,455);
-  assert.equal(p.size,186);
+  assert.equal(p.size,180);
 });
 
 test('all tabletop controls use CSS pixel scale, never physical framebuffer resolution',()=>{
@@ -103,8 +103,8 @@ test('radial hover modifies only the ORIGINAL wedge; no independent portal or gi
  assert.ok(!radial.includes('sennet-radial-hover-top-layer'));
  assert.ok(!radial.includes(',document.body)'));
  assert.ok(!radial.includes('<use key={item.id}'));
- assert.match(radial,/hoveredAction===act.id&&\!collapsed/);
- assert.match(radial,/scale\(1\.45\)/);
+ assert.ok(!radial.includes('scale(1.45)'));
+
  assert.match(radial,/pointerEvents="none"/);
 });
 

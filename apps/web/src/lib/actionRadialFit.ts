@@ -16,17 +16,13 @@ export function fitDockedRadial(
   return {x:cx,y:cy,size};
 }
 
-/** The radial is physically attached to the bottom center of the mat.
- * Original diameter: 30% of the on-screen mat width, including any
- * 1v1/Castle seat transform; no fixed corner docking or independent size.
- * Fit only when needed to keep the expanded semicircle visible. */
+/** Project only the anchor. The wheel uses CSS pixels, never mat units. */
+export const ACTION_RADIAL_DIAMETER_PX=180;
 export function fitMatAttachedRadial(
-  handCenterX:number,handBottomY:number,visibleMatWidth:number,
-  viewportWidth:number,viewportHeight:number
+  handCenterX:number,handBottomY:number,_visibleMatWidth:number,
+  _viewportWidth:number,_viewportHeight:number
 ):{x:number;y:number;size:number}{
-  const diameter=Math.max(1,Number.isFinite(visibleMatWidth)?visibleMatWidth*.30:1);
-  // Always stay physically attached to the playmat, regardless of viewport edges.
-  return {x:handCenterX,y:handBottomY,size:diameter};
+  return {x:handCenterX,y:handBottomY,size:ACTION_RADIAL_DIAMETER_PX};
 }
 
 /** Fit the REAL occupied silhouette of a focused player mat, including
@@ -46,12 +42,14 @@ export function fitSelfMatWithHud(
   const w=Math.max(1,viewportWidth),h=Math.max(1,viewportHeight);
   const reserve=Math.max(0,Math.min(h*.65,heldHandPixels));
   const top=Math.max(0,topControlReach);
-  const bottom=Math.max(matWidth*.15,lcdReach);
+  const fixedDepth=ACTION_RADIAL_DIAMETER_PX/2;
   const usableH=Math.max(1,h-reserve-padding*2);
   const usableW=Math.max(1,w-padding*2);
-  const silhouette=matHeight+top+bottom;
+  const silhouette=matHeight+top;
   const scale=Math.min(usableW/Math.max(1,completeMatWidth),
-    usableH/Math.max(1,silhouette));
+    Math.max(1,usableH-fixedDepth)/Math.max(1,silhouette),
+    usableH/Math.max(1,silhouette+lcdReach));
+  const bottom=Math.max(fixedDepth/scale,lcdReach);
   // The mat occupies the center of the free viewport (above the held hand).
   // The radial extends farther below the mat than the Eye extends above.
   const offsetY=(top-bottom)*scale/2-reserve/2;
@@ -84,11 +82,11 @@ export function fitBattleRadialZoom(
 ):number{
   if(![baseScale,height,matWidth,matHeight].every(Number.isFinite)||
     baseScale<=0||height<=0||matWidth<=0||matHeight<=0)return Math.max(0,baseScale)||1;
-  const radius=matWidth*.15; // expanded half-wheel depth
-  const eyeBottomDistance=baseScale*(matHeight+22+radius);
-  const castleBottomDistance=height/4+baseScale*(matHeight/2+radius);
+  const radius=ACTION_RADIAL_DIAMETER_PX/2; // CSS pixel depth
+  const eyeBottomDistance=baseScale*(matHeight+22);
+  const castleBottomDistance=height/4+baseScale*matHeight/2;
   const distance=mode==='castle'?castleBottomDistance:eyeBottomDistance;
-  const room=Math.max(1,height/2-padding);
+  const room=Math.max(1,height/2-padding-radius);
   return baseScale*Math.min(1,room/Math.max(1,distance));
 }
 

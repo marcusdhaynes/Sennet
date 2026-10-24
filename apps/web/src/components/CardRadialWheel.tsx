@@ -88,10 +88,10 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   'scale-smaller':'Decrease','scale-original':'Original','scale-bigger':'Increase'
  };
  const centerLabel=hoveredAction?hoveredLabel[hoveredAction]:'Actions';
- // Hover must magnify the ONE existing sector exactly at its own center:
+ // Hover highlights the existing sector without resizing its artwork:
  // never create a second SVG, <use>, document.body portal or floating preview.
  // A transparent stationary hit path keeps the hover target stable while
- // the visible sector enlarges.
+ // its colors change.
  const [collapsed,setCollapsed]=useState(false);
  const toggleCollapsed=()=>{
    const next=!collapsed;
@@ -188,10 +188,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
          wedge is the SAME artwork transformed in place, never duplicated. */}
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
        fill="transparent" stroke="none" pointerEvents="all"/>
-     <g pointerEvents="none"
-       transform={hoveredAction===act.id&&!collapsed
-         ?`translate(${p.x} ${p.y}) scale(1.45) translate(${-p.x} ${-p.y})`
-         :undefined}>
+     <g pointerEvents="none">
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}

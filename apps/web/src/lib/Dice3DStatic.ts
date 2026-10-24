@@ -445,7 +445,7 @@ export function createStaticDice3D(
         looseDieOpacity(Date.now()-(entry.shownAt??Date.now()),entry.fadeAfterMs??0);
       visual.group.visible=opacity>0;
       if(visual.caption)visual.caption.visible=opacity>0;
-      if(entry.id===activeHoverId&&opacity>0&&exposed){
+      if(!entry.source&&entry.id===activeHoverId&&opacity>0&&exposed){
         hoverTarget={visual,entry,x,y,scale:sf};
       }
       // Unlike hiding the whole canvas, material alpha fades only the

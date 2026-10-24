@@ -7,67 +7,6 @@ import {RADIAL_ACTIONS} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
-/** Hover-expanded book covers must paint above the player drawer, table and
- * every other interface layer. Keep the real cover as the only hit target
- * and mirror its enlarged appearance in a pointer-transparent body overlay. */
-function installTopLayerBookHover(){
- let active:HTMLElement|null=null;
- let wrapper:HTMLDivElement|null=null;
- let raf=0;
- const remove=()=>{
-  active=null;
-  if(raf)window.cancelAnimationFrame(raf);
-  raf=0;
-  wrapper?.remove();
-  wrapper=null;
- };
- const sync=()=>{
-  if(!active||!active.isConnected||!wrapper){remove();return;}
-  const rect=active.getBoundingClientRect();
-  const preview=wrapper.firstElementChild as HTMLElement|null;
-  if(preview){
-   preview.style.width=rect.width+'px';
-   preview.style.height=rect.height+'px';
-   preview.style.filter=getComputedStyle(active).filter;
-  }
-  wrapper.style.left=rect.left+'px';
-  wrapper.style.top=rect.top+'px';
-  raf=window.requestAnimationFrame(sync);
- };
- const enter=(event:PointerEvent)=>{
-  if(!(event.target instanceof Element))return;
-  const original=event.target.closest<HTMLElement>('.player-hub .table-book');
-  if(!original||original===active)return;
-  remove();
-  active=original;
-  wrapper=document.createElement('div');
-  wrapper.className='sennet-book-hover-top-layer';
-  const clone=original.cloneNode(true) as HTMLElement;
-  clone.removeAttribute('id');
-  clone.setAttribute('aria-hidden','true');
-  clone.setAttribute('tabindex','-1');
-  clone.inert=true;
-  clone.style.cssText='position:relative;display:block;left:0;top:0;margin:0;'+
-   'transform:none!important;transition:none!important;'+
-   'pointer-events:none!important;touch-action:none;';
-  wrapper.appendChild(clone);
-  document.body.appendChild(wrapper);
-  sync();
- };
- const leave=(event:PointerEvent)=>{
-  if(!active||!(event.target instanceof Node)||!active.contains(event.target))return;
-  const next=event.relatedTarget;
-  if(next instanceof Node&&active.contains(next))return;
-  remove();
- };
- document.addEventListener('pointerover',enter,true);
- document.addEventListener('pointerout',leave,true);
- return ()=>{
-  document.removeEventListener('pointerover',enter,true);
-  document.removeEventListener('pointerout',leave,true);
-  remove();
- };
-}
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 // Display numerals are deliberately separate from the numeric action values.
@@ -499,6 +438,7 @@ function drawTcgMats(
       const bx=side*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+bookOffset.x;
       const by=trayBottom-bh*.44-10+bookOffset.y;
       const book=makePseudo3DBook(bookDesign,bw,bh);
+      onMergeReady(book);
       book.position.set(bx,by);
       // A physical book can be loose on the felt OR stowed in EITHER
       // drawer. Test its footprint against the actual inner wooden walls;
@@ -1436,7 +1376,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
   // Docked radial follows the actual hand-zone boundary in playmat/world
-  // coordinates, not viewport dimensions. Camera zoom is its only scaling.
+  // coordinates; only its anchor follows the camera, never its pixel size.
   // HUD geometry is stored without a React rerender per pan/zoom frame.
   // Only visibility changes need to trigger a React render.
   const [actionScreenVisible,setActionScreenVisible]=useState(false);
@@ -1495,12 +1435,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const eyeHitTarget=useRef<Container|null>(null);
   const castleHitTarget=useRef<Container|null>(null);
   const mergeHitTargets=useRef<Container[]>([]);
+  const drawHitTarget=useRef<Container|null>(null);
+  const toolControls=useRef<Container[]>([]);
   // Exactly one reference diameter per mounted session: the actual
   // initial Eye-view opponent button footprint, not a guessed 16/34px.
   const controlReferencePixels=useRef<number|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
-  useEffect(()=>installTopLayerBookHover(),[]);
+
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
   // Every Pixi control is normalized in ONE place before each render.
@@ -2008,6 +1950,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const castle=castleHitTarget.current;
           if(castle&&!castle.destroyed)castle.scale.set(1);
         }
+        if(drawHitTarget.current)fix(drawHitTarget.current,21);
+        for(const tool of toolControls.current)fix(tool,34);
         for(const button of mergeHitTargets.current){
           if(button.destroyed)continue;
           fix(button,34);
@@ -2060,12 +2004,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const projectedRight=parent.toGlobal(new Point(matRight.x,matRight.y));
           const matScreenWidth=Math.hypot(
             projectedRight.x-projectedLeft.x,projectedRight.y-projectedLeft.y);
-          // Original radial diameter = 30% of the visible playmat width.
-          // Measure the real transformed mat, so 1v1/Castle use the same
-          // relationship even when the seat has a separate view transform.
-          // ALWAYS use the mat-projected center and original size.
-          // Never clamp, slide, or shrink the radial to fit the viewport.
-          // Eye/Castle camera framing is responsible for its visibility.
+          // Project the mat anchor, but keep the wheel in CSS pixels.
           const next=fitMatAttachedRadial(
             projected.x,projected.y,matScreenWidth,w,h);
           dockedWheelGeometry.current=next;
@@ -2076,22 +2015,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           }
           // Keep the action display alongside this same playmat, not
           // beside a floating screen-corner radial.
-          const normalDisplay=fitActionScreenToWheel(
-            projectedLeft.x,projectedRight.x,next.x,next.size,
-            screen.y,matScreenWidth/TCG_MAT_WIDTH);
+          const normalDisplay={left:Math.min(projectedLeft.x,projectedRight.x),
+            y:screen.y,width:220,heightScale:1,visible:true};
           const matUpperLeft=tcgMatWorld(-TCG_MAT_WIDTH/2+8,-TCG_MAT_HEIGHT/2+13,seatRef.current);
           const upperLeft=parent.toGlobal(new Point(matUpperLeft.x,matUpperLeft.y));
           const display=handPlayModeRef.current?{
             ...normalDisplay,left:upperLeft.x,y:upperLeft.y,
-            width:Math.max(125,Math.min(matScreenWidth*.38,240)),
-            heightScale:Math.max(.65,Math.min(1,matScreenWidth/TCG_MAT_WIDTH)),
-            visible:true}:normalDisplay;
+            heightScale:1,visible:true}:normalDisplay;
           const castle=viewButtonPosition('castle');
           const world=tcgMatWorld(castle.x+34,castle.y,seatRef.current);
           const toolbarPoint=parent.toGlobal(new Point(world.x,world.y));
           const toolbar=play00ToolbarRef.current;
           if(toolbar){
-            const size=Math.max(.45,Math.min(2.1,matScreenWidth/TCG_MAT_WIDTH));
+            const size=1; // CSS pixels; project the anchor only.
             toolbar.style.transform=`translate3d(${toolbarPoint.x}px,${toolbarPoint.y-15*size}px,0) scale(${size})`;
           }
           actionScreenLatest.current=display;
@@ -2178,6 +2114,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     drawerGroups.current.clear();drawerTabs.current.clear();
     eyeHitTarget.current=null;castleHitTarget.current=null;
     mergeHitTargets.current=[];
+    drawHitTarget.current=null;
+    toolControls.current=[];
     visuals.current.clear();
     snapHighlight.current=null;
     board.rotation=viewerTableRotation(seat);
@@ -2388,6 +2326,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Never hide a whole source when the drawer starts moving.
         // Pixi's stencil reveals it incrementally past the felt edge.
         source.visible=true;
+        toolControls.current.push(source);
         // Fixed, real right-drawer coordinates. Zoom and camera changes
         // never edit their physical slot positions.
         source.position.set(slots[index].x,slots[index].y);
@@ -2459,6 +2398,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // Its metal face is clipped against the moving playmat edge,
         // not made visible all at once after the drawer finishes sliding.
         source.visible=true;
+        toolControls.current.push(source);
         // Match the LEFT dice rack's 25-unit top row and 18-unit label
         // offset. Small physical coins share one row inside the narrow felt.
         source.position.set(boxX+(index===0?-15:15),top+25);
@@ -2503,7 +2443,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         };
         source.on('pointerover',e=>{
           highlightSide(e.global);
-          setCoinHover(source,coinOverlay);
+          // Highlight the original coin; never create an enlarged control replica.
         });
         source.on('pointermove',e=>highlightSide(e.global));
         source.on('pointerout',()=>{
@@ -3004,6 +2944,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
       paintLayers.buttons.attach(draw);
+      drawHitTarget.current=draw;
     }
     // Animate the shuffling pile, not the whole table. The animation is
     // local-only and does not reorder server-authoritative game objects.
@@ -4239,7 +4180,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           (coinMenu.index===0?'#c4d8d9':'#d8b979')}
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
-    {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
+    {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':1,'--drawer-width':'320px'} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
         ref={node=>{
