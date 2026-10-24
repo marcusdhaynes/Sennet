@@ -1349,9 +1349,9 @@ body>.reader-backdrop{
 }
 .pixi-host>.sennet-player-tag-anchor[data-outward="right"] .player-hub.is-open .player-hub-content{clip-path:inset(0)}
 
-/* The player-tag trigger must win hit-testing against the radial overlay.
-   Neither the radial nor the tag changes its table-world coordinates. */
-.pixi-host>.sennet-player-tag-anchor{z-index:90}
+/* The closed player plate sits behind the radial, as in the reference.
+   Opening its drawer brings the drawer above tabletop controls. */
+.pixi-host>.sennet-player-tag-anchor{z-index:70}
 .pixi-host>.sennet-player-tag-anchor:has(.player-hub.is-open){z-index:120}
 
 /* The unified book is a single tabbed fantasy tome, not three separate covers. */
@@ -1868,9 +1868,7 @@ body>.reader-backdrop{
   .sennet-coin-radial{animation:none}
 }
 
-/* All twelve player captions now use the same Pixi text underneath
-   tabletop accessories. The local HTML tag remains accessible and clickable,
-   but no longer paints a gold plate or duplicates its text. */
+/* The local DOM plate replaces its Pixi caption and keeps a fixed pixel size. */
 
 
 
