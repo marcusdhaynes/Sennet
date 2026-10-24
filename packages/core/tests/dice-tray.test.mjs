@@ -278,7 +278,7 @@ test('all 8 larger dice sources retain individual slots in the right drawer',()=
   const radius=13.7*DICE_SOURCE_RACK_SCALE;
   for(let i=0;i<from.length;i++){
     const p=from[i];
-    assert.equal(p.y,-10+Math.floor(i/2)*31);
+    assert.equal(p.y,-95+68+Math.floor(i/2)*39);
     // The full projected 3D mesh fits the original 62-unit felt well.
     assert.ok(Math.abs(p.x-250)+radius<31);
     for(let j=i+1;j<from.length;j++){
