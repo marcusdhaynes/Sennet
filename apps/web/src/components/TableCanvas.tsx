@@ -1068,7 +1068,7 @@ function deckBoxArt(o:TableObject):Container{
  * perfectly z-sorted Pixi coin disappears behind the card's image.
  * This overlay is display-only: Pixi keeps all hit tests and drag gestures.
  */
-function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAppearance,color='#d8b979',editable=false):HTMLDivElement{
+function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAppearance,color='#d8b979',editable=false,caption?:string):HTMLDivElement{
   const root=document.createElement('div');
   root.className='sennet-coin-above-card';
   root.dataset.finish=style.finish;
@@ -1087,6 +1087,15 @@ function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAp
   center.style.fontSize=String((text.length>12?4.2:text.length>9?5.2:text.length>6?6.4:
     text.length>4?8:text.length===4?10.2:text.length===3?12:text.length===2?13.6:15)*.75)+'px';
   face.append(center);root.appendChild(face);
+  if(source&&caption){
+    // The label shares its coin's actual DOM visual and clipping polygon;
+    // it cannot float into another layer while this drawer retracts.
+    const label=document.createElement('span');
+    label.className='sennet-drawer-coin-caption';
+    label.textContent=caption;
+    label.setAttribute('aria-hidden','true');
+    root.appendChild(label);
+  }
   return root;
 }
 function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
@@ -2006,8 +2015,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
     const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number;source:boolean}[]=[];
-    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1,style:CoinAppearance=coinAppearance)=>{
-      const el=coinDomVisual(value,sign,source,style,color,editable);
+    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1,style:CoinAppearance=coinAppearance,caption?:string)=>{
+      const el=coinDomVisual(value,sign,source,style,color,editable,caption);
       mount.current?.appendChild(el);
       coinLayers.push({piece,el,displayScale,source});
       return el;
@@ -2060,7 +2069,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         mat.addChild(source);
         diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
-          quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
+          caption:diceLabel(sides),quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
         if(readonly)return;
         source.eventMode='static';source.cursor='grab';
         // Click diameter agrees with larger 3D die while remaining clear
@@ -2114,6 +2123,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // Both markings use exactly the dice-label font size and baseline.
         const symbol=drawerLabel(isEditable?'∞':'∑',isEditable?16:8.8);
         symbol.position.set(0,18);symbol.eventMode='none';
+        // The working HTML metal face also owns its engraved label. Keep
+        // this fallback as a child of the same source, not a separate layer.
+        symbol.visible=false;
         source.addChild(symbol);
         const highlight=new Graphics();
         highlight.scale.set(coinAppearance.size*1.08*sourceScale);
@@ -2121,7 +2133,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // The Pixi coin and its lettering remain in the drawer accessory
         // layer together. HTML coin art follows the same source transform.
         mat.addChild(source);
-        const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable,sourceScale);
+        const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable,sourceScale,coinAppearance,isEditable?'∞':'∑');
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
         // The coin mesh internally clamps appearance.size; hit detection
