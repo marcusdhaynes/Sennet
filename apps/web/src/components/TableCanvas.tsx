@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel,{RadialActionGlyph} from './CardRadialWheel';
+import {makePlaymatRadial} from './PlaymatActionRadial';
 import {RADIAL_ACTIONS} from '../lib/radialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {bestCardImage} from '../lib/tcgCatalog';
@@ -2259,6 +2260,24 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       button=>{castleHitTarget.current=button;},
       button=>{mergeHitTargets.current.push(button);},handPlayMode);
     duelLayers.current=seatGroups;
+    if(state.kind==='tcg'&&!readonly&&!handPlayMode&&wheelMode==='docked'&&seatGroups?.has(seat)){
+      // Put the wheel IN the playmat's Pixi container. There is no separate
+      // HTML overlay to chase the camera, and no second coordinate space.
+      const hand=tcgMatCells(seat).find(cell=>cell.row===3&&cell.column===1);
+      if(hand){
+        const x=hand.x-Math.sin(hand.angle)*hand.height/2;
+        const y=hand.y+Math.cos(hand.angle)*hand.height/2;
+        const radial=makePlaymatRadial(x,y,TCG_MAT_WIDTH,
+          action=>{
+            const targets=[...selectedSet.current];
+            if(targets.length)callbacks.current.onRadialAction(targets,action);
+          },
+          expanded=>interfaceAction.current(expanded?'Expand':'Collapse',
+            'Action radial',expanded?'Show actions':'Hide actions'),
+          ()=>selectedSet.current.size?String(selectedSet.current.size):'Actions');
+        seatGroups.get(seat)!.addChild(radial);
+      }
+    }
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
     paintLayers.objects.attach(snapOverlay);snapHighlight.current=snapOverlay;
@@ -4284,7 +4303,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
-    {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
+    {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&wheelMode!=='docked'&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
         ref={wheelMode==='docked'?attachDockedWheel:undefined}>
       <CardRadialWheel
