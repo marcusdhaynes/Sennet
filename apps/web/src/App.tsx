@@ -316,7 +316,7 @@ export default function App(){
       setEndpoint(address);setRoom(roomId);setJoinInput(roomId);setOnlineStatus('Connecting…');
       try{localStorage.setItem('sennet.ws',address);localStorage.setItem('sennet.name',playerName);}catch{}
       window.history.replaceState({},'',inviteUrl(roomId,address));
-      connection.current=new RoomConnection(address,roomId,game.kind,actor,seat,playerName,playerToken(),{
+      connection.current=new RoomConnection(address,roomId,game.kind==='sandbox'&&!options?.room?'tcg':game.kind,actor,seat,playerName,playerToken(),{
         onJoined:(assigned,joinedRoom)=>{
           if(assigned!==null)setSeat(assigned);
           connection.current?.publishAppearance(appearanceRef.current());
