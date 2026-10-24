@@ -98,12 +98,17 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   // Foil-inlaid cover has exactly the same vanishing geometry as the model.
   const inset=Math.max(6,width*.095);
   const border=plane(-halfW+inset,-halfH+inset*.68,halfW-inset*.75,halfH-inset*.72,thickness+1.15);
+  const shadowBorder=border.map(p=>({x:p.x+1.3,y:p.y+1.8}));
+  outline(body,shadowBorder,c.shadow,3,.98);
   outline(body,border,c.foil,1,1.25);
   const border2=plane(-halfW+inset+3,-halfH+inset*.68+4,halfW-inset*.75-3,halfH-inset*.72-4,thickness+1.2);
+  outline(body,border2.map(p=>({x:p.x+1,y:p.y+1.3})),c.shadow,2,.9);
   outline(body,border2,c.foil,.75,.8);
   // Embossed clasp and filigree live on the modeled cover plane.
   const center=project(spineWidth*.25,-height*.055,thickness+1.55);
   const emblemRadius=Math.max(7,width*.135);
+  body.ellipse(center.x+1.1,center.y+1.7,emblemRadius,emblemRadius*.86)
+    .stroke({color:c.shadow,width:3,alpha:.96});
   body.ellipse(center.x,center.y,emblemRadius,emblemRadius*.86)
     .fill({color:c.shadow}).stroke({color:c.foil,width:1.25});
   body.ellipse(center.x,center.y,emblemRadius*.75,emblemRadius*.65)
@@ -127,12 +132,16 @@ export function makePseudo3DBook(design:TomeDesign,width:number,height:number):C
   const mark=new Text({text:design==='dragon'?'✦':design==='arcane'?'✧':'◆',
     style:{fontFamily:'Georgia, serif',fontSize:emblemRadius*1.55,fill:c.foil,
       fontWeight:'bold'}});
+  mark.style.stroke={color:c.shadow,width:3,join:'round'};
+  mark.style.dropShadow={color:0x030506,alpha:1,blur:3,distance:1.6,angle:Math.PI/2};
   mark.anchor.set(.5);mark.position.set(center.x,center.y-.4);
   book.addChild(mark);
   const captionPoint=project(spineWidth*.28,height*.29,thickness+2);
   const caption=new Text({text:'SENNET',resolution:2,
     style:{fontFamily:'Georgia, serif',fontSize:Math.max(8,width*.15),
       fontWeight:'bold',letterSpacing:1.4,fill:0xffe7a5}});
+  caption.style.stroke={color:c.shadow,width:2.5,join:'round'};
+  caption.style.dropShadow={color:0x030506,alpha:1,blur:3,distance:1.7,angle:Math.PI/2};
   caption.anchor.set(.5);caption.position.set(captionPoint.x,captionPoint.y);
   caption.rotation=.025;
   book.addChild(caption);
