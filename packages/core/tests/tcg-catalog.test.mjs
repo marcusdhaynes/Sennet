@@ -37,7 +37,7 @@ test('Provider adapters retain real card IDs, sets, art, colors, and specialized
    {id:'onepiece:OP01-001',number:'OP01-001',cost:'3',text:'Double attack'}],
   ['pokemon',{id:'base1-4',name:'Charizard',image:'https://assets.tcgdex.net/en/base/base1/4',
    localId:'4',rarity:'Rare Holo',hp:120,types:['Fire'],category:'Pokemon'},
-   {id:'pokemon:base1-4',number:'4',image:'https://assets.tcgdex.net/en/base/base1/4/low.webp'}],
+   {id:'pokemon:base1-4',number:'4',image:'https://assets.tcgdex.net/en/base/base1/4/high.webp'}],
   ['riftbound',{id:'OGN-11',name:'Jinx',set:'Origins',type:'Champion',faction:'Chaos',
    description:'Deal damage',stats:{cost:3,might:5},media:[{type:'thumbnail',url:'https://assets.riotgames.com/jinx.jpg'}]},
    {id:'riftbound:OGN-11',type:'Champion',cost:'3',text:'Deal damage'}],
@@ -56,6 +56,18 @@ test('Provider adapters retain real card IDs, sets, art, colors, and specialized
   assert.ok(normalized.id.length>game.length+1);
  }
 });
+test('High-resolution TCG imagery is preferred for existing source card links',async()=>{
+ const {bestCardImage}=await import('../../../apps/web/src/lib/tcgCatalog.ts');
+ assert.equal(bestCardImage('https://cards.scryfall.io/small/front/a/b/abc.jpg?123'),
+  'https://cards.scryfall.io/png/front/a/b/abc.png?123');
+ assert.equal(bestCardImage('https://assets.tcgdex.net/en/base/base1/4/low.webp'),
+  'https://assets.tcgdex.net/en/base/base1/4/high.webp');
+ assert.equal(bestCardImage('https://images.ygoprodeck.com/images/cards_small/1.jpg'),
+  'https://images.ygoprodeck.com/images/cards/1.jpg');
+ assert.equal(bestCardImage('https://example.com/custom.png'),
+  'https://example.com/custom.png');
+});
+
 test('Catalogue endpoints fetch full indexes in one bulk request when supported',async()=>{
  const previous=globalThis.fetch;
  const requests=[];
