@@ -2364,12 +2364,25 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // every Pixi camera/mat/seat/selection transform.
         const tx=p.x*sx-31*aa-44*cc;
         const ty=p.y*sy-31*bb-44*dd;
-        // Native 62x88 CSS geometry is vital here: enlarging thousands of
-        // offscreen image elements to 12x caused oversized raster surfaces
-        // and could make cards vanish or exhaust browser graphics memory.
-        // The browser samples their original high-resolution SOURCE image
-        // at the real on-table card dimensions and any camera zoom.
-        img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
+        // Render at the actual zoom's pixel density, instead of asking the
+        // compositor to magnify a 62x88 layer. Limit the high-detail
+        // framebuffer to on-screen cards and cap it to 8x (never the old
+        // unconditional 12x on every object, which exhausted GPU memory).
+        const scale=Math.max(Math.hypot(aa,bb),Math.hypot(cc,dd));
+        const onScreen=p.x*sx>-125&&p.x*sx<rect.width+125&&
+          p.y*sy>-155&&p.y*sy<rect.height+155;
+        const sharp=onScreen
+          ?Math.min(8,Math.max(1,Math.ceil(scale*Math.min(2,window.devicePixelRatio||1))))
+          :1;
+        if(img.dataset.rasterScale!==String(sharp)){
+          img.dataset.rasterScale=String(sharp);
+          img.style.width=62*sharp+'px';
+          img.style.height=88*sharp+'px';
+          img.style.borderRadius=6*sharp+'px';
+        }
+        // Apply inverse scale to keep identical card geometry and placement
+        // regardless of how many pixels the full-resolution image samples.
+        img.style.transform=`matrix(${aa/sharp},${bb/sharp},${cc/sharp},${dd/sharp},${tx},${ty})`;
       }
       // A separate DOM layer at z-index 6 keeps every coin above every
       // imported card image (z-index 5), even during camera or card motion.
