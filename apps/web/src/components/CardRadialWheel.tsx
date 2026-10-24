@@ -1,5 +1,6 @@
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
+import {radialHoverMatrix} from '../lib/actionRadialFit';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
@@ -167,10 +168,9 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
    const svg=svgRef.current,portal=magnifierPortalRef.current;
    if(svg&&portal){
     const bounds=svg.getBoundingClientRect();
-    const scaleX=bounds.width/400;
-    const scaleY=bounds.height/(half?200:400);
-    if(scaleX>0&&scaleY>0){
-      const matrix=`matrix(${scaleX},0,0,${scaleY},${bounds.left},${bounds.top-(half?200*scaleY:0)})`;
+    const {a,d,e,f}=radialHoverMatrix(bounds,half);
+    if(a>0&&d>0){
+      const matrix=`matrix(${a},0,0,${d},${e},${f})`;
       if(portal.style.transform!==matrix)portal.style.transform=matrix;
     }
    }
