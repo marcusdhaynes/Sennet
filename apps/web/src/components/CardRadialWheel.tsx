@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
@@ -61,6 +61,10 @@ function sector(inside:number,outside:number,a:number,b:number){
 export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onChoose,onCancel,docked=false,half=false,tapLabel='Tap',onMoveDock,onExpandedChange}:Props){
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
  const [category,setCategory]=useState<number|null>(null);
+ const [hoveredAction,setHoveredAction]=useState<RadialAction|null>(null);
+ // The artwork for each sector can be duplicated visually without cloning
+ // its pointer handlers or changing the wheel's original hit geometry.
+ const wheelId=useId().replace(/:/g,'');
  const [collapsed,setCollapsed]=useState(false);
  const toggleCollapsed=()=>{
    const next=!collapsed;
@@ -69,7 +73,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  };
  const centerTimer=useRef<number|null>(null);
  const clearCenterTimer=()=>{if(centerTimer.current!==null){window.clearTimeout(centerTimer.current);centerTimer.current=null;}};
- const clearHighlight=()=>{state.current.category=null;state.current.action=null;setCategory(null);setAction(null);};
+ const clearHighlight=()=>{state.current.category=null;state.current.action=null;setCategory(null);setAction(null);setHoveredAction(null);};
  useEffect(()=>{const outside=(event:PointerEvent)=>{
   if(!(event.target instanceof Node)||!document.querySelector('.card-radial-wheel')?.contains(event.target))clearHighlight();
  };document.addEventListener('pointerdown',outside,true);return()=>document.removeEventListener('pointerdown',outside,true);},[]);
@@ -120,7 +124,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
- return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')+(half?' is-half':'')} style={{width:size,height:half?size/2:size,left:(dragOffset?.x??x)-size/2,top:half?y:(dragOffset?.y??y)-size/2,transition:half||dragOffset?'none':'left .38s cubic-bezier(.18,.82,.2,1), top .38s cubic-bezier(.18,.82,.2,1)'}}
+ return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')+(half?' is-half':'')+(hoveredAction?' has-sector-preview':'')} style={{width:size,height:half?size/2:size,left:(dragOffset?.x??x)-size/2,top:half?y:(dragOffset?.y??y)-size/2,transition:half||dragOffset?'none':'left .38s cubic-bezier(.18,.82,.2,1), top .38s cubic-bezier(.18,.82,.2,1)'}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
   <svg viewBox={half?"0 200 400 200":"0 0 400 400"} role="img" aria-label="Position, Scale and State action wheel">
@@ -146,11 +150,14 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
     // 3× (54px); the three Position commands are 2× (36px).
     const glyphSize=i===0?36:54;
     return <g key={act.id} aria-label={help} role="button" tabIndex={selected?0:-1}
-      onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
+      onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);setHoveredAction(act.id);}}
+      onPointerLeave={()=>setHoveredAction(current=>current===act.id?null:current)}
+      onBlur={()=>setHoveredAction(current=>current===act.id?null:current)}
       onPointerDown={e=>{e.preventDefault();e.stopPropagation();if(!collapsed)onChoose(act.id);}}
       onClick={e=>{e.preventDefault();e.stopPropagation();}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
       style={{pointerEvents:'auto'}}>
+     <g id={wheelId+'-'+act.id}>
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
@@ -221,8 +228,23 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
            lengthAdjust={half&&i===0?'spacingAndGlyphs':undefined}
            fill="#f8f3ff" stroke="#20172f" strokeWidth=".6"
            paintOrder="stroke" pointerEvents="none">{actionLabel}</text>}
+     </g>
     </g>;
    }))}
+   {/* The selected artwork is enlarged exactly 3x over the wheel, in a
+       visual-only SVG clone. Real sectors stay unmoved at their original
+       dimensions, so pointer hit areas and actions cannot drift or flicker. */}
+   {hoveredAction&&!collapsed&&
+     <g className="sennet-sector-magnifier" pointerEvents="none" aria-hidden="true">
+       {RADIAL_ACTIONS.flatMap((actions,i)=>actions.map((item,j)=>{
+         if(item.id!==hoveredAction)return null;
+         const mid=half?90+i*60+j*20+10:i*120+j*40+20;
+         const p=point(157,mid);
+         return <use key={item.id} href={'#'+wheelId+'-'+item.id}
+           pointerEvents="none"
+           transform={`translate(${p.x} ${p.y}) scale(3) translate(${-p.x} ${-p.y})`}/>;
+       }))}
+     </g>}
    </g>
    <g className="sennet-radial-center" role="button" tabIndex={0} aria-label={collapsed?'Hold to expand the action radial':'Hold to collapse the action radial'}
      onPointerDown={e=>{e.stopPropagation();clearCenterTimer();const startX=e.clientX,startY=e.clientY;
