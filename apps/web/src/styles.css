@@ -2657,3 +2657,32 @@ body>.reader-backdrop{
   .sennet-online-card button{width:100%;}
   .sennet-hosting-panel>summary small{display:none;}
 }
+
+
+/* Rapid-fire legibility pass (intentionally scoped to the existing controls). */
+.pixi-host .sennet-action-lcd{
+  grid-template-columns:27px minmax(0,1fr) 27px;
+  gap:3.3px;min-height:51.7px;
+}
+.pixi-host .sennet-action-lcd-display{
+  height:36px;font-size:12.1px;line-height:1.24;
+}
+.pixi-host .sennet-action-lcd-button{
+  width:26.4px;height:31.9px;font-size:18.7px;
+}
+.pixi-host .sennet-action-lcd-button svg{
+  width:19px;height:19px;
+}
+.pixi-host .sennet-action-lcd-roll{
+  font-size:110%;min-height:31.9px;
+}
+.pixi-host .sennet-player-tag-anchor .player-hub-number{font-size:12.1px;}
+.pixi-host .sennet-player-tag-anchor .player-hub-name{font-size:16.5px;}
+.pixi-host .sennet-player-tag-anchor .player-hub-utilities button{font-size:110%;}
+.player-hub .book-title,.book-cover .book-title{
+  color:#f8e6af;text-shadow:0 1px 4px #070d0bdc,0 0 8px #f2d28b8a;
+  font-weight:700;letter-spacing:.03em;
+}
+.player-hub .book-rule,.book-cover .book-rule{
+  opacity:1;box-shadow:0 0 4px #f9db85a0;
+}
