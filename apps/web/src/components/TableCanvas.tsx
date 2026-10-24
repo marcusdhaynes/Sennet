@@ -2328,6 +2328,11 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
     // Use browser <img> elements for actual card art, just like the Deck
     // Builder. Third-party card art often disallows WebGL/CORS texture uploads
     // even while rendering perfectly in an ordinary HTML image.
+    // Rasterize full-resolution card artwork at 12x the card's native
+    // tabletop pixel footprint. The inverse CSS matrix retains the exact
+    // same physical coordinates at any camera zoom, without enlarging a
+    // low-resolution 62x88 bitmap during close inspection.
+    const CARD_ART_RASTER_SCALE=12;
     const artLayers:{piece:Container;img:HTMLImageElement}[]=[];
     const visibleArtworkIds=new Set<string>();
     const imagesRoot=mount.current;
@@ -2348,7 +2353,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // every Pixi camera/mat/seat/selection transform.
         const tx=p.x*sx-31*aa-44*cc;
         const ty=p.y*sy-31*bb-44*dd;
-        img.style.transform=`matrix(${aa},${bb},${cc},${dd},${tx},${ty})`;
+        const sharp=CARD_ART_RASTER_SCALE;
+        img.style.transform=`matrix(${aa/sharp},${bb/sharp},${cc/sharp},${dd/sharp},${tx},${ty})`;
       }
       // A separate DOM layer at z-index 6 keeps every coin above every
       // imported card image (z-index 5), even during camera or card motion.
@@ -2519,8 +2525,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         }else{
           img=document.createElement('img');
           img.draggable=false;img.decoding='async';img.loading='eager';
-          img.style.cssText='position:absolute;left:0;top:0;width:62px;height:88px;'+
-            'display:none;pointer-events:none;user-select:none;object-fit:contain;'+
+          img.style.cssText=`position:absolute;left:0;top:0;width:${62*CARD_ART_RASTER_SCALE}px;height:${88*CARD_ART_RASTER_SCALE}px;`+
+            'display:none;pointer-events:none;user-select:none;object-fit:contain;image-rendering:auto;'+
             'transform-origin:0 0;border-radius:6px;will-change:transform;z-index:85';
           img.onload=()=>{if(img.isConnected)img.style.display='block';};
           img.onerror=()=>{img.style.display='none';};
