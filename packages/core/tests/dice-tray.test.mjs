@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createGame,applyCommand,replay,isTcgSideBoxDrop,tcgMatWorld,validThrowQuaternion} from '../src/index.ts';
 import {stepDicePhysics,throwVelocity}
   from '../../../apps/web/src/lib/dicePhysics.ts';
-import {DICE_SOURCE_RACK_SCALE,diceRackLocations}
+import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations}
   from '../../../apps/web/src/lib/diceCoordinates.ts';
 import {dieGeometry,convexShape,spawnOutsideTray}
   from '../../../apps/web/src/lib/Dice3D.ts';
@@ -344,9 +344,9 @@ test('right-drawer rack fits all eight larger dice between coins and book',()=>{
   const slots=diceRackLocations(center,top);
   assert.equal(slots.length,8);
   assert.deepEqual(slots.slice(0,2),[
-    {x:center-15,y:top+85},{x:center+15,y:top+85}
+    {x:center-15,y:top+68},{x:center+15,y:top+68}
   ]);
-  assert.equal(slots[7].y,top+85+3*31);
+  assert.equal(slots[7].y,top+68+3*39);
   const coinRowY=top+25;
   const bookTop=115;
   const diceRadius=13.7*DICE_SOURCE_RACK_SCALE;
@@ -355,8 +355,17 @@ test('right-drawer rack fits all eight larger dice between coins and book',()=>{
       'each 3D die remains inside the felt side walls');
     assert.ok(y-diceRadius>coinRowY+18,
       'dice clear the top coin labels');
-    assert.ok(y+15+5<bookTop,
+    assert.ok(y+DICE_RACK_LABEL_OFFSET+5<bookTop,
       'last dice label clears the wider book');
+  }
+  for(let row=0;row<3;row++){
+    const y=slots[row*2].y;
+    const nextY=slots[(row+1)*2].y;
+    const labelHalf=4.4;
+    assert.ok(DICE_RACK_LABEL_OFFSET-labelHalf-diceRadius>1.5,
+      'room above the letterforms and after the die edge');
+    assert.ok((nextY-diceRadius)-(y+DICE_RACK_LABEL_OFFSET+labelHalf)>2,
+      'room below the lettering before the next die');
   }
 });
 test('right-drawer source dice match the two smaller source coins',()=>{
