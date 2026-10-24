@@ -12,16 +12,15 @@ function download(name:string,content:string,type='text/plain'){
  const link=document.createElement('a');link.href=uri;link.download=name;link.click();
  window.setTimeout(()=>URL.revokeObjectURL(uri),1000);
 }
-export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame='pokemon',
+export default function TcgDeckBuilder({onClose,onLoadOnTable,initialGame=TCGS[0].id,
  snapMerged,onSnapMerged,mergeHoverMs,onMergeHoverMs}:Props){
  const [decks,setDecks]=useState<SavedDeck[]>(readDecks);
  const [activeId,setActiveId]=useState(()=>{
   try{return localStorage.getItem('sennet.deck-active.v1')||'';}catch{return '';}
  });
- const [game,setGame]=useState<TcgId>(()=>{
-  try{const saved=localStorage.getItem('sennet.tcg.preferred.v1');
-   return TCGS.some(t=>t.id===saved)?saved as TcgId:initialGame;}catch{return initialGame;}
- });
+ // Start on the first selectable TCG (Disney Lorcana) instead of the
+ // previous Pokémon preference. A specific initialGame prop still overrides.
+ const [game,setGame]=useState<TcgId>(initialGame);
  const [cards,setCards]=useState<CatalogCard[]>([]);
  const [loading,setLoading]=useState(false);
  const [status,setStatus]=useState('Ready');
