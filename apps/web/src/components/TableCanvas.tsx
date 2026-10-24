@@ -263,7 +263,7 @@ function drawTcgMats(
       .stroke({color:0x466059,width:1,alpha:.46}));
     // Two empty trays are siblings of the mat pockets in the SAME transformed
     // container, so Castle/Eye/ordinary views all carry them automatically.
-    {
+    if(seat===viewerSeat||seatActor){
       const trayW=TCG_MAT.cardWidth;
       // Exact zone edges: row 1 = PLAY 02; row 3 = HAND.
       // Match the pockets, including the gaps between their rows.
