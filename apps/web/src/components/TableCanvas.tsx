@@ -4320,10 +4320,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&wheelMode!=='docked'&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
-      <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
-        ref={wheelMode==='docked'?attachDockedWheel:undefined}>
+      <div className={'sennet-radial-free-anchor'}
+        ref={undefined}>
       <CardRadialWheel
-        x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
+        x={wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
         allLocked={(wheelMode!=='hold'?(selectedIds.length?selectedIds:(selected?[selected]:[])):radialWheel!.ids).every(id=>state.objects.find(o=>o.id===id)?.locked)}
         pointerId={wheelMode!=='hold'?null:radialWheel!.pointerId}
