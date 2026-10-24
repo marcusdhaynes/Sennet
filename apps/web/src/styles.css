@@ -2677,3 +2677,21 @@ body>.reader-backdrop{
 .player-hub .book-rule,.book-cover .book-rule{
   opacity:1;box-shadow:0 0 4px #f9db85a0;
 }
+
+
+/* Drawer inscriptions ride within each source coin's *own* metal-art
+   overlay. They share its transform, clipping and paint order rather than
+   floating in Pixi's unrelated text layer. */
+.pixi-host>.sennet-coin-above-card .sennet-drawer-coin-caption{
+  position:absolute;
+  left:50%;top:30px;
+  transform:translateX(-50%);
+  display:block;
+  min-width:22px;height:12px;
+  line-height:12px;text-align:center;
+  font:800 12px/12px Inter,system-ui,sans-serif;
+  color:#ffedbe;
+  -webkit-text-stroke:.45px #101711;
+  text-shadow:0 1px 3px #040805,0 0 2px #060805;
+  white-space:nowrap;pointer-events:none;user-select:none;
+}
