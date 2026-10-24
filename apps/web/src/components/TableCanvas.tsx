@@ -2578,8 +2578,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             const pointer=e.pointerId;
             const global=node.toGlobal(new Point(0,0));
             const place=local.toLocal(global);
+            // Preserve the instrument's screen-facing angle while changing
+            // parent from the sliding drawer to the seat's playmat layer.
+            // Position alone is insufficient: parent rotations differ.
+            const worldAngle=Math.atan2(node.worldTransform.b,node.worldTransform.a);
             if(node.parent!==local)local.addChild(node);
             node.position.copyFrom(place);
+            const parentAngle=Math.atan2(local.worldTransform.b,local.worldTransform.a);
+            node.rotation=worldAngle-parentAngle;
             const origin=local.toLocal(e.global);
             const startX=node.x,startY=node.y;
             node.cursor='grabbing';
@@ -2607,8 +2613,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
                 // actual drawer parent instead of leaving it floating above.
                 if(node.parent===local&&startX===place.x&&startY===place.y){
                   const home=left.toLocal(node.toGlobal(new Point(0,0)));
+                  const priorAngle=Math.atan2(node.worldTransform.b,node.worldTransform.a);
                   left.addChild(node);
                   node.position.copyFrom(home);
+                  node.rotation=priorAngle-Math.atan2(left.worldTransform.b,left.worldTransform.a);
                 }
                 return;
               }
@@ -2616,6 +2624,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               if(key==='life'&&Math.hypot(node.x-dock.x,node.y-dock.y)<22){
                 left.addChild(node);
                 node.position.set(instrument.x,instrument.y);
+                node.rotation=0;
                 try{localStorage.removeItem(storageKey);}catch{/* ignore */}
               }else{
                 try{localStorage.setItem(storageKey,JSON.stringify({x:node.x,y:node.y}));}catch{/* ignore */}
