@@ -8,6 +8,10 @@ type Props={
  onMoveDock?:(position:{x:number;y:number})=>void;
  onExpandedChange?:(expanded:boolean)=>void;
 };
+// Vector-traced from the supplied white-arrow stacked-cards icon. Using a
+// path (not a background-filled image) keeps the icon transparent and crisp
+// in State's dark wedge at any radial size.
+const SHUFFLE_DECK_ICON_PATH='M84,47 72,58 52,80 34,77 9,70 4,76 4,89 5,91 45,102 50,102 84,65Z M49,91 51,92 50,99 48,98Z M20,91 24,90 36,93 39,96 36,97 21,93Z M8,83 11,82 16,84 20,84 44,90 45,92 40,93 31,90 27,90 11,86Z M80,62 81,65 56,91 55,88Z M82,55 76,63 51,89 6,78 7,76 12,76 33,82 51,85 80,54Z M96,43 88,51 87,54 95,46Z M85,38 45,30 8,67 50,77 85,40Z M82,40 50,75 46,75 14,67 12,65 45,32 80,38Z M77,41 47,35 17,64 49,72Z M61,29 61,30 85,34 88,37 88,39 92,35Z M55,28 55,29 57,29 60,26 66,26 95,32 97,34 87,45 87,47 100,34 99,31 60,24Z M16,20 13,20 5,30 1,40 0,47 3,46 3,41 7,31Z M90,21 84,15 74,10 63,8 50,9 41,12 31,18 19,30 12,41 10,38 8,39 11,46 19,45 20,43 19,42 16,43 15,41 23,29 37,17 52,11 72,12 81,16 88,22Z M45,4 49,5 54,3 68,3 75,5 75,3 63,0 52,1Z';
 const cx=200,cy=200;
 // Uniform type across all categories and all actions; smaller outer
 // text stays inside the narrowest 40-degree wedge at compact sizes.
@@ -119,13 +123,21 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
-     <text x={p.x} y={p.y}
-       textAnchor="middle" dominantBaseline="central"
-       fontSize={glyphSize} fontWeight="700"
-       textLength={half&&i===0?49:undefined}
-       lengthAdjust={half&&i===0?'spacingAndGlyphs':undefined}
-       fill="#f8f3ff" stroke="#20172f" strokeWidth=".6"
-       paintOrder="stroke" pointerEvents="none">{actionLabel}</text>
+     {act.id==='shuffle'
+       ? <svg x={p.x-(half?24:33)} y={p.y-(half?24:33)}
+           width={half?48:66} height={half?48:66}
+           viewBox="0 0 104 106" aria-hidden="true"
+           style={{pointerEvents:'none',overflow:'visible'}}>
+           <path d={SHUFFLE_DECK_ICON_PATH} fill="#fff"
+             fillRule="evenodd" stroke="#fff" strokeWidth=".35" strokeLinejoin="round"/>
+         </svg>
+       : <text x={p.x} y={p.y}
+           textAnchor="middle" dominantBaseline="central"
+           fontSize={glyphSize} fontWeight="700"
+           textLength={half&&i===0?49:undefined}
+           lengthAdjust={half&&i===0?'spacingAndGlyphs':undefined}
+           fill="#f8f3ff" stroke="#20172f" strokeWidth=".6"
+           paintOrder="stroke" pointerEvents="none">{actionLabel}</text>}
     </g>;
    }))}
    </g>
