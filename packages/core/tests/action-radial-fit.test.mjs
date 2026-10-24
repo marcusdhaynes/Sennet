@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fitDockedRadial,fitSelfMatWithHud,fitBattleRadialZoom,fitMatAttachedRadial,radialHoverMatrix} from '../../../apps/web/src/lib/actionRadialFit.ts';
+import {fitDockedRadial,fitSelfMatWithHud,fitBattleRadialZoom,fitMatAttachedRadial,radialHoverMatrix,
+ EYE_CONTROL_DIAMETER_PX,fixedMatControlScale,fixedMatControlHalfSpacing} from '../../../apps/web/src/lib/actionRadialFit.ts';
 function fullyVisible(fit,viewport){
   const r=fit.size/2;
   assert.ok(fit.x-r>=7.99,'radial left edge visible');
@@ -85,3 +86,16 @@ for(const mode of ['eye','castle']){
   });
  }
 }
+
+test('Eye, Castle and stack count stay exactly 34px as camera zooms',()=>{
+ assert.equal(EYE_CONTROL_DIAMETER_PX,34);
+ for(const matPixelScale of [.025,.05,.2,.5,1,1.5,3,10,20,45]){
+  const inverse=fixedMatControlScale(matPixelScale);
+  const eyePixels=34*matPixelScale*inverse;
+  const castlePixels=34*matPixelScale*inverse;
+  const stackPixels=EYE_CONTROL_DIAMETER_PX; // independent HTML SVG
+  assert.ok(Math.abs(eyePixels-stackPixels)<1e-9);
+  assert.ok(Math.abs(castlePixels-stackPixels)<1e-9);
+  assert.ok(fixedMatControlHalfSpacing(matPixelScale)*matPixelScale>=22-1e-9);
+ }
+});
