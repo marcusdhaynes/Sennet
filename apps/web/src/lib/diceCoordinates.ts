@@ -11,7 +11,7 @@ export function diceToCssTransform(
   return {x:cssWidth/pixiWidth,y:cssHeight/pixiHeight};
 }
 /** Dice display at the compact source coin diameter, including flipcoins. */
-export const DICE_SOURCE_RACK_SCALE=.82;
+export const DICE_SOURCE_RACK_SCALE=.902;
 export function diceRackLocations(
   boxX:number,top:number
 ):{x:number;y:number}[]{
