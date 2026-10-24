@@ -66,7 +66,7 @@ export function bestCardImage(src:string):string{
 const key=(game:TcgId,id:unknown)=>game+':'+s(id);
 const card=(game:TcgId,id:unknown,name:unknown,opts:Partial<CatalogCard>={}):CatalogCard=>({
  id:key(game,id),game,name:s(name)||'Unnamed card',number:'',set:'',rarity:'',type:'',types:[],colors:[],
- cost:'',text:'',image:'',price:null,legalities:{},attributes:{},...opts,
+ cost:'',text:'',price:null,legalities:{},attributes:{},...opts,
  image:bestCardImage(opts.image||'')
 });
 export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
