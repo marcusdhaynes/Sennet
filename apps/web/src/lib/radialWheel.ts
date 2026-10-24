@@ -5,8 +5,8 @@ export const RADIAL_CATEGORIES=['Position','State','Scale'] as const;
 export type RadialCategory=(typeof RADIAL_CATEGORIES)[number];
 export const RADIAL_ACTIONS=[
  [{id:'rotate-cw',label:'+45°'}, {id:'tap-toggle',label:'Tap'}, {id:'rotate-ccw',label:'−45°'}],
- [{id:'shuffle',label:'Shuffle'}, {id:'flip',label:'Flip'}, {id:'reveal',label:'Reveal'}],
- [{id:'scale-bigger',label:'Increase'}, {id:'scale-original',label:'Original'}, {id:'scale-smaller',label:'Decrease'}]
+ [{id:'shuffle',label:'⤨'}, {id:'flip',label:'⇅'}, {id:'reveal',label:'▣'}],
+ [{id:'scale-smaller',label:'−'}, {id:'scale-original',label:'='}, {id:'scale-bigger',label:'+'}]
 ] as const;
 export type RadialAction=(typeof RADIAL_ACTIONS)[number][number]['id'];
 export type RadialHit={ring:'center'|'inner'|'outer'|'outside';category:number|null;action:RadialAction|null};
