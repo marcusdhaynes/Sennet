@@ -2218,7 +2218,29 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(!hoveredCoin||(piece&&hoveredCoin.piece!==piece))return;
       hoveredCoin.preview.remove();hoveredCoin=null;
     };
+    const coinOverlapsStackCounter=(piece:Container)=>{
+      if(!session.current||!stackBadges.length)return false;
+      const canvas=session.current.app.canvas;
+      const rect=canvas.getBoundingClientRect();
+      const at=piece.toGlobal(new Point(0,0));
+      const cx=rect.left+at.x*rect.width/session.current.app.screen.width;
+      const cy=rect.top+at.y*rect.height/session.current.app.screen.height;
+      return stackBadges.some(({button})=>{
+        if(!button.isConnected)return false;
+        const area=button.getBoundingClientRect();
+        const bx=area.left+area.width/2,by=area.top+area.height/2;
+        return Math.hypot(cx-bx,cy-by)<Math.max(14,area.width/2+10);
+      });
+    };
     const setCoinHover=(piece:Container,el:HTMLDivElement)=>{
+      // A real coin may be placed ON a stack-count marker. When the
+      // marker takes pointer focus Pixi can retain coin-hover state,
+      // leaving a giant 3x coin over the tiny count control. Never let
+      // the coin magnifier obscure the stack's clickable counter.
+      if(coinOverlapsStackCounter(piece)){
+        clearCoinHover();
+        return;
+      }
       if(hoveredCoin?.piece===piece)return;
       clearCoinHover();
       const preview=el.cloneNode(true) as HTMLDivElement;
@@ -2569,7 +2591,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           preview.style.transform=`matrix(${xa},${xb},${xc},${xd},${originX-18*(xa+xc)},${originY-18*(xb+xd)})`;
         }
       }
-      if(hoveredCoin&&!hoveredCoin.el.isConnected)clearCoinHover();
+      if(hoveredCoin&&
+         (!hoveredCoin.el.isConnected||coinOverlapsStackCounter(hoveredCoin.piece)))
+        clearCoinHover();
       staticDice3D.current?.sync();
       for(const [id,bubble] of rollBubbles.current){
         const piece=visuals.current.get(id);
@@ -2630,7 +2654,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         button.textContent=String(count);
         button.title='Select all '+count+' cards in this stack';
         button.setAttribute('aria-label',button.title);
-        button.addEventListener('pointerdown',e=>{e.stopPropagation();restartSelectionIdle.current();});
+        button.addEventListener('pointerenter',()=>clearCoinHover());
+        button.addEventListener('pointermove',()=>clearCoinHover());
+        button.addEventListener('pointerdown',e=>{
+          e.stopPropagation();
+          clearCoinHover();
+          restartSelectionIdle.current();
+        });
         button.addEventListener('click',e=>{
           e.stopPropagation();
           const ids=group.map(card=>card.id);
