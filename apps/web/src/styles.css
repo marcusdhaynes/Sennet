@@ -1072,38 +1072,41 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .card-radial-wheel.is-half.is-collapsed{clip-path:circle(18% at 50% 0%);}
 
 
-/* Full-art gallery: wrapped FLEX ROWS instead of CSS Grid implicit rows.
-   With dozens of cards in a height-constrained scroll container, auto grid
-   tracks shrink to a few pixels when cards have min-height:0 and their img
-   is absolutely positioned. That caused every following card to cover most
-   of the one above. Flex wrap sizes each row to the ACTUAL tallest card. */
+/* Full card gallery: each grid track must measure its CONTENT, not shrink
+   toward the height of the scroll panel. Images participate in normal flow
+   (no position:absolute); that reserves full card height before lazy-loading
+   completes, and prevents later rows painting over earlier ones. */
 .tcg-builder .tcgb-results.tcgb-card-gallery,
 .tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery,
 .tcg-builder .tcgb-mobile-browse .tcgb-results.tcgb-card-gallery.dense{
- display:flex!important;
- flex-direction:row!important;
- flex-wrap:wrap!important;
- align-content:flex-start!important;
- align-items:flex-start!important;
+ display:grid!important;
+ grid-template-columns:repeat(var(--cards-per-row,2),minmax(0,1fr))!important;
+ grid-auto-rows:max-content!important;
+ align-content:start!important;
+ align-items:start!important;
  gap:12px!important;
  padding:12px!important;
  overflow-y:auto!important;
  overflow-x:hidden!important;
+ min-height:0!important;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-result,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery .tcgb-result,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery.dense .tcgb-result{
  display:flex!important;
  flex-direction:column!important;
- flex:0 0 calc((100% - (var(--cards-per-row,2) - 1) * 12px) / var(--cards-per-row,2))!important;
- width:calc((100% - (var(--cards-per-row,2) - 1) * 12px) / var(--cards-per-row,2))!important;
+ align-items:stretch!important;
+ justify-content:flex-start!important;
+ width:100%!important;
  min-width:0!important;
+ min-height:0!important;
  height:auto!important;
- min-height:max-content!important;
+ max-height:none!important;
+ align-self:start!important;
  box-sizing:border-box!important;
  padding:8px!important;
  gap:7px!important;
- overflow:hidden!important;
+ overflow:visible!important;
  border:1px solid #536d58;
  border-radius:12px;
  background:#20392d;
@@ -1111,32 +1114,34 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .tcg-builder .tcgb-card-gallery .tcgb-thumb,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery .tcgb-thumb,
 .tcg-builder .tcgb-mobile-browse .tcgb-card-gallery.dense .tcgb-thumb{
- display:block!important;flex:none!important;
- width:100%!important;height:auto!important;aspect-ratio:5 / 7!important;
- min-height:0!important;max-height:none!important;
- overflow:hidden!important;padding:0!important;border-radius:8px;
- background:#10231e;
-}
-/* Source card art is positioned inside a definite-ratio button, so its
-   own intrinsic height never pushes the image beyond a clipped thumbnail.
-   Full portrait and landscape cards display uncropped with 'contain'. */
-.tcg-builder .tcgb-card-gallery .tcgb-thumb{
  position:relative!important;
- box-sizing:border-box!important;
  display:block!important;
  flex:0 0 auto!important;
- aspect-ratio:5 / 7!important;
+ box-sizing:border-box!important;
+ width:100%!important;
  height:auto!important;
- min-height:auto!important;
- isolation:isolate;
+ aspect-ratio:5 / 7!important;
+ min-height:0!important;
+ max-height:none!important;
+ overflow:hidden!important;
+ padding:0!important;
+ border-radius:8px!important;
+ background:#10231e;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-thumb img{
- position:absolute!important;
- inset:0!important;
+ /* Normal-flow image reserves real height, including prior to downloading.
+    Contain, never crop, landscape and portrait cards alike. */
+ position:static!important;
+ inset:auto!important;
  display:block!important;
- width:100%!important;height:100%!important;
- max-width:100%!important;max-height:100%!important;
- object-fit:contain!important;object-position:center center!important;
+ box-sizing:border-box!important;
+ width:100%!important;
+ height:auto!important;
+ aspect-ratio:5 / 7!important;
+ max-width:100%!important;
+ max-height:none!important;
+ object-fit:contain!important;
+ object-position:center center!important;
  transform:none!important;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-result-text{width:100%!important;min-width:0;flex:none!important;align-items:center!important;text-align:center!important;padding:0!important}
