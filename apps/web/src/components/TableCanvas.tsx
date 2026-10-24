@@ -342,6 +342,22 @@ function drawTcgMats(
         }
 
       }
+      if(seat!==viewerSeat&&seatActor){
+        const style=remoteAppearance?.bookDesign??'dragon';
+        const dock=remoteAppearance?.bookDock==='left'?-1:1;
+        const tray=drawerGroups.get(dock);
+        // The opponent's actual book is visible, but never intercepts our
+        // pointer events or opens another player's settings.
+        if(tray){
+          const bw=TCG_MAT.cardWidth-8,bh=bw/.76;
+          const accessory=makePseudo3DBook(style,bw,bh);
+          const shift=remoteAppearance?.bookOffset??{x:0,y:0};
+          accessory.position.set(dock*(TCG_MAT_WIDTH/2+TCG_MAT.cardWidth/2+3)+shift.x,
+            TCG_MAT_HEIGHT/2-bh*.44-10+shift.y);
+          accessory.eventMode='none';
+          tray.addChild(accessory);
+        }
+      }
     }
     if(seat===viewerSeat){
       const side=bookDock==='left'?-1:1;
