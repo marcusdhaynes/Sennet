@@ -196,6 +196,24 @@ export default function App(){
     try{const n=Number(localStorage.getItem('sennet.dice.hold.ms'));
       return n>=100&&n<=1500?n:250;}catch{return 250;}
   });
+  const [autoDeselect,setAutoDeselect]=useState(()=>localStorage.getItem('sennet.selection.auto')!=='false');
+  const [deselectMs,setDeselectMs]=useState(()=>{
+    const n=Number(localStorage.getItem('sennet.selection.idle.ms'));
+    return Number.isFinite(n)&&n>=500&&n<=30000?n:3000;
+  });
+  const [cardViewHoldMs,setCardViewHoldMs]=useState(()=>{
+    const n=Number(localStorage.getItem('sennet.card.inspect.hold.ms'));
+    return Number.isFinite(n)&&n>=100&&n<=1500?n:250;
+  });
+  const [handHoldView,setHandHoldView]=useState(()=>localStorage.getItem('sennet.hand.hold.view')==='true');
+  const [handPlayMode,setHandPlayMode]=useState(()=>localStorage.getItem('sennet.hand.play00')==='true');
+  useEffect(()=>{try{
+    localStorage.setItem('sennet.selection.auto',String(autoDeselect));
+    localStorage.setItem('sennet.selection.idle.ms',String(deselectMs));
+    localStorage.setItem('sennet.card.inspect.hold.ms',String(cardViewHoldMs));
+    localStorage.setItem('sennet.hand.hold.view',String(handHoldView));
+    localStorage.setItem('sennet.hand.play00',String(handPlayMode));
+  }catch{}},[autoDeselect,deselectMs,cardViewHoldMs,handHoldView,handPlayMode]);
   // Thrown pieces are removed permanently at exactly 10 seconds.
   // The built-in dice/flipcoin generators in the tray are not disposable.
   const diceFadeMs=THROWN_DIE_LIFETIME_MS;
@@ -661,6 +679,8 @@ export default function App(){
           setBookOffset(point);
         }} onBookOpen={()=>{writeReceipt('Open','Book','Sennet');setBook('sennet');}} state={viewedGame} labelScale={labelScale} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} wheelMode="docked"
+        autoDeselect={autoDeselect} deselectMs={deselectMs} cardViewHoldMs={cardViewHoldMs}
+        handHoldView={handHoldView} handPlayMode={handPlayMode}
         onOpenReceipt={()=>setActionLogOpen(true)}
         onInterfaceAction={(type,location,description)=>writeReceipt(type,location,description)}
         latestAction={latestAction} canUndo={!isConnected&&replayAt===null&&history.length>0}
@@ -705,6 +725,14 @@ export default function App(){
           else if(action==='roll')takeAction('ROLL',{id,seed:Date.now()%10000000});
         }}
         onRadialAction={(ids,action)=>{
+          // Shuffling a card in a pile shuffles the whole physical pile,
+          // rather than silently shuffling only the one visible card.
+          if(action==='shuffle'){
+            const expanded=new Set(ids);
+            for(const id of ids)for(const card of cardStackMembers(current.current,id))
+              expanded.add(card.id);
+            ids=[...expanded];
+          }
           // One authoritative event applies to the ENTIRE selection.
           // State is validated atomically; invalid or opponent-owned
           // groups never partially mutate.
@@ -910,6 +938,22 @@ export default function App(){
             {settingsPage==='general'&&<><div className="reader-heading"><div><h2>Your perspective</h2><p>Your own seat is always positioned at the bottom. The table rotates around it.</p></div></div>
               <div className="reader-block"><h3>Player</h3><label>Display name<input value={playerName} maxLength={32} onChange={e=>setPlayerName(e.target.value)}/></label><label>My seat<select value={seat} onChange={e=>setSeat(Number(e.target.value))}>{Array.from({length:12},(_,i)=><option key={i} value={i}>Player {String(i+1).padStart(2,'0')}</option>)}</select></label></div>
               <div className="reader-block"><h3>View controls</h3><p>Scroll the mouse wheel or two-finger touchpad to zoom. Pinch with two fingers on a touchscreen. After zooming in, click and drag empty tabletop space (left mouse button) or drag with one finger to pan. The camera cannot move beyond the area visible at startup. At maximum zoom-out, camera panning is locked. Dragging a card moves the card instead. Middle-mouse drag and Shift + scroll also pan. Press + / − to zoom and 0 to reset. Double-clicking does not change the zoom. The Eye on the top line of your Play 03 zone focuses it; hold for 0.25 seconds to choose an opponent. In Opponent Mode, each other visible player's mat has two circular controls whose centers sit directly on the top line of its Play 03 zone, from that player's perspective: Sword (Enemy, across the divider) and Shield (Ally, alongside you, facing the same way). Your own Play 03 zone has an evenly centered Eye/Castle pair directly on its top boundary. The Eye works exactly as before. Tap Castle to open or close the divided battlefield; unclassified seats disappear. Hold Castle for 0.25 seconds to switch BOTH sides together between Single View (one Ally and one Enemy, each with independent left/right cycling arrows) and All View (all Allies and all Enemies in their respective optimized grids). Click an Ally or Enemy mat to focus that player on their side without changing the opposite side's All grid or existing focus. Focus both sides to display only your full-size mat, one Ally, and one Enemy, with each focused player's relation buttons and same-side cycling arrows. Focus is neither All nor Single, and the next Castle hold continues the previous mode toggle. Your mat remains full-size and fixed to the left in both views, with existing spacing preserved; Enemies stay above the divider. Click Sword or Shield on the specific player's mat to change that player's relationship. They are mutually exclusive, toggle off on a second click, and are remembered separately per opponent on this browser. Eye is strictly one-on-one with the selected opponent always across the divide, regardless of Ally or Enemy classification. Castle always shows marked Enemies across from you and marked Allies beside you; All View shows both groups in grids, while Single View shows one player from each group with independent left/right arrows. Without a Sword or Shield selection, a chosen Eye opponent appears across from you by default.  The left and right circular arrows centered on the opponent's exact side borders between rows 2 and 3 cycle through opponents by their full-table seat positions: left counter-clockwise, right clockwise, skipping your seat. The opponent-view camera is locked: mouse/touchpad wheel, drag, pinch and zoom/reset shortcuts cannot pan or zoom. Cards and match controls remain interactive. The player areas fill the screen, and the Eye and Castle remain merge-button-sized along the top line of Play 03. All PLAY and HAND rows have six additional half-slot card anchors between their original seven horizontal positions. Player names and seat numbers stay tucked behind the top and bottom screen edges: hover over a small, semi-transparent caret tab for 0.25 seconds to reveal its compact name/seat label. Tag transparency uses the merge-button setting. They stay open while hovered and retract 1 second after the pointer leaves, unless clicked to pin. Tap the eye again for the full table or hold it to return to your mat alone. Vector mats stay sharp; raster card art is limited by its source image resolution.</p></div>
+              <div className="reader-block">
+                <h3>Card gestures and selections</h3>
+                <label><input type="checkbox" checked={handHoldView}
+                  onChange={e=>setHandHoldView(e.target.checked)}/> Hand Hold View: hold to select and move groups (off: hold to inspect a card)</label>
+                <label>Card-view hold time — {cardViewHoldMs} ms
+                  <input type="range" min="100" max="1500" step="50"
+                    value={cardViewHoldMs} onChange={e=>setCardViewHoldMs(Number(e.target.value))}/></label>
+                <label><input type="checkbox" checked={autoDeselect}
+                  onChange={e=>setAutoDeselect(e.target.checked)}/> Automatically deselect inactive selections</label>
+                <label>Inactive selection delay — {(deselectMs/1000).toFixed(1)} seconds
+                  <input type="range" min="500" max="30000" step="500"
+                    disabled={!autoDeselect} value={deselectMs}
+                    onChange={e=>setDeselectMs(Number(e.target.value))}/></label>
+                <label><input type="checkbox" checked={handPlayMode}
+                  onChange={e=>setHandPlayMode(e.target.checked)}/> Play 00 hand layout: screen at upper-left; compact purple action controls at upper-right</label>
+              </div>
               <div className="reader-block">
                 <h3>Card stacks</h3>
                 <p>A stationary <strong>0.25-second hold</strong> starts selection mode. Tap more cards or stacks once to add them; tap selected cards to remove them. Drag any selected card to move the entire selection together. A small <strong>13 px</strong> breakaway threshold resists accidental motion.</p>
