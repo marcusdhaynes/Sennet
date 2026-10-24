@@ -88,10 +88,10 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   'scale-smaller':'Decrease','scale-original':'Original','scale-bigger':'Increase'
  };
  const centerLabel=hoveredAction?hoveredLabel[hoveredAction]:'Actions';
- // Hover highlights the existing sector without resizing its artwork:
+ // Hover changes color only; geometry never changes:
  // never create a second SVG, <use>, document.body portal or floating preview.
  // A transparent stationary hit path keeps the hover target stable while
- // its colors change.
+ // the visible sector is highlighted.
  const [collapsed,setCollapsed]=useState(false);
  const toggleCollapsed=()=>{
    const next=!collapsed;
@@ -164,7 +164,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      onClick={()=>{state.current.category=i;setCategory(i);}}
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,half?90+i*60:i*120,half?150+i*60:i*120+120)}
-      fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
+      fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={1.3}/>
      <text x={p.x} y={p.y+5} transform={i===0||i===2?`rotate(${half?(i===0?-45:45):(i===0?60:-60)} ${p.x} ${p.y})`:undefined} textAnchor="middle" fontSize="22.5" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
@@ -184,15 +184,14 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       onClick={e=>{e.preventDefault();e.stopPropagation();}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
       style={{pointerEvents:'auto'}}>
-     {/* Hit testing stays at the ORIGINAL, unmagnified wedge. The visible
-         wedge is the SAME artwork transformed in place, never duplicated. */}
+     {/* Hit testing and visible artwork share the same fixed geometry. */}
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
        fill="transparent" stroke="none" pointerEvents="all"/>
      <g pointerEvents="none">
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
-      strokeWidth={hot?2.8:1.4}/>
+      strokeWidth={1.4}/>
      {act.id==='tap-toggle'
        ? <svg x={p.x-(half?24:35)} y={p.y-(half?24:35)}
            width={half?48:70} height={half?48:70}

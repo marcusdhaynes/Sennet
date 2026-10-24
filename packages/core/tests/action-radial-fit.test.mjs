@@ -74,7 +74,7 @@ for(const mode of ['eye','castle']){
    const baseScale=Math.min(height/(2*matH+4*pad),width/(2*matW+3*pad));
    const scale=fitBattleRadialZoom(baseScale,height,matW,matH,mode);
    assert.ok(scale>0&&scale<=baseScale);
-   const radialDepth=90/scale;
+   const radialDepth=108/scale;
    const bottom=mode==='eye'
      ?height/2+scale*(matH+pad+radialDepth)
      :height/2+height/4*(scale/baseScale)+scale*(matH/2+radialDepth);
@@ -82,13 +82,13 @@ for(const mode of ['eye','castle']){
    const anchored=fitMatAttachedRadial(width/2,bottom-scale*radialDepth,scale*matW,width,height);
    assert.equal(anchored.x,width/2,'No horizontal viewport redocking');
    assert.equal(anchored.y,bottom-scale*radialDepth,'No vertical viewport redocking');
-   assert.equal(anchored.size,180);
+   assert.ok(Math.abs(anchored.size/2-scale*radialDepth)<1e-8);
   });
  }
 }
 
-test('Eye, Castle, merge and stack count stay small (16px) at EVERY camera zoom',()=>{
- assert.equal(EYE_CONTROL_DIAMETER_PX,16);
+test('Eye, Castle, merge and stack count stay small (28px) at EVERY camera zoom',()=>{
+ assert.equal(EYE_CONTROL_DIAMETER_PX,28);
  assert.equal(WOODEN_CONTROL_WORLD_DIAMETER,34);
  for(const matPixelScale of [.025,.05,.2,.5,1,1.5,3,10,20,45]){
   const inverse=fixedMatControlScale(matPixelScale);
@@ -99,6 +99,6 @@ test('Eye, Castle, merge and stack count stay small (16px) at EVERY camera zoom'
   assert.ok(Math.abs(eyePixels-stackPixels)<1e-9);
   assert.ok(Math.abs(castlePixels-stackPixels)<1e-9);
   assert.ok(Math.abs(mergePixels-stackPixels)<1e-9);
-  assert.ok(Math.abs(stackPixels-16)<1e-9);
+  assert.ok(Math.abs(stackPixels-28)<1e-9);
  }
 });

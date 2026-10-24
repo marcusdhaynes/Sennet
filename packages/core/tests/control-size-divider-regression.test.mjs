@@ -9,12 +9,12 @@ import {
 const table=readFileSync(new URL('../../../apps/web/src/components/TableCanvas.tsx',import.meta.url),'utf8');
 const styles=readFileSync(new URL('../../../apps/web/src/styles.css',import.meta.url),'utf8');
 
-test('merge, Eye, Castle, stack controls all use the same SMALL 16px diameter',()=>{
+test('merge, Eye, Castle, stack controls all use the same SMALL 28px diameter',()=>{
   assert.equal(2*(VIEW_BUTTON_RADIUS+1),WOODEN_CONTROL_WORLD_DIAMETER);
-  assert.equal(EYE_CONTROL_DIAMETER_PX,16);
+  assert.equal(EYE_CONTROL_DIAMETER_PX,28);
   assert.match(table,/woodenControl\(VIEW_BUTTON_RADIUS,seatPlaymat\.sideBoxStyle\?\?'walnut',merged\)/);
   assert.match(table,/createEyeStyleCounter\(count,playmat\.sideBoxStyle/);
-  assert.match(styles,/width:var\(--sennet-control-size,16px\)!important/);
+  assert.match(styles,/width:var\(--sennet-control-size,28px\)!important/);
   assert.ok(!styles.includes('width:34px!important;height:34px!important'));
   assert.equal(viewButtonPosition('eye').x,-22);
   assert.equal(viewButtonPosition('castle').x,22);
@@ -29,8 +29,8 @@ test('Eye and Castle share a fixed playmat anchor, their size and separation nev
   assert.ok(!table.includes('castle.position.x=halfSpacing'));
   for(const zoom of [.035,.25,.5,1,1.5,4,12]){
     const scale=fixedMatControlScale(zoom);
-    assert.ok(Math.abs(zoom*scale*WOODEN_CONTROL_WORLD_DIAMETER-16)<1e-8);
-    assert.ok(Math.abs(zoom*scale*44-44*16/34)<1e-8);
+    assert.ok(Math.abs(zoom*scale*WOODEN_CONTROL_WORLD_DIAMETER-28)<1e-8);
+    assert.ok(Math.abs(zoom*scale*44-44*28/34)<1e-8);
   }
 });
 
@@ -58,7 +58,7 @@ test('action radial cannot be moved separately from the physical playmat',()=>{
   const p=fitMatAttachedRadial(21,455,620,250,300);
   assert.equal(p.x,21);
   assert.equal(p.y,455);
-  assert.equal(p.size,180);
+  assert.equal(p.size,216);
 });
 
 test('all tabletop controls use CSS pixel scale, never physical framebuffer resolution',()=>{
@@ -68,7 +68,7 @@ test('all tabletop controls use CSS pixel scale, never physical framebuffer reso
   assert.match(controls,/const sy=canvas.height\/app.screen.height/);
   assert.ok(!controls.includes('/app.renderer.width'));
   assert.ok(!controls.includes('/app.renderer.height'));
-  assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:var\(--sennet-control-size,16px\)!important/s);
+  assert.match(styles,/\.sennet-stack-count svg\s*\{[^}]*width:var\(--sennet-control-size,28px\)!important/s);
 });
 
 test('mat controls only change inverse scale; world anchor and merge positions remain immutable',()=>{
@@ -80,12 +80,10 @@ test('mat controls only change inverse scale; world anchor and merge positions r
   assert.ok(!/\.position\.set|\.position\.x\s*=|\.position\.y\s*=/.test(fragment));
 });
 
-test('one session reference uses the opponent Sword/Shield size in initial Eye view',()=>{
-  assert.match(table,/controlReferencePixels=useRef<number\|null>\(null\)/);
-  assert.match(table,/if\(controlReferencePixels\.current===null\)\{/);
-  assert.match(table,/eyeOpponentReferencePixels\(/);
-  assert.match(table,/host\.style\.setProperty\('--sennet-control-size'/);
-  assert.match(table,/const factor=desired\/sourceDiameter/);
+test('approved pixel dimensions never come from a camera or viewport reference',()=>{
+  assert.ok(!table.includes('eyeOpponentReferencePixels('));
+  assert.match(table,/const desired=CONTROL_PIXELS.circle/);
+  assert.match(table,/const factor=screenScale/);
   assert.match(table,/const pxX=factor\/worldX,pxY=factor\/worldY/);
 });
 
