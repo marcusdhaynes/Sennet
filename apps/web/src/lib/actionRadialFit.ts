@@ -102,8 +102,27 @@ export function fitBattleRadialZoom(
  */
 export const EYE_CONTROL_DIAMETER_PX=16;
 export const WOODEN_CONTROL_WORLD_DIAMETER=34;
-export function fixedMatControlScale(pxPerWorldUnit:number):number{
+/** Match the on-screen diameter that a normal opponent Sword/Shield
+ * has in the INITIAL Eye view. Compute once for the viewport, then keep
+ * the answer unchanged through all camera zooms and game view changes.
+ * This is a reference measurement, not a new arbitrary button size. */
+export function eyeOpponentReferencePixels(
+  viewportWidth:number,viewportHeight:number,
+  eyeBounds:{width:number;height:number},
+  matWidth:number,matHeight:number
+):number{
+  const base=Math.min(Math.max(1,viewportWidth)/eyeBounds.width,
+    Math.max(1,viewportHeight)/eyeBounds.height);
+  const eyeScale=fitBattleRadialZoom(base,viewportHeight,matWidth,matHeight,'eye');
+  const pixels=WOODEN_CONTROL_WORLD_DIAMETER*eyeScale;
+  return Number.isFinite(pixels)&&pixels>0?pixels:EYE_CONTROL_DIAMETER_PX;
+}
+/** Screen-fixed visual scaling. The target is the opponent Eye-view
+ * reference for this session, not a fixed guessed CSS dimension. */
+export function fixedMatControlScale(pxPerWorldUnit:number,targetPixels=EYE_CONTROL_DIAMETER_PX):number{
+  const pixels=Number.isFinite(targetPixels)&&targetPixels>0
+    ?targetPixels:EYE_CONTROL_DIAMETER_PX;
   return Number.isFinite(pxPerWorldUnit)&&pxPerWorldUnit>0
-    ?EYE_CONTROL_DIAMETER_PX/(WOODEN_CONTROL_WORLD_DIAMETER*pxPerWorldUnit)
-    :EYE_CONTROL_DIAMETER_PX/WOODEN_CONTROL_WORLD_DIAMETER;
+    ?pixels/(WOODEN_CONTROL_WORLD_DIAMETER*pxPerWorldUnit)
+    :pixels/WOODEN_CONTROL_WORLD_DIAMETER;
 }
