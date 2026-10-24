@@ -275,7 +275,7 @@ export default function App(){
     setReceipt(mergeReceipt(audit,cleanOrigin,past));
     setSelected(null);setReplayAt(null);setBook(null);setActionLogOpen(false);
   }
-  function startGame(kind:GameKind){resetWith(createGame(kind));}
+  function startGame(kind:GameKind){resetWith(createGame(kind,'local',false));}
   function loadPack(pack:GamePack){resetWith(gameFromPack(pack));}
   function loadRecent(s:SavedSession){resetWith(s.game,s.id,s.history,s.initial,s.receipt,s.redoStack);}
   function returnToEmpty(){resetWith(emptyTable());}
