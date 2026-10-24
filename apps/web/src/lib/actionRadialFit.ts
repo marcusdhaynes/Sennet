@@ -92,14 +92,18 @@ export function fitBattleRadialZoom(
   return baseScale*Math.min(1,room/Math.max(1,distance));
 }
 
-/** Eye, Castle and count badges share this exact on-screen diameter.
- * The SVG stack control and the inverse-scaled Pixi controls derive their
- * measurements from this one geometry contract. */
-export const EYE_CONTROL_DIAMETER_PX=34;
+/** The ORIGINAL merge buttons were visually small. The earlier 34px
+ * "fix" turned their 34-world-unit ART dimensions into giant CSS pixels.
+ * Shared geometry for every small circular tabletop control:
+ * - Pixi woodenControl has a 34-WORLD-UNIT outer silhouette.
+ * - Its inverse camera scale must therefore include 16/34.
+ * - DOM count badges are exactly 16 CSS pixels, without inherited scale.
+ * - Their anchors are game-world positions, NEVER viewport re-docked.
+ */
+export const EYE_CONTROL_DIAMETER_PX=16;
+export const WOODEN_CONTROL_WORLD_DIAMETER=34;
 export function fixedMatControlScale(pxPerWorldUnit:number):number{
   return Number.isFinite(pxPerWorldUnit)&&pxPerWorldUnit>0
-    ?1/pxPerWorldUnit:1;
-}
-export function fixedMatControlHalfSpacing(pxPerWorldUnit:number):number{
-  return 22*Math.max(1,fixedMatControlScale(pxPerWorldUnit));
+    ?EYE_CONTROL_DIAMETER_PX/(WOODEN_CONTROL_WORLD_DIAMETER*pxPerWorldUnit)
+    :EYE_CONTROL_DIAMETER_PX/WOODEN_CONTROL_WORLD_DIAMETER;
 }
