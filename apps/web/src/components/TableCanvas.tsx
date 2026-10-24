@@ -2374,9 +2374,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(o.zone==='DECK')continue;
       topRenderedId.set(stackKey(o),o.id);
     }
+    // Always preserve a real second card beneath each visible stack top.
+    // Otherwise lifting the only rendered top sprite makes the entire pile
+    // appear to vanish until the authoritative move finishes.
+    const stackUnderlayId=new Map<string,string>();
+    for(const o of visible){
+      if(o.kind!=='card'&&o.kind!=='deck'||o.zone==='DECK')continue;
+      const key=stackKey(o);
+      if(topRenderedId.get(key)!==o.id)stackUnderlayId.set(key,o.id);
+    }
     const renderable=visible.filter(o=>
       (o.kind!=='card'&&o.kind!=='deck')||
-      o.zone==='DECK'||topRenderedId.get(stackKey(o))===o.id);
+      o.zone==='DECK'||topRenderedId.get(stackKey(o))===o.id||
+      stackUnderlayId.get(stackKey(o))===o.id);
     // Selection contains only currently existing, visible members; never
     // allow a stale deleted card ID into a later wheel action.
     const validIds=new Set(state.objects.map(o=>o.id));
@@ -3087,8 +3097,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // local-only and does not reorder server-authoritative game objects.
     if(/shuffle/i.test(state.message??'')&&lastShuffleAnimated.current!==state){
       lastShuffleAnimated.current=state;
-      const targets=[...deckTop.values(),...renderable.filter(o=>
-        selectedSet.current.has(o.id)&&['card','deck'].includes(o.kind))];
+      // Only animate the shuffling player's selected pile. Never animate
+      // every player's deck just because the shared state says "shuffle".
+      const shuffleSeat=Number(/(?:seat|Seat) (\\d+)/.exec(state.message??'')?.[1]);
+      const targets=renderable.filter(o=>
+        ['card','deck'].includes(o.kind)&&
+        (Number.isFinite(shuffleSeat)
+          ?o.matSeat===shuffleSeat-1
+          :selectedSet.current.has(o.id)));
       const animated=new Set<string>();
       for(const obj of targets){
         const piece=visuals.current.get(obj.id);
@@ -3362,7 +3378,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         d.moved=true;
         if(d.timer!==null){window.clearTimeout(d.timer);d.timer=null;}
       }
-      // Breakaway friction: 13px must be overcome before moving a card.
+      // Minimal deadzone for responsive, precise card movement.
       // Subtract that deadzone from pointer delta so cards NEVER jump.
       const rect=current.app.canvas.getBoundingClientRect();
       const coord=(clientX:number,clientY:number)=>new Point(
@@ -3371,7 +3387,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const parent=d.visual.parent??current.board;
       const origin=parent.toLocal(coord(d.startClientX,d.startClientY),current.app.stage);
       const point=parent.toLocal(coord(event.clientX,event.clientY),current.app.stage);
-      const factor=Math.max(0,(distance-GESTURE_MOVE_THRESHOLD)/Math.max(1,distance));
+      const factor=1;
       d.x=Math.max(0,Math.min(BOARD_W,d.startX+(point.x-origin.x)*factor));
       d.y=Math.max(0,Math.min(BOARD_W,d.startY+(point.y-origin.y)*factor));
       const dx=d.x-d.startX,dy=d.y-d.startY;
