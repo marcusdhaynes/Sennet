@@ -104,14 +104,15 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setCategory(i);state.current.category=i;}}}>
      <path d={sector(67,122,half?90+i*60:i*120,half?150+i*60:i*120+120)}
       fill={active?'#714db6':'#28203c'} stroke={active?'#d3beec':'#8f78ac'} strokeWidth={active?2.5:1.3}/>
-     <text x={p.x} y={p.y+5} transform={i===0||i===2?`rotate(${half?(i===0?-45:45):(i===0?60:-60)} ${p.x} ${p.y})`:undefined} textAnchor="middle" fontSize="15" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
+     <text x={p.x} y={p.y+5} transform={i===0||i===2?`rotate(${half?(i===0?-45:45):(i===0?60:-60)} ${p.x} ${p.y})`:undefined} textAnchor="middle" fontSize="22.5" fontWeight="700" fill="#f9f4ff" pointerEvents="none">{name}</text>
     </g>;
    })}
    {RADIAL_CATEGORIES.map((group,i)=>Array.from({length:3},(_,j)=>{
     const act=RADIAL_ACTIONS[i][j],mid=half?90+i*60+j*20+10:i*120+j*40+20,p=point(157,mid);
     const actionLabel=act.id==='tap-toggle'?tapLabel:act.label;
+     const help=act.id==='reveal'?'Reveal':act.id==='flip'?'Flip':act.id==='shuffle'?'Shuffle':act.id==='scale-bigger'?'Increase':act.id==='scale-smaller'?'Decrease':act.id==='scale-original'?'Original':actionLabel;
     const selected=category===i,hot=action===act.id;
-    return <g key={act.id} aria-label={actionLabel} role="button" tabIndex={selected?0:-1}
+    return <g key={act.id} aria-label={help} role="button" tabIndex={selected?0:-1}
       onPointerEnter={()=>{if(!selected){setCategory(i);state.current.category=i;}state.current.action=act.id;setAction(act.id);}}
       onPointerDown={e=>{e.preventDefault();e.stopPropagation();if(!collapsed)onChoose(act.id);}}
       onClick={e=>{e.preventDefault();e.stopPropagation();}}
@@ -122,7 +123,7 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
       strokeWidth={hot?2.8:1.4}/>
      {<text x={p.x} y={p.y-(multiline(actionLabel).length-1)*7}
-       textAnchor="middle" fontSize="12" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
+       textAnchor="middle" fontSize="18" fontWeight="700" fill="#f8f3ff" pointerEvents="none">
        {multiline(actionLabel).map((s,k)=><tspan key={s} x={p.x} dy={k?14:0}>{s}</tspan>)}
      </text>}
     </g>;
