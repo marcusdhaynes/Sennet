@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
+import {useCallback,useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
@@ -1491,6 +1491,17 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   },[handHoldView]);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
+  // Keep the DOM node attached across camera-driven React renders. An inline
+  // ref callback is recreated on every render, detaching/re-attaching the
+  // radial and momentarily restoring stale screen coordinates while panning.
+  const attachDockedWheel=useCallback((node:HTMLDivElement|null)=>{
+    dockedWheelRef.current=node;
+    if(!node)return;
+    const geometry=dockedWheelGeometry.current;
+    if(geometry.size<=0)return;
+    const factor=geometry.size/180;
+    node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
+  },[]);
   const battleMinZoom=useRef(1);
   const eyeHitTarget=useRef<Container|null>(null);
   const castleHitTarget=useRef<Container|null>(null);
@@ -4239,14 +4250,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={wheelMode==='docked'?'sennet-radial-camera-anchor':'sennet-radial-free-anchor'}
-        ref={node=>{
-          dockedWheelRef.current=wheelMode==='docked'?node:null;
-          if(node&&wheelMode==='docked'){
-            const geometry=dockedWheelGeometry.current;
-            const factor=geometry.size/180;
-            node.style.transform=`translate3d(${geometry.x-90*factor}px,${geometry.y}px,0) scale(${factor})`;
-          }
-        }}>
+        ref={wheelMode==='docked'?attachDockedWheel:undefined}>
       <CardRadialWheel
         x={wheelMode==='docked'?90:wheelMode==='mobile'?Math.max(76,Math.min(viewport.width-76,dockPosition?.x??viewport.width-88)):radialWheel!.x} y={wheelMode==='docked'?0:wheelMode==='mobile'?Math.max(76,Math.min(viewport.height-76,dockPosition?.y??viewport.height-88)):radialWheel!.y} size={wheelMode==='docked'?180:wheelMode==='mobile'?152:radialWheel!.size} docked={wheelMode==='mobile'} half={wheelMode==='docked'} onMoveDock={saveDockPosition}
         count={wheelMode!=='hold'?(selectedIds.length||Number(!!selected)):radialWheel!.ids.length}
