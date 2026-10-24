@@ -1711,7 +1711,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
           }
         }
       }
-      message=picked.length+' selected cards · '+action.replaceAll('-', ' ');
+      message=action==='shuffle'
+        ?'Shuffled '+picked.length+' cards · Seat '+(Number(picked[0]?.matSeat??0)+1)
+        :picked.length+' selected cards · '+action.replaceAll('-', ' ');
     }break;
     case 'THROW_TRAY':{
       const thrown=p.throws as Array<{sides:number;rolls:number[];x:number;y:number;rotation:number;quaternion?:[number,number,number,number];altitude?:number}>;
