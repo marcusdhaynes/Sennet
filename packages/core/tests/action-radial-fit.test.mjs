@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fitDockedRadial,fitSelfMatWithHud} from '../../../apps/web/src/lib/actionRadialFit.ts';
+import {fitDockedRadial,fitSelfMatWithHud,radialHoverMatrix} from '../../../apps/web/src/lib/actionRadialFit.ts';
 function fullyVisible(fit,viewport){
   const r=fit.size/2;
   assert.ok(fit.x-r>=7.99,'radial left edge visible');
@@ -48,3 +48,18 @@ for(const {width,height,held} of [
   assert.ok(fullWidth<=width-23.9);
  });
 }
+
+test('half radial hover magnifier preserves actual button location at bottom edge',()=>{
+ const rect={left:120,top:440,width:180,height:90};
+ const m=radialHoverMatrix(rect,true);
+ const center={x:200*m.a+m.e,y:200*m.d+m.f};
+ assert.deepEqual(center,{x:210,y:440});
+ const outer={x:200*m.a+m.e,y:360*m.d+m.f};
+ assert.deepEqual(outer,{x:210,y:512});
+});
+test('full radial hover magnifier preserves actual wheel center',()=>{
+ const rect={left:90,top:85,width:220,height:220};
+ const m=radialHoverMatrix(rect,false);
+ assert.deepEqual({x:200*m.a+m.e,y:200*m.d+m.f},
+  {x:200,y:195});
+});
