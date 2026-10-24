@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
+import {buildLifeCounter,buildDrawerMagnifier,buildDrawerCalculator} from './DrawerInstruments';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel,{RadialActionGlyph} from './CardRadialWheel';
 import {makePlaymatRadial} from './PlaymatActionRadial';
@@ -2537,6 +2538,28 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           };
         });
       });
+    }
+    // Dedicated instruments inside the left drawer, with the life-point
+    // device mounted just above its top lip. Their Pixi ancestry guarantees
+    // that dragging/panning moves them with the playmat rather than a DOM HUD.
+    if(state.kind==='tcg'){
+      const left=drawerGroups.current.get(-1);
+      const local=seatGroups?.get(seat)??board;
+      const trayX=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth/2-3;
+      const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
+      if(left){
+        const glass=buildDrawerMagnifier(()=>{glass.scale.set(glass.scale.x===1?1.35:1);});
+        glass.position.set(trayX-12,trayTop+44);
+        glass.scale.set(.52);left.addChild(glass);
+        const calculator=buildDrawerCalculator();
+        calculator.position.set(trayX+17,trayTop+58);
+        calculator.scale.set(.62);left.addChild(calculator);
+      }
+      const life=buildLifeCounter();
+      life.position.set(trayX,-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap-53);
+      life.scale.set(.72);
+      local.addChild(life);
+      paintLayers.buttons.attach(life);
     }
     // Fixed, interactive source coins live inside the *local* right tray.
     // Their Pixi transform follows the mat in all three camera modes.
