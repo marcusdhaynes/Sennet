@@ -37,13 +37,16 @@ export function buildLifeCounter(seat=0):Container{
  root.addChild(button(-18,9,6,'−',()=>{total--;redraw();}));
  root.addChild(button(18,9,6,'+',()=>{total++;redraw();}));
  const next=button(0,30,10,'NEXT',()=>{round++;redraw();},0x395365);root.addChild(next);
- const glyphs=['✦','◆','✧','☠','●','✥','★'];
+ // Distinct readable sigils for all seven supported deck-builder TCGs.
+ const glyphs=['L','G','M','OP','PK','R','Y'];
+ const gameButtons:Container[]=[];
  TCGS.forEach((game,i)=>{
   const angle=(i*360/TCGS.length-90)*Math.PI/180;
   const x=Math.cos(angle)*30,y=Math.sin(angle)*30;
   // Keep the status text legible by placing icons slightly outside display.
-  const p=button(x,y,4.5,glyphs[i],()=>{active=i;gameName.text=game.name.slice(0,12);persist();});
-  p.alpha=i===active?1:.82;root.addChild(p);
+  const p=button(x,y,5.1,glyphs[i],()=>{active=i;gameName.text=game.name.slice(0,12);
+    gameButtons.forEach((b,j)=>{b.alpha=j===i?1:.66;});persist();});
+  p.alpha=i===active?1:.66;p.label=game.name;gameButtons.push(p);root.addChild(p);
  });
  const gameName=label(TCGS[active].name.slice(0,12),4.3,0x65c9e4);gameName.y=20;root.addChild(gameName);
  // A contained external silhouette gives the housing depth above the drawer.
