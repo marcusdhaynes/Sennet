@@ -5,6 +5,67 @@ import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer
 import CardRadialWheel from './CardRadialWheel';
 import {makeCoin,coinHighlight,type CoinAppearance} from './CoinArt';
 import {createDrawerBody,drawerPalette} from './RealisticSideDrawer';
+/** Hover-expanded book covers must paint above the player drawer, table and
+ * every other interface layer. Keep the real cover as the only hit target
+ * and mirror its enlarged appearance in a pointer-transparent body overlay. */
+function installTopLayerBookHover(){
+ let active:HTMLElement|null=null;
+ let wrapper:HTMLDivElement|null=null;
+ let raf=0;
+ const remove=()=>{
+  active=null;
+  if(raf)window.cancelAnimationFrame(raf);
+  raf=0;
+  wrapper?.remove();
+  wrapper=null;
+ };
+ const sync=()=>{
+  if(!active||!active.isConnected||!wrapper){remove();return;}
+  const rect=active.getBoundingClientRect();
+  const preview=wrapper.firstElementChild as HTMLElement|null;
+  if(preview){
+   preview.style.width=rect.width+'px';
+   preview.style.height=rect.height+'px';
+   preview.style.filter=getComputedStyle(active).filter;
+  }
+  wrapper.style.left=rect.left+'px';
+  wrapper.style.top=rect.top+'px';
+  raf=window.requestAnimationFrame(sync);
+ };
+ const enter=(event:PointerEvent)=>{
+  if(!(event.target instanceof Element))return;
+  const original=event.target.closest<HTMLElement>('.player-hub .table-book');
+  if(!original||original===active)return;
+  remove();
+  active=original;
+  wrapper=document.createElement('div');
+  wrapper.className='sennet-book-hover-top-layer';
+  const clone=original.cloneNode(true) as HTMLElement;
+  clone.removeAttribute('id');
+  clone.setAttribute('aria-hidden','true');
+  clone.setAttribute('tabindex','-1');
+  clone.inert=true;
+  clone.style.cssText='position:relative;display:block;left:0;top:0;margin:0;'+
+   'transform:none!important;transition:none!important;'+
+   'pointer-events:none!important;touch-action:none;';
+  wrapper.appendChild(clone);
+  document.body.appendChild(wrapper);
+  sync();
+ };
+ const leave=(event:PointerEvent)=>{
+  if(!active||!(event.target instanceof Node)||!active.contains(event.target))return;
+  const next=event.relatedTarget;
+  if(next instanceof Node&&active.contains(next))return;
+  remove();
+ };
+ document.addEventListener('pointerover',enter,true);
+ document.addEventListener('pointerout',leave,true);
+ return ()=>{
+  document.removeEventListener('pointerover',enter,true);
+  document.removeEventListener('pointerout',leave,true);
+  remove();
+ };
+}
 const COIN_ACTIONS=['Duplicate Coin','+1','+10','+100','+1000',
   'Color Selector','−1','−10','−100','−1000'] as const;
 // Display numerals are deliberately separate from the numeric action values.
@@ -1367,6 +1428,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
   const eyeHitTarget=useRef<Container|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
+  useEffect(()=>installTopLayerBookHover(),[]);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
   const seatRef=useRef(seat);seatRef.current=seat;
