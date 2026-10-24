@@ -1538,6 +1538,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       if(landing){
         obj.zone='TABLE';obj.matSeat=landing.seat??obj.matSeat;
         obj.carrierId=landing.carrierId;
+        obj.order=1+Math.max(-1,...objects.filter(card=>card.id!==obj.id&&
+          card.zone==='TABLE'&&card.matSeat===obj.matSeat&&
+          Math.hypot(card.x-landing.x,card.y-landing.y)<2)
+          .map(card=>card.order));
         message='Stacked '+obj.name;
       }else if(snapped) { obj.matSeat=snapped.seat;
         if(obj.kind==='card'||obj.kind==='deck')
@@ -1571,14 +1575,20 @@ export function applyCommand(state: GameState, command: Command): GameState {
         card.x=clamp(card.x+dx,0,BOARD_W);
         card.y=clamp(card.y+dy,0,BOARD_H);
         if(state.kind==='tcg'){
-          if(snapped)card.matSeat=snapped.seat;
+          if(landing)card.matSeat=landing.seat??card.matSeat;
+          else if(snapped)card.matSeat=snapped.seat;
           else delete card.matSeat;
         }
       }
       if(landing){
-        for(const card of objects.filter(o=>ids.has(o.id))){
+        const incoming=objects.filter(o=>ids.has(o.id)).sort((a,b)=>a.order-b.order);
+        const next=1+Math.max(-1,...objects.filter(card=>!ids.has(card.id)&&
+          card.zone==='TABLE'&&Math.hypot(card.x-landing.x,card.y-landing.y)<2)
+          .map(card=>card.order));
+        incoming.forEach((card,index)=>{
           card.zone='TABLE';card.matSeat=landing.seat??card.matSeat;
-        }
+          card.order=next+index;
+        });
       }else if(snapped){
         const placed=objects.filter(card=>ids.has(card.id));
         if(placed.length&&placed.every(card=>card.kind==='card'||card.kind==='deck'))
@@ -1619,6 +1629,13 @@ export function applyCommand(state: GameState, command: Command): GameState {
           else if(snapped)card.matSeat=snapped.seat;
           else delete card.matSeat;
           if(card.zone==='DECK'&&snapped)card.zone='TABLE';
+        }
+        if(landing){
+          const incoming=picked.slice().sort((a,b)=>a.order-b.order);
+          const next=1+Math.max(-1,...objects.filter(card=>!idSet.has(card.id)&&
+            card.zone==='TABLE'&&Math.hypot(card.x-landing.x,card.y-landing.y)<2)
+            .map(card=>card.order));
+          incoming.forEach((card,index)=>{card.order=next+index;});
         }
         if(!landing&&snapped&&picked.every(card=>card.kind==='card'||card.kind==='deck'))
           applyPocketDrop(picked,snapped.freePlacement?snapped.x:tx,
