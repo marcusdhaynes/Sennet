@@ -205,15 +205,19 @@ export default function App(){
     const n=Number(localStorage.getItem('sennet.card.inspect.hold.ms'));
     return Number.isFinite(n)&&n>=100&&n<=1500?n:250;
   });
+  // The held-hand presentation and the stationary-card selection gesture
+  // are independent. Earlier versions accidentally wired one switch to both.
   const [handHoldView,setHandHoldView]=useState(()=>localStorage.getItem('sennet.hand.hold.view')==='true');
+  const [holdSelectStacks,setHoldSelectStacks]=useState(()=>localStorage.getItem('sennet.cards.hold.select')==='true');
   const [handPlayMode,setHandPlayMode]=useState(()=>localStorage.getItem('sennet.hand.play00')==='true');
   useEffect(()=>{try{
     localStorage.setItem('sennet.selection.auto',String(autoDeselect));
     localStorage.setItem('sennet.selection.idle.ms',String(deselectMs));
     localStorage.setItem('sennet.card.inspect.hold.ms',String(cardViewHoldMs));
     localStorage.setItem('sennet.hand.hold.view',String(handHoldView));
+    localStorage.setItem('sennet.cards.hold.select',String(holdSelectStacks));
     localStorage.setItem('sennet.hand.play00',String(handPlayMode));
-  }catch{}},[autoDeselect,deselectMs,cardViewHoldMs,handHoldView,handPlayMode]);
+  }catch{}},[autoDeselect,deselectMs,cardViewHoldMs,handHoldView,holdSelectStacks,handPlayMode]);
   // Thrown pieces are removed permanently at exactly 10 seconds.
   // The built-in dice/flipcoin generators in the tray are not disposable.
   const diceFadeMs=THROWN_DIE_LIFETIME_MS;
@@ -680,7 +684,7 @@ export default function App(){
         }} onBookOpen={()=>{writeReceipt('Open','Book','Sennet');setBook('sennet');}} state={viewedGame} labelScale={labelScale} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} wheelMode="docked"
         autoDeselect={autoDeselect} deselectMs={deselectMs} cardViewHoldMs={cardViewHoldMs}
-        handHoldView={handHoldView} handPlayMode={handPlayMode}
+        handHoldView={handHoldView} holdSelectStacks={holdSelectStacks} handPlayMode={handPlayMode}
         onOpenReceipt={()=>setActionLogOpen(true)}
         onInterfaceAction={(type,location,description)=>writeReceipt(type,location,description)}
         latestAction={latestAction} canUndo={!isConnected&&replayAt===null&&history.length>0}
@@ -941,7 +945,9 @@ export default function App(){
               <div className="reader-block">
                 <h3>Card gestures and selections</h3>
                 <label><input type="checkbox" checked={handHoldView}
-                  onChange={e=>setHandHoldView(e.target.checked)}/> Hand Hold View: hold to select and move groups (off: hold to inspect a card)</label>
+                  onChange={e=>setHandHoldView(e.target.checked)}/> Held Hand View — show my hand close to me, fanned along the bottom of the screen (Arena / Tabletop Simulator style). Drag a card into the playmat to play it.</label>
+                <label><input type="checkbox" checked={holdSelectStacks}
+                  onChange={e=>setHoldSelectStacks(e.target.checked)}/> Hold-to-select stacks instead of hold-to-inspect cards</label>
                 <label>Card-view hold time — {cardViewHoldMs} ms
                   <input type="range" min="100" max="1500" step="50"
                     value={cardViewHoldMs} onChange={e=>setCardViewHoldMs(Number(e.target.value))}/></label>
