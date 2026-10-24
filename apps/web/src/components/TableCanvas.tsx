@@ -33,7 +33,7 @@ import {roll3DDice} from '../lib/Dice3D';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {expandDiceSources} from '../lib/diceSourceExpansion';
-import {DICE_SOURCE_RACK_SCALE,diceRackLocations} from '../lib/diceCoordinates';
+import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
 import {fitMatAttachedRadial} from '../lib/actionRadialFit';
@@ -79,6 +79,16 @@ function woodenControl(radius:number,finish:string,active=false):Graphics{
 }
 function label(text:string,size:number,color:number,weight:'normal'|'bold'='normal'){
   const t=new Text({text,resolution:Math.min(4,Math.max(2,window.devicePixelRatio||1)),style:{fontFamily:FONT,fontSize:size,fill:color,fontWeight:weight,align:'center'}});t.anchor.set(.5);return t;
+}
+/** Drawer engravings: a fine dark outline and offset shadow preserve
+ * readability against walnut grain, felt, coin rims and every dice finish. */
+function drawerLabel(text:string,size=8.8){
+  const t=label(text,size,0xffedbe,'bold');
+  t.style.stroke={color:0x11150f,width:2.2,join:'round'};
+  t.style.dropShadow={color:0x070906,alpha:.98,blur:2.2,distance:1.1,angle:Math.PI/2};
+  t.style.letterSpacing=.25;
+  t.eventMode='none';
+  return t;
 }
 /** Procedure-generated finishes keep the mat crisp at any camera zoom.
  * Textures are drawn over the optional background image but under the label.
@@ -323,8 +333,8 @@ function drawTcgMats(
             die.position.set(locations[index].x,locations[index].y);
             die.scale.set(DICE_SOURCE_RACK_SCALE);
             die.eventMode='none';drawerGroup.addChild(die);
-            const mark=label(diceLabel(sides),8.8,0xffedbe,'bold');
-            mark.position.set(locations[index].x,locations[index].y+15);
+            const mark=drawerLabel(diceLabel(sides));
+            mark.position.set(locations[index].x,locations[index].y+DICE_RACK_LABEL_OFFSET);
             drawerGroup.addChild(mark);
           });
           const c=remoteAppearance?.coin;
@@ -336,7 +346,7 @@ function drawTcgMats(
             const coin=makeCoin(value,coinStyle,true,1,index===0?'#c4d8d9':'#d8b979',index===0);
             coin.position.set(rightX+(index===0?-15:15),top+25);
             coin.scale.set(.68);drawerGroup.addChild(coin);
-            const mark=label(index===0?'∞':'∑',index===0?17.6:8.8,0xffedbe,'bold');
+            const mark=drawerLabel(index===0?'∞':'∑',index===0?17.6:8.8);
             mark.position.set(coin.x,top+43);drawerGroup.addChild(mark);
           });
         }
@@ -2017,8 +2027,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const face=makeDie(sides,undefined,badge);
         face.scale.set(DICE_SOURCE_RACK_SCALE);
         source.addChild(face);
-        const name=label(diceLabel(sides),8.8,0xffedbe,'bold');
-        name.position.set(0,15);
+        const name=drawerLabel(diceLabel(sides));
+        name.position.set(0,DICE_RACK_LABEL_OFFSET);
         source.addChild(name);
         // Live-updated badge is a separate child so click counting does
         // not create a new scene or interrupt another piece's drag.
@@ -2090,7 +2100,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         face.scale.set(face.scale.x*sourceScale);
         source.addChild(face);
         // Both markings use exactly the dice-label font size and baseline.
-        const symbol=label(isEditable?'∞':'∑',isEditable?16:8,0xffedbe,'bold');
+        const symbol=drawerLabel(isEditable?'∞':'∑',isEditable?16:8.8);
         symbol.position.set(0,18);symbol.eventMode='none';
         source.addChild(symbol);
         const highlight=new Graphics();
