@@ -775,23 +775,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 /* All nine magnified action wedges are portaled directly under <body>.
    The unscaled wedge still owns hit testing, while the visual copy paints
    above all tabletop panels, drawers, overlays and camera clipping. */
-.sennet-radial-hover-top-layer{
-  position:fixed;left:0;top:0;
-  width:400px;height:400px;
-  transform-origin:0 0;
-  z-index:2147483647;
-  isolation:isolate;
-  overflow:visible;
-  pointer-events:none!important;
-}
-.sennet-radial-hover-top-layer svg,
-.sennet-radial-hover-top-layer .sennet-sector-magnifier{
-  overflow:visible;
-  pointer-events:none!important;
-}
-.sennet-radial-hover-top-layer .sennet-sector-magnifier{
-  filter:drop-shadow(0 6px 8px #090519dd);
-}
+/* The hovered action is its ORIGINAL sector; there are no
+   extra document-level magnifier SVGs or portals. */
 .card-radial-wheel g[role=button]:focus-visible path{stroke:#ffe8a9;stroke-width:4}
 .card-radial-wheel .card-radial-close{position:absolute;top:5%;left:50%;transform:translateX(-50%);
  border:1px solid #b7a3d2;border-radius:50%;background:#20172b;
@@ -2758,10 +2743,8 @@ body>.reader-backdrop{
 }
 
 
-/* Shared highest paint tier for ALL visual hover enlargement copies.
-   These float directly under <body> (outside Pixi, 3D and HUD clipping)
-   and never capture taps, hover, scrolling or dragging. */
-.sennet-radial-hover-top-layer,
+/* Other overlays (dice, book and coins) retain their existing
+   behavior. Radial actions are magnified only in their own SVG. */
 .sennet-dice-hover-top-layer,
 .sennet-book-hover-top-layer,
 .sennet-coin-hover-top-layer{
@@ -2790,14 +2773,18 @@ body>.reader-backdrop{
  overflow:visible!important;
 }
 
-/* Match the OLD small merge-button look, not its 34-WORLD-UNIT
-   source geometry. Screen-space counters remain 16px in EVERY camera
-   and must never inherit CSS transform scaling from a Pixi object. */
+/* In the initial Eye view, the opponent's small Sword/Shield controls
+   establish the exact visual diameter for this session. The mount sets
+   --sennet-control-size ONCE; every count badge inherits it and never
+   scales with camera zoom, card scale, or opponent grid transforms. */
 .sennet-stack-count{
  position:absolute;z-index:125;
- width:16px!important;height:16px!important;
- min-width:16px!important;min-height:16px!important;
- max-width:16px!important;max-height:16px!important;
+ width:var(--sennet-control-size,16px)!important;
+ height:var(--sennet-control-size,16px)!important;
+ min-width:var(--sennet-control-size,16px)!important;
+ min-height:var(--sennet-control-size,16px)!important;
+ max-width:var(--sennet-control-size,16px)!important;
+ max-height:var(--sennet-control-size,16px)!important;
  display:grid;place-items:center;transform:translate(-50%,-50%)!important;
  transform-origin:center center;flex:none;border:0!important;
  border-radius:50%;padding:0!important;overflow:visible;
@@ -2806,9 +2793,13 @@ body>.reader-backdrop{
  color:#fff2cd;font:800 8px/1 'Inter',system-ui,sans-serif;
 }
 .sennet-stack-count svg{
- display:block;width:16px!important;height:16px!important;
- min-width:16px!important;min-height:16px!important;
- max-width:16px!important;max-height:16px!important;
+ display:block;
+ width:var(--sennet-control-size,16px)!important;
+ height:var(--sennet-control-size,16px)!important;
+ min-width:var(--sennet-control-size,16px)!important;
+ min-height:var(--sennet-control-size,16px)!important;
+ max-width:var(--sennet-control-size,16px)!important;
+ max-height:var(--sennet-control-size,16px)!important;
  pointer-events:none;overflow:visible;
  filter:drop-shadow(0 1px 1px #0008);
 }
