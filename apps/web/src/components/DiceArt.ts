@@ -20,9 +20,9 @@ const number=(value:string,size:number,color:number)=>{
     fill:color,align:'center',stroke:{color:0x182329,width:.55}}});
   t.anchor.set(.5);t.eventMode='none';return t;
 };
-export function makeDie(sides:number,result?:string,selected=0):Container{
+export function makeDie(sides:number,result?:string,selected=0,themeColor?:string):Container{
   const root=new Container();root.eventMode='none';
-  const base=pigment(sides),r=16.1,n=sides===2?32:sides===4?3:
+  const base=themeColor&&/^#[0-9a-f]{6}$/i.test(themeColor)?parseInt(themeColor.slice(1),16):pigment(sides),r=16.1,n=sides===2?32:sides===4?3:
     sides===6?4:sides===8?6:sides===10?5:sides===12?7:
     sides===20?8:12;
   const offset=sides===6?Math.PI/4:-Math.PI/2;
