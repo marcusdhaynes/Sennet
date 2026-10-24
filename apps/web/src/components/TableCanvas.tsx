@@ -98,8 +98,8 @@ import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {expandDiceSources} from '../lib/diceSourceExpansion';
 import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
-import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScreenFit';
-import {fitMatAttachedRadial} from '../lib/actionRadialFit';
+import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
+import {fitMatAttachedRadial,fitDockedRadial,fitSelfMatWithHud} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
@@ -1433,6 +1433,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const actionLcdRef=useRef<HTMLDivElement|null>(null);
   const play00ToolbarRef=useRef<HTMLDivElement|null>(null);
   const handPlayModeRef=useRef(handPlayMode);handPlayModeRef.current=handPlayMode;
+  const handHoldViewRef=useRef(handHoldView);handHoldViewRef.current=handHoldView;
+  const previousHandView=useRef(handHoldView);
+  useEffect(()=>{
+    if(previousHandView.current!==handHoldView){
+      previousHandView.current=handHoldView;
+      if(viewRef.current.kind==='self')requestAnimationFrame(()=>focusMyMat.current());
+    }
+  },[handHoldView]);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
   const eyeHitTarget=useRef<Container|null>(null);
@@ -1947,8 +1955,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           // Original radial diameter = 30% of the visible playmat width.
           // Measure the real transformed mat, so 1v1/Castle use the same
           // relationship even when the seat has a separate view transform.
-          const next=fitMatAttachedRadial(
+          const raw=fitMatAttachedRadial(
             projected.x,projected.y,matScreenWidth,w,h);
+          // In Eye/self view the camera fits the complete radial. For
+          // manual extreme zooms and battlefield layouts, clamp only as an
+          // emergency viewport fallback so actions are never unreachable.
+          const next=raw.y+raw.size/2>h-8||raw.x-raw.size/2<8||
+            raw.x+raw.size/2>w-8||raw.y<8
+              ?fitDockedRadial(raw.x,raw.y,raw.size,w,h,8):raw;
           dockedWheelGeometry.current=next;
           const dock=dockedWheelRef.current;
           if(dock){
@@ -3351,14 +3365,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const projected=board.toGlobal(origin);
       const localX=(projected.x-scene.x)/scene.scale.x;
       const localY=(projected.y-scene.y)/scene.scale.y;
-      // Fit to the screen, including the view controls on PLAY 03.
-      // Both actual wooden side drawers (plus slim pull handles) must fit.
+      // Fit the complete on-screen control silhouette, not just the felt
+      // rectangle. The semicircular wheel projects BELOW the hand edge:
+      // a symmetric mat-only fit cropped its lower half on short screens.
       const completeMatWidth=TCG_MAT_WIDTH+2*(TCG_MAT.cardWidth+18);
-      const widthFit=.98*w/completeMatWidth;
-      const heightFit=.98*h/(TCG_MAT_HEIGHT+148);
-      const zoom=clampTableZoom(Math.min(widthFit,heightFit)/fit);
+      const reservedHand=handHoldViewRef.current
+        ?Math.min(190,Math.max(126,h*.23)):0;
+      const framed=fitSelfMatWithHud(w,h,
+        TCG_MAT_WIDTH,TCG_MAT_HEIGHT,completeMatWidth,
+        VIEW_BUTTON_HIT_RADIUS+6,ACTION_LCD_HEIGHT+10,reservedHand);
+      const zoom=clampTableZoom(framed.scale/fit);
       const scale=fit*zoom;
-      const panX=(BOARD_CENTER-localX)*scale,panY=(BOARD_CENTER-localY)*scale;
+      const panX=(BOARD_CENTER-localX)*scale;
+      const panY=(BOARD_CENTER-localY)*scale+framed.offsetY;
       animateTo(zoom,panX,panY);
     };
     focusOpponent.current=()=>{
