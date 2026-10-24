@@ -41,9 +41,9 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
   // Framed blind embossing: double gilt rules, rounded corner ornaments,
   // spine-side hinge and fine binding filigree.
   g.strokeStyle=gold;g.lineJoin='round';
-  g.globalAlpha=.84;g.lineWidth=8;g.strokeRect(67,66,634,891);
-  g.globalAlpha=.48;g.lineWidth=3;g.strokeRect(85,84,598,855);
-  g.globalAlpha=.67;g.lineWidth=2;
+  g.globalAlpha=1;g.lineWidth=10;g.strokeRect(67,66,634,891);
+  g.globalAlpha=.84;g.lineWidth=4;g.strokeRect(85,84,598,855);
+  g.globalAlpha=.91;g.lineWidth=3;
   for(const sy of [1,-1])for(const sx of [1,-1]){
     g.save();g.translate(sx===1?110:658,sy===1?122:900);g.scale(sx,sy);
     g.beginPath();g.moveTo(0,72);g.bezierCurveTo(0,14,16,0,72,0);g.stroke();
@@ -51,13 +51,15 @@ function decoratedCover(style:typeof themes[TomeDesign]):THREE.CanvasTexture{
     g.beginPath();g.arc(14,14,5,0,Math.PI*2);g.fillStyle=gold;g.fill();
     g.restore();
   }
-  g.globalAlpha=.95;g.fillStyle=gold;g.textAlign='center';
-  g.font='bold 117px Georgia, Times New Roman, serif';
+  g.globalAlpha=1;g.fillStyle=gold;g.textAlign='center';
+   g.shadowColor=gold;g.shadowBlur=13;
+  g.font='bold 132px Georgia, Times New Roman, serif';
   g.fillText('SENNET',384,304);
+   g.shadowBlur=0;
   g.globalAlpha=.96;g.font='bold 40px Georgia, serif';
   g.fillText('SETTINGS',384,357);
   g.lineWidth=3;g.beginPath();g.moveTo(221,388);g.lineTo(547,388);g.stroke();
-  g.globalAlpha=.85;
+  g.globalAlpha=1;
   g.beginPath();g.arc(384,572,147,0,Math.PI*2);g.stroke();
   g.beginPath();g.arc(384,572,131,0,Math.PI*2);g.stroke();
   for(let i=0;i<12;i++){
