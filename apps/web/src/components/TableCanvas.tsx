@@ -1381,6 +1381,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const rerollDieNow=useRef<(id:string,x:number,y:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const dieShownAt=useRef(new Map<string,{fingerprint:string;at:number}>());
   const artworkCache=useRef(new Map<string,{img:HTMLImageElement;url:string}>());
+  const lastShuffleAnimated=useRef<GameState|null>(null);
   const rollBubbles=useRef(new Map<string,{node:HTMLDivElement;timer:number}>());
   const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
   const [viewport,setViewport]=useState({width:window.innerWidth,height:window.innerHeight});
@@ -2155,6 +2156,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // They remain independent hit targets when the underlying 99 cards
     // are efficiently culled from Pixi and the browser's image compositor.
     const stackBadges:{piece:Container;button:HTMLButtonElement;size:number}[]=[];
+    const shuffleFx:{piece:Container;el:HTMLDivElement}[]=[];
     // Only the VISUAL copy is magnified. Every source or placed coin keeps
     // its Pixi pointer hit area, center click and drag behavior unchanged.
     // Append the 3x preview directly to <body>, beside the top-tier dice and
@@ -2415,6 +2417,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const rect=session.current.app.canvas.getBoundingClientRect();
       const sx=rect.width/session.current.app.screen.width;
       const sy=rect.height/session.current.app.screen.height;
+      for(const {piece,el} of shuffleFx){
+        if(piece.destroyed||!el.isConnected)continue;
+        const p=piece.toGlobal(new Point(0,0));
+        el.style.left=(p.x*sx)+'px';
+        el.style.top=(p.y*sy)+'px';
+      }
       for(const {piece,button,size} of stackBadges){
         if(piece.destroyed||!button.isConnected)continue;
         const p=piece.toGlobal(new Point(29,41));
@@ -2800,6 +2808,25 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       (seatGroups?.get(seat)??board).addChild(draw);
       paintLayers.buttons.attach(draw);
     }
+    // Animate the shuffling pile, not the whole table. The animation is
+    // local-only and does not reorder server-authoritative game objects.
+    if(/shuffle/i.test(state.message??'')&&lastShuffleAnimated.current!==state){
+      lastShuffleAnimated.current=state;
+      const targets=[...deckTop.values(),...renderable.filter(o=>
+        selectedSet.current.has(o.id)&&['card','deck'].includes(o.kind))];
+      const animated=new Set<string>();
+      for(const obj of targets){
+        const piece=visuals.current.get(obj.id);
+        if(!piece||animated.has(obj.id)||animated.size>=5)continue;
+        animated.add(obj.id);
+        const el=document.createElement('div');
+        el.className='sennet-shuffle-fx';
+        el.setAttribute('aria-hidden','true');
+        el.addEventListener('animationend',()=>el.remove(),{once:true});
+        mount.current?.appendChild(el);
+        shuffleFx.push({piece,el});
+      }
+    }
     // Hide truly removed cards, but keep every unchanged decoded image.
     for(const [id,cached] of artworkCache.current){
       if(!visibleArtworkIds.has(id)){
@@ -2830,6 +2857,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       clearCoinHover();
       for(const {el} of coinLayers)el.remove();
       for(const {button} of stackBadges)button.remove();
+      for(const {el} of shuffleFx)el.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs,handPlayMode]);
 
