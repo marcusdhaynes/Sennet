@@ -1103,9 +1103,22 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  overflow:hidden!important;padding:0!important;border-radius:8px;
  background:#10231e;
 }
+/* Source card art is positioned inside a definite-ratio button, so its
+   own intrinsic height never pushes the image beyond a clipped thumbnail.
+   Full portrait and landscape cards display uncropped with 'contain'. */
+.tcg-builder .tcgb-card-gallery .tcgb-thumb{
+ position:relative!important;
+ box-sizing:border-box!important;
+ isolation:isolate;
+}
 .tcg-builder .tcgb-card-gallery .tcgb-thumb img{
- width:100%!important;height:100%!important;object-fit:contain!important;
+ position:absolute!important;
+ inset:0!important;
  display:block!important;
+ width:100%!important;height:100%!important;
+ max-width:100%!important;max-height:100%!important;
+ object-fit:contain!important;object-position:center center!important;
+ transform:none!important;
 }
 .tcg-builder .tcgb-card-gallery .tcgb-result-text{width:100%!important;min-width:0;flex:none!important;align-items:center!important;text-align:center!important;padding:0!important}
 .tcg-builder .tcgb-card-gallery .tcgb-result-text strong{white-space:normal!important;overflow-wrap:anywhere;font-size:12px}
@@ -2716,4 +2729,27 @@ body>.reader-backdrop{
   -webkit-text-stroke:.45px #101711;
   text-shadow:0 1px 3px #040805,0 0 2px #060805;
   white-space:nowrap;pointer-events:none;user-select:none;
+}
+
+
+/* Shared highest paint tier for ALL visual hover enlargement copies.
+   These float directly under <body> (outside Pixi, 3D and HUD clipping)
+   and never capture taps, hover, scrolling or dragging. */
+.sennet-radial-hover-top-layer,
+.sennet-dice-hover-top-layer,
+.sennet-book-hover-top-layer{
+ z-index:2147483647!important;
+ pointer-events:none!important;
+}
+.sennet-book-hover-top-layer{
+ position:fixed!important;
+ left:0;top:0;
+ width:0;height:0;
+ overflow:visible!important;
+ filter:drop-shadow(0 8px 14px #000b);
+ isolation:isolate;
+}
+.sennet-book-hover-top-layer .table-book{
+ pointer-events:none!important;
+ overflow:visible!important;
 }
