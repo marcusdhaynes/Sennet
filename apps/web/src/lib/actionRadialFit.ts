@@ -70,3 +70,24 @@ export function radialHoverMatrix(
   const d=rect.height/(half?200:400);
   return {a,d,e:rect.left,f:rect.top-(half?200*d:0)};
 }
+
+/** Maximum initial Eye/Castle magnification that leaves the entire
+ * MAT-ATTACHED bottom semicircle visible. Never moves the wheel itself.
+ *
+ * Eye places the player's center one half-mat below the divider.
+ * Castle places the viewer one quarter viewport below the divider.
+ * Both are zoomed about the viewport center, so we solve for the exact
+ * lower extent rather than applying an arbitrary 80% fudge factor. */
+export function fitBattleRadialZoom(
+  baseScale:number,height:number,matWidth:number,matHeight:number,
+  mode:'eye'|'castle',padding=14
+):number{
+  if(![baseScale,height,matWidth,matHeight].every(Number.isFinite)||
+    baseScale<=0||height<=0||matWidth<=0||matHeight<=0)return Math.max(0,baseScale)||1;
+  const radius=matWidth*.15; // expanded half-wheel depth
+  const eyeBottomDistance=baseScale*(matHeight+22+radius);
+  const castleBottomDistance=height/4+baseScale*(matHeight/2+radius);
+  const distance=mode==='castle'?castleBottomDistance:eyeBottomDistance;
+  const room=Math.max(1,height/2-padding);
+  return baseScale*Math.min(1,room/Math.max(1,distance));
+}
