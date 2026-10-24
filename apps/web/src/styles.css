@@ -770,6 +770,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
  animation:sennet-wheel-enter .13s ease-out both}
 .card-radial-wheel svg{width:100%;height:100%;display:block;overflow:visible}
 .card-radial-wheel g[role=button]{outline:none;cursor:pointer}
+/* Hover magnification is a non-interactive copy of the selected 1-of-9
+   radial action; it can cross neighboring wedges without stealing clicks. */
+.card-radial-wheel .sennet-sector-magnifier{
+  pointer-events:none!important;
+  filter:drop-shadow(0 6px 8px #090519dd);
+}
 .card-radial-wheel g[role=button]:focus-visible path{stroke:#ffe8a9;stroke-width:4}
 .card-radial-wheel .card-radial-close{position:absolute;top:5%;left:50%;transform:translateX(-50%);
  border:1px solid #b7a3d2;border-radius:50%;background:#20172b;
