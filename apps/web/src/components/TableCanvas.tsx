@@ -767,11 +767,15 @@ function drawTcgMats(
     // Eye and Castle centers straddle the PLAY 03 top border,
     // symmetrically around the owning player's local mat center.
     if(seat===viewerSeat){
-      const eye=new Container();
-      // The center of each circle straddles PLAY 03's top line,
-      // not a viewport-relative position.
+      // A single fixed anchor at the PLAY 03 boundary owns BOTH controls.
+      // Scaling this parent inversely to camera zoom preserves their
+      // fixed-size 34px faces and 44px gap, without moving either button.
+      const controls=new Container();
       const eyePosition=viewButtonPosition('eye');
-      eye.position.set(eyePosition.x,eyePosition.y);
+      controls.position.set(0,eyePosition.y);
+      mat.addChild(controls);
+      const eye=new Container();
+      eye.position.set(eyePosition.x,0);
       eye.eventMode='static';
       // Initial hit region is updated to a constant minimum on-screen size
       // after the seat transform/camera is applied. The wooden eye itself
@@ -818,13 +822,13 @@ function drawTcgMats(
       });
       eye.on('pointerupoutside',()=>{pressedPointer=null;clear();});
       eye.on('pointercancel',()=>{pressedPointer=null;clear();});
-      mat.addChild(eye);
+      controls.addChild(eye);
       layers.buttons.attach(eye);
       // Same size as the eye and merge controls. Castle switches to the
       // classified-only battlefield, excluding every unmarked opponent.
       const castle=new Container();
       const castlePosition=viewButtonPosition('castle');
-      castle.position.set(castlePosition.x,castlePosition.y);
+      castle.position.set(castlePosition.x,0);
       castle.eventMode='static';
       castle.cursor='pointer';
       castle.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
@@ -889,7 +893,7 @@ function drawTcgMats(
       const modeMark=label(castleMode==='focus'?'•':castleMode==='single'?'1':'∞',9,0xf9e0a7,'bold');
       modeMark.position.set(11,11);modeMark.eventMode='none';
       castle.addChild(modeMark);
-      mat.addChild(castle);
+      controls.addChild(castle);
       layers.buttons.attach(castle);
       // The gear circle is CENTERED on the exact bottom-right corner
       // where the viewer's HAND bottom border meets its right edge.
@@ -1969,20 +1973,28 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // scale is inverse to the camera; the DOM stack badge is already
         // screen-space. No per-frame X/Y offsets or hit-area inflation.
         const control=eyeHitTarget.current;
-        if(control&&!control.destroyed&&control.parent){
-          const parent=control.parent;
-          const origin=parent.toGlobal(new Point(0,0));
-          const unit=parent.toGlobal(new Point(1,0));
+        if(control&&!control.destroyed&&control.parent?.parent){
+          const group=control.parent;
+          const mat=group.parent!;
+          const origin=mat.toGlobal(new Point(0,0));
+          const unit=mat.toGlobal(new Point(1,0));
           const rect=app.canvas.getBoundingClientRect();
           const pxPerWorld=Math.hypot((unit.x-origin.x)*rect.width/app.renderer.width,
             (unit.y-origin.y)*rect.height/app.renderer.height);
           if(Number.isFinite(pxPerWorld)&&pxPerWorld>0){
             const inverse=fixedMatControlScale(pxPerWorld);
-            for(const button of [control,castleHitTarget.current,...mergeHitTargets.current]){
+            // Eye/Castle share one group, ensuring both their radius AND
+            // separation stay invariant while the anchor stays on the mat.
+            group.scale.set(inverse);
+            for(const button of [control,castleHitTarget.current]){
               if(!button||button.destroyed)continue;
-              button.scale.set(inverse);
-              // Exact 19px circular hit radius in screen space.
+              button.scale.set(1);
               button.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
+            }
+            for(const merge of mergeHitTargets.current){
+              if(!merge||merge.destroyed)continue;
+              merge.scale.set(inverse);
+              merge.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
             }
           }
         }
