@@ -2149,6 +2149,42 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           callbacks.current.onViewChange({x:point.x,y:point.y,scale});
         }
       };
+      // The radial is HTML, while the mat and dice are Pixi objects. Updating
+      // its HTML position only in pointer handlers leaves it a frame behind
+      // when Pixi rebuilds/reparents a seat or finishes a camera transform.
+      // Project its actual HAND-edge anchor on the renderer ticker instead,
+      // using the same live world transform as the dice each rendered frame.
+      const syncRadialOnRender=()=>{
+        const parent=duelLayers.current?.get(seatRef.current)??board;
+        const dock=dockedWheelRef.current;
+        if(!dock||parent.destroyed)return;
+        const hand=tcgMatCells(seatRef.current).find(cell=>cell.row===3&&cell.column===1);
+        if(!hand)return;
+        const bottom=new Point(
+          hand.x-Math.sin(hand.angle)*hand.height/2,
+          hand.y+Math.cos(hand.angle)*hand.height/2
+        );
+        const point=parent.toGlobal(bottom);
+        const panelY=actionScreenContactCenter(TCG_MAT_HEIGHT);
+        const left=tcgMatWorld(-TCG_MAT_WIDTH/2,panelY,seatRef.current);
+        const right=tcgMatWorld(TCG_MAT_WIDTH/2,panelY,seatRef.current);
+        const a=parent.toGlobal(new Point(left.x,left.y));
+        const b=parent.toGlobal(new Point(right.x,right.y));
+        const width=Math.hypot(b.x-a.x,b.y-a.y);
+        if(![point.x,point.y,width].every(Number.isFinite)||width<=0)return;
+        const size=width*.30;
+        const next={x:point.x,y:point.y,size};
+        dockedWheelGeometry.current=next;
+        const factor=size/180;
+        const transform=`translate3d(${point.x-90*factor}px,${point.y}px,0) scale(${factor})`;
+        if(dock.style.transform!==transform)dock.style.transform=transform;
+      };
+      app.ticker.add(syncRadialOnRender);
+      const oldUnregister=unregisterFixedControls;
+      unregisterFixedControls=()=>{
+        app.ticker.remove(syncRadialOnRender);
+        oldUnregister();
+      };
       updateView.current=rescale;
       resizeObserver=new ResizeObserver(()=>{
         const oldW=lastWidth,oldH=lastHeight;
