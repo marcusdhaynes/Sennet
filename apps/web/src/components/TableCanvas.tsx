@@ -3466,6 +3466,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const scale=fit*zoom;
       const panX=(BOARD_CENTER-localX)*scale;
       const panY=(BOARD_CENTER-localY)*scale+framed.offsetY;
+      battleMinZoom.current=zoom;
       animateTo(zoom,panX,panY);
     };
     focusOpponent.current=()=>{
@@ -3482,7 +3483,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const layout=castleGridLayout(seatRef.current,relationsRef.current,
           viewRef.current.castleMode==='single'?'single':'all',
           viewRef.current.opponent,{width:w,height:h});
-        animateTo(layout.cameraScale/fit,0,0);
+        const fitted=fitBattleRadialZoom(layout.cameraScale,h,
+          TCG_MAT_WIDTH,TCG_MAT_HEIGHT,'castle');
+        battleMinZoom.current=fitted/fit;
+        animateTo(battleMinZoom.current,0,0);
         return;
       }
       const lineup=oneOnOneMatchupLayout(seatRef.current,selected!,relationsRef.current,BATTLEFIELD_PLAYMAT_PADDING);
@@ -3492,7 +3496,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const bounds=battlefieldFitBounds(lineup.columns,BATTLEFIELD_PLAYMAT_PADDING,true);
       const heightScale=h/bounds.height;
       const widthScale=w/bounds.width;
-      animateTo(Math.min(heightScale,widthScale)/fit,0,0);
+      const fitted=fitBattleRadialZoom(Math.min(heightScale,widthScale),h,
+        TCG_MAT_WIDTH,TCG_MAT_HEIGHT,'eye');
+      battleMinZoom.current=fitted/fit;
+      animateTo(battleMinZoom.current,0,0);
     };
     cycleOpponentHandler.current=(direction,sourceSeat)=>{
       const current=viewRef.current;
@@ -3704,13 +3711,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       requestAnimationFrame(()=>focusOpponent.current());
     };
     const zoomAt=(x:number,y:number,ratio:number)=>{
-      // Opposing view has a fixed matchup camera. Only the eye control may
-      // leave it; ordinary zoom input must not break the two-mat layout.
-      if(isBattleView(viewRef.current.kind))return;
       const current=session.current;if(!current||!Number.isFinite(ratio)||ratio<=0)return;
       interruptFocus();
       const {scene}=current,c=camera.current;
-      const before=c.zoom,after=clampTableZoom(before*ratio);
+      const kind=viewRef.current.kind;
+      const isFocused=kind==='self'||isBattleView(kind);
+      // Focused views may magnify but never pass their initial full-radial
+      // fit when zooming out. Normal overview keeps its original zoom floor.
+      const minimum=isFocused?battleMinZoom.current:MIN_TABLE_ZOOM;
+      const before=c.zoom;
+      const after=Math.min(48,Math.max(minimum,before*ratio));
       if(after===before)return;
       const localX=(x-scene.x)/scene.scale.x;
       const localY=(y-scene.y)/scene.scale.y;
@@ -3733,8 +3743,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // while scrolling the tray on a touchpad or with a mouse wheel.
       if(onCardMenu(event.target))return;
       event.preventDefault();
-      // Block wheel zoom, trackpad scroll/pinch and Shift+wheel pan.
-      if(isBattleView(viewRef.current.kind))return;
+      // Keep Shift-scroll panning locked in battlefield views, but
+      // allow scroll/pinch to magnify from the fitted minimum.
       const point=coordinates(event);
       const factor=event.deltaMode===1?16:event.deltaMode===2?host.clientHeight:1;
       if(event.shiftKey&&!event.ctrlKey){
@@ -3810,7 +3820,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     };
     const move=(event:PointerEvent)=>{
       if(activeBookPointer===event.pointerId)return;
-      if(isBattleView(viewRef.current.kind))return;
       const touches=pointers.current;
       if(event.pointerType==='touch'&&touches.has(event.pointerId)){
         const old=[...touches.values()];
@@ -3824,10 +3833,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const newDistance=Math.hypot(c.x-d.x,c.y-d.y);
           const target=coordinates({clientX:oldCenter.x,clientY:oldCenter.y});
           if(oldDistance>5&&newDistance>5)zoomAt(target.x,target.y,newDistance/oldDistance);
-          pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
+          if(!isBattleView(viewRef.current.kind))
+            pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
           return;
         }
       }
+      if(isBattleView(viewRef.current.kind))return;
       const active=panPointer.current;
       if(!active||active.id!==event.pointerId)return;
       if(drag.current?.pointerId===event.pointerId)return;
@@ -3868,10 +3879,19 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           event.preventDefault();callbacks.current.onCardAction(card.id,key==='t'?'tap':'flip');return;
         }
       }
-      // Keyboard reset and +/- cannot bypass the opponent-view camera lock.
-      // The eye button remains the explicit way to leave this view.
+      // Eye/Castle allow zooming in. Minus may only return to the
+      // initial fitted framing, never farther out. 0 still cannot exit
+      // the focused view; use the Eye control to leave it.
       if(isBattleView(viewRef.current.kind)){
-        if(['0','+','=','-'].includes(event.key))event.preventDefault();
+        if(event.key==='0'){event.preventDefault();return;}
+        if(event.key==='+'||event.key==='='){
+          event.preventDefault();
+          zoomAt(host.clientWidth/2,host.clientHeight/2,1.25);
+        }
+        if(event.key==='-'){
+          event.preventDefault();
+          zoomAt(host.clientWidth/2,host.clientHeight/2,1/1.25);
+        }
         return;
       }
       if(event.key==='0'){reset();}
