@@ -746,6 +746,7 @@ function drawTcgMats(
         button.hitArea=new Circle(0,0,19);
         button.cursor='pointer';
         button.addChild(woodenControl(16,seatPlaymat.sideBoxStyle??'walnut'));
+        button.label='table-scale-control';
         onMergeReady(button);
         // A 180-degree facing rotation makes a local right-arrow appear
         // as a LEFT arrow on screen, and vice-versa.
@@ -953,6 +954,7 @@ function drawTcgMats(
           button.cursor='pointer';
           button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
           button.addChild(woodenControl(OPPONENT_RELATION_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',active));
+          button.label='table-scale-control';
           onMergeReady(button);
           const glyph=new Graphics();
           if(isSword){
@@ -1499,6 +1501,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   useEffect(()=>installTopLayerBookHover(),[]);
+  const battleDividerRef=useRef<HTMLDivElement|null>(null);
   const camera=useRef({zoom:MIN_TABLE_ZOOM,panX:0,panY:0});
   const updateView=useRef<()=>void>(()=>{});
   // Every Pixi control is normalized in ONE place before each render.
@@ -2038,8 +2041,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         // The startup view is a hard camera boundary. Any pointer, wheel,
         // touchpad or pinch gesture can only reveal space already visible
         // when the full table is fitted to the viewport.
-        const bounded=clampTablePan(c.panX,c.panY,c.zoom,w,h);
+        const bounded=isBattleView(viewRef.current.kind)
+          ?{panX:c.panX,panY:c.panY}:clampTablePan(c.panX,c.panY,c.zoom,w,h);
         c.panX=bounded.panX;c.panY=bounded.panY;
+        if(battleDividerRef.current)
+          battleDividerRef.current.style.transform=`translateY(calc(-50% + ${c.panY}px))`;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
         // Enforce fixed button diameter during every camera update as
@@ -2999,11 +3005,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     if(state.kind==='tcg'&&!readonly){
       const cell=tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!;
       const center=tcgMatLocal(cell.x,cell.y,seat);
-      const point=tcgMatWorld(center.x+cell.width/2-7,center.y-cell.height/2+7,seat);
+      // Sit just above the deck corner so its top card cannot cover the arrow.
+      const point=tcgMatWorld(center.x+cell.width/2,center.y-cell.height/2-VIEW_BUTTON_RADIUS,seat);
       const draw=new Container();draw.position.set(point.x,point.y);draw.rotation=cell.angle;
-      draw.eventMode='static';draw.cursor='pointer';draw.hitArea=new Circle(0,0,13);
-      draw.addChild(new Graphics().circle(0,0,10).fill({color:0x00050a,alpha:.95}).stroke({color:0x00ff87,width:1}));
-      draw.addChild(label('↓',16,0x00ff87,'bold'));
+      draw.label='draw-control';
+      draw.eventMode='static';draw.cursor='pointer';draw.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
+      draw.addChild(woodenControl(VIEW_BUTTON_RADIUS,playmat.sideBoxStyle??'walnut'));
+      draw.addChild(label('↓',26,0xf4e1b9,'bold'));
       draw.on('pointerdown',e=>{e.stopPropagation();controlPointer.current=e.pointerId;});
       draw.on('pointertap',e=>{e.stopPropagation();callbacks.current.onDrawMat();});
       (seatGroups?.get(seat)??board).addChild(draw);
@@ -3790,20 +3798,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const fit=Math.min(host.clientWidth/(TABLE_VIEW_RADIUS*2),
         host.clientHeight/(TABLE_VIEW_RADIUS*2));
       const newScale=fit*after;
-      if(isBattleView(kind)){
-        // Eye/Castle have a SCREEN-CENTERED dividing boundary. Allow
-        // magnification without introducing cursor-relative panning:
-        // if the camera origin moves, the colored halves and divider
-        // immediately separate from their respective player mats.
-        c.panX=0;c.panY=0;
-      }else{
-        c.panX=x-localX*newScale-(host.clientWidth/2-BOARD_CENTER*newScale);
-        c.panY=y-localY*newScale-(host.clientHeight/2-BOARD_CENTER*newScale);
-      }
+      c.panX=x-localX*newScale-(host.clientWidth/2-BOARD_CENTER*newScale);
+      c.panY=y-localY*newScale-(host.clientHeight/2-BOARD_CENTER*newScale);
       updateView.current();
     };
     const pan=(dx:number,dy:number)=>{
-      if(isBattleView(viewRef.current.kind))return;
       interruptFocus();
       camera.current.panX+=dx;camera.current.panY+=dy;
       updateView.current();
@@ -3813,8 +3812,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // while scrolling the tray on a touchpad or with a mouse wheel.
       if(onCardMenu(event.target))return;
       event.preventDefault();
-      // Keep Shift-scroll panning locked in battlefield views, but
-      // allow scroll/pinch to magnify from the fitted minimum.
+      // Shift-scroll pans in every view; scroll/pinch zooms from the fitted minimum.
       const point=coordinates(event);
       const factor=event.deltaMode===1?16:event.deltaMode===2?host.clientHeight:1;
       if(event.shiftKey&&!event.ctrlKey){
@@ -3853,7 +3851,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           lastTap.current=null;
         }
       }
-      // All modes track touch pointers, including locked Castle/Eye views.
+      // All modes track touch pointers, including Castle/Eye views.
       // A second finger always cancels any pending card move or stack
       // hold before the two touches can be mistaken for two card drags.
       if(event.pointerType==='touch'){
@@ -3866,9 +3864,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           host.classList.remove('is-panning');
         }
       }
-      // Cards, stacks, eye and opponent arrows remain interactive in
-      // locked matchups; only camera gestures are disabled.
-      if(isBattleView(viewRef.current.kind))return;
       // Pixi's piece pointerdown is dispatched on the canvas before this
       // bubbling handler. Its active object drag takes priority over panning.
       if(drag.current?.pointerId===event.pointerId||controlPointer.current===event.pointerId)return;
@@ -3903,12 +3898,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const newDistance=Math.hypot(c.x-d.x,c.y-d.y);
           const target=coordinates({clientX:oldCenter.x,clientY:oldCenter.y});
           if(oldDistance>5&&newDistance>5)zoomAt(target.x,target.y,newDistance/oldDistance);
-          if(!isBattleView(viewRef.current.kind))
-            pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
+          pan(newCenter.x-oldCenter.x,newCenter.y-oldCenter.y);
           return;
         }
       }
-      if(isBattleView(viewRef.current.kind))return;
       const active=panPointer.current;
       if(!active||active.id!==event.pointerId)return;
       if(drag.current?.pointerId===event.pointerId)return;
@@ -4076,7 +4069,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const fanSpacing=Math.min(73,Math.max(13,
     (Math.max(180,viewport.width)-110)/Math.max(1,localHeldCards.length-1)));
   return <div ref={mount} className="pixi-host" role="img" aria-label="Interactive twelve-seat tabletop. Drag empty space to move the camera; drag cards to move them. Hold the eye control for a quarter second to choose an opponent.">
-    {isBattleView(eyeView.kind)&&<div className="opponent-battle-divider" aria-hidden="true"/>}
+    {isBattleView(eyeView.kind)&&<div ref={battleDividerRef} className="opponent-battle-divider" style={{transform:`translateY(calc(-50% + ${camera.current.panY}px))`}} aria-hidden="true"/>}
     {cardPeek&&(()=>{
       const item=state.objects.find(o=>o.id===cardPeek);
       if(!item)return null;

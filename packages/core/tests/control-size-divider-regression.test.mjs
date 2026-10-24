@@ -43,9 +43,13 @@ test('merge positions remain in their true playmat gutters',()=>{
   assert.ok(!table.includes('merge.position.x='));
 });
 
-test('Eye/Castle divider has one viewport-centered stroke and anchored camera',()=>{
+test('Eye/Castle divider follows camera panning without a duplicate stroke',()=>{
   assert.match(styles,/\.opponent-battle-divider\s*\{[^}]*top:50%/s);
-  assert.match(table,/if\(isBattleView\(kind\)\)\{[\s\S]*?c\.panX=0;c\.panY=0;/);
+  assert.ok(table.includes('battleDividerRef.current.style.transform='));
+  assert.ok(table.includes('${c.panY}px'));
+  const gestures=table.split('const pan=(dx:number,dy:number)=>{')[1].split('const up=(event:PointerEvent)=>{')[0];
+  assert.ok(!gestures.includes('if(isBattleView(viewRef.current.kind))return;'));
+  assert.ok(!table.includes('c.panX=0;c.panY=0;'));
   const between=table.split('if(duelOpponent!==null||castleActive){')[1]
     .split('}else{')[0];
   assert.ok(!between.includes('.lineTo(span/2,0)'),
