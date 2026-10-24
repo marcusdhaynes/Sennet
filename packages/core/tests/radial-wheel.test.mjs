@@ -218,16 +218,16 @@ test('After first 250ms hold selection mode uses ONE tap per next card or stack'
  assert.deepEqual(radialTapMembership(new Set(second),'a',['a','b']),['c','d']);
  assert.deepEqual(radialTapMembership(new Set(['c']),'c',['c']),[]);
 });
-test('Stationary hold is 250ms, movement resistance starts after 13 screen pixels',async()=>{
+test('Stationary hold is 250ms, movement resistance is five screen pixels',async()=>{
  const {GESTURE_HOLD_MS,GESTURE_MOVE_THRESHOLD}=await import('../../../apps/web/src/lib/cardGestures.ts');
  assert.equal(GESTURE_HOLD_MS,250);
- assert.equal(GESTURE_MOVE_THRESHOLD,13);
- assert.ok(GESTURE_MOVE_THRESHOLD>7,'Drag threshold must provide slight deliberate resistance');
+ assert.equal(GESTURE_MOVE_THRESHOLD,5);
+ assert.ok(GESTURE_MOVE_THRESHOLD>=4&&GESTURE_MOVE_THRESHOLD<8,'Very slight deliberate resistance');
 });
 test('Compact radial layout keeps outer actions in the requested order',()=>{
  assert.deepEqual(RADIAL_ACTIONS[0].map(a=>a.id),['rotate-cw','tap-toggle','rotate-ccw']);
  assert.deepEqual(RADIAL_ACTIONS[1].map(a=>a.id),['shuffle','flip','reveal']);
- assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['scale-bigger','scale-original','scale-smaller']);
+ assert.deepEqual(RADIAL_ACTIONS[2].map(a=>a.id),['scale-smaller','scale-original','scale-bigger']);
  for(const [index,group] of RADIAL_ACTIONS.entries()){
   for(const [position,action] of group.entries()){
    const radians=(index*120+position*40+20)*Math.PI/180;
