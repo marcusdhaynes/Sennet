@@ -618,6 +618,21 @@ function drawTcgMats(
       if(cell.column===0)text.rotation=-Math.PI/2;
       if(cell.column===2)text.rotation=Math.PI/2;
       surface.addChild(text);
+      if(cell.row===1&&cell.column===2){
+        // Match the two halves tested by tcgDropZone in local mat Y.
+        for(const bottom of [false,true]){
+          const chip=new Container();
+          chip.position.set(x+w/2,bottom?y+h-14:y+14);
+          const tint=bottom?0xffc97b:0x96f6d7;
+          chip.addChild(new Graphics()
+            .roundRect(-29,-9,58,18,6)
+            .fill({color:0x10241f,alpha:.92})
+            .stroke({color:tint,width:1.6,alpha:.95}));
+          const caption=label(bottom?'▼ BOTTOM':'▲ TOP',9,tint,'bold');
+          caption.eventMode='none';chip.addChild(caption);
+          chip.eventMode='none';surface.addChild(chip);
+        }
+      }
     }
     // No separate gold/yellow outer border beneath the mat: only the
     // central playing area keeps its colored guide lines.
@@ -2921,18 +2936,23 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
             .stroke({color:remove?0xff3b30:0xf6daa2,width:1.5,alpha:.75});
           const deckPocket=d.card?tcgDropZone(d.x,d.y,cell.seat):null;
           if(deckPocket?.zone==='DECK'){
-            const deckSide=deckPocket.deckBottom?'BOTTOM':'TOP';
-            hint.roundRect(-zone.width/2+2,-zone.height/2+2,zone.width-4,zone.height-4,5)
-              .fill({color:0xf6ce55,alpha:.23})
-              .stroke({color:0xffe07a,width:3,alpha:1});
-            const deckMarker=label('DECK '+deckSide,8,0xffe07a,'bold');
-            deckMarker.rotation=-Math.PI/2;
-            hint.addChild(deckMarker);
+            const bottom=deckPocket.deckBottom;
+            const tint=bottom?0xffc16e:0x82ffcf;
+            const halfHeight=(zone.height-6)/2;
+            // Distinguish the destination visually: only the top OR
+            // bottom half is illuminated, not the whole deck pocket.
+            hint.roundRect(-zone.width/2+2,bottom?3:-halfHeight,
+              zone.width-4,halfHeight-2,5)
+              .fill({color:tint,alpha:.36})
+              .stroke({color:tint,width:3,alpha:1});
+            const marker=label(bottom?'▼ BOTTOM':'▲ TOP',10,tint,'bold');
+            marker.position.set(0,bottom?zone.height/4:-zone.height/4);
+            marker.eventMode='none';hint.addChild(marker);
           }
           if(remove){
             const text=label('RELEASE TO REMOVE',7,0xff6b61,'bold');
             text.rotation=-Math.PI/2;hint.addChild(text);
-          }else{
+          }else if(deckPocket?.zone!=='DECK'){
             // Show the precise snapped CARD SLOT in addition to the zone,
             // so each unmerged row previews exactly where the card will land.
             const dx=cell.x-zone.x,dy=cell.y-zone.y;
