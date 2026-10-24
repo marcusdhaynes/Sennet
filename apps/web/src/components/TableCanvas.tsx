@@ -2541,12 +2541,20 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         node.position.set(instrument.x,instrument.y);
         node.scale.set(instrument.scale);
         homeParent.addChild(node);
-        if(key==='life')paintLayers.buttons.attach(node);
+        if(key==='life'){
+          // The paint-layer attachment previously detached the counter from
+          // its owning seat without converting coordinates, hiding it offscreen.
+          // Attach to the foreground paint layer in BOARD coordinates.
+          const global=node.toGlobal(new Point(0,0));
+          const boardPoint=board.toLocal(global);
+          paintLayers.buttons.attach(node);
+          node.position.copyFrom(boardPoint);
+        }
         const storageKey='sennet.instrument-position.v1.'+seat+'.'+key;
         try{
           const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
           if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){
-            local.addChild(node);
+            board.addChild(node);
             node.position.set(saved.x,saved.y);
           }
         }catch{/* Storage is optional. */}
@@ -2560,10 +2568,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const pointer=e.pointerId;
           // Reparent without changing its visible world position.
           const global=node.toGlobal(new Point(0,0));
-          const localPoint=local.toLocal(global);
-          if(node.parent!==local)local.addChild(node);
+          const localPoint=board.toLocal(global);
+          if(node.parent!==board)board.addChild(node);
           node.position.copyFrom(localPoint);
-          const origin=local.toLocal(e.global);
+          const origin=board.toLocal(e.global);
           const startX=node.x,startY=node.y;
           node.cursor='grabbing';
           let moved=false;
@@ -2572,7 +2580,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             const rect=app.canvas.getBoundingClientRect();
             const point=new Point((event.clientX-rect.left)*app.renderer.width/rect.width,
               (event.clientY-rect.top)*app.renderer.height/rect.height);
-            const current=local.toLocal(point,app.stage);
+            const current=board.toLocal(point,app.stage);
             const dx=current.x-origin.x,dy=current.y-origin.y;
             if(Math.hypot(dx,dy)>1)moved=true;
             node.position.set(startX+dx,startY+dy);
@@ -2584,9 +2592,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             window.removeEventListener('pointercancel',finish);
             node.cursor='grab';
             if(!moved)return;
-            const dockPoint=homeParent===local
-              ?new Point(instrument.x,instrument.y)
-              :local.toLocal(homeParent.toGlobal(new Point(instrument.x,instrument.y)));
+            const dockPoint=board.toLocal(homeParent.toGlobal(new Point(instrument.x,instrument.y)));
+            if(key==='life')dockPoint.copyFrom(board.toLocal(local.toGlobal(new Point(instrument.x,instrument.y))));
             if(key==='life'&&Math.hypot(node.x-dockPoint.x,node.y-dockPoint.y)<28){
               node.position.copyFrom(dockPoint);
               try{localStorage.removeItem(storageKey);}catch{/* ignore */}
