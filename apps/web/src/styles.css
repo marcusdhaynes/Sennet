@@ -2719,12 +2719,14 @@ body>.reader-backdrop{
    floating in Pixi's unrelated text layer. */
 .pixi-host>.sennet-coin-above-card .sennet-drawer-coin-caption{
   position:absolute;
-  left:50%;top:30px;
+  /* Beneath the 36px face, never inside or behind its center number. */
+  left:50%;top:44px;
+  z-index:5;
   transform:translateX(-50%);
   display:block;
-  min-width:22px;height:12px;
-  line-height:12px;text-align:center;
-  font:800 12px/12px Inter,system-ui,sans-serif;
+  min-width:22px;height:15px;
+  line-height:15px;text-align:center;
+  font:900 14px/15px Inter,system-ui,sans-serif;
   color:#ffedbe;
   -webkit-text-stroke:.45px #101711;
   text-shadow:0 1px 3px #040805,0 0 2px #060805;
