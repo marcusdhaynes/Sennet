@@ -24,8 +24,8 @@ test('Reference wheel defines exactly 3 inner sections and 9 unique outer action
  assert.equal(RADIAL_ACTIONS.length,3);
  assert.deepEqual(RADIAL_ACTIONS.map(group=>group.map(o=>o.label)),[
   ['+45°','Tap','−45°'],
-  ['Shuffle','Flip','Reveal'],
-  ['Increase','Original','Decrease']
+  ['⤨','⇅','▣'],
+  ['−','=','+']
  ]);
  assert.equal(RADIAL_ACTIONS.flat().length,9);
  assert.equal(new Set(RADIAL_ACTIONS.flat().map(o=>o.id)).size,9,'Each sector now has its own action');
