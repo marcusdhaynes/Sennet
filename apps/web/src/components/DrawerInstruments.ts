@@ -10,7 +10,7 @@ const button=(x:number,y:number,r:number,caption:string,callback:()=>void,color=
  const root=new Container();root.position.set(x,y);
  const disk=new Graphics().circle(0,1.3,r+1).fill(0x081015)
   .circle(0,0,r).fill(color).stroke({color:0x58cada,width:1.1,alpha:.9});
- disk.eventMode='static';disk.cursor='pointer';disk.on('pointerdown',e=>{e.stopPropagation();callback();});
+ disk.eventMode='static';disk.cursor='pointer';disk.on('pointertap',e=>{e.stopPropagation();callback();});
  root.addChild(disk);root.addChild(label(caption,Math.min(9,r*.91)));return root;
 };
 /** Styled, functional electronic life counter, with seven game selectors. */
@@ -87,7 +87,7 @@ export function buildDrawerMagnifier(onUse?:()=>void):Container{
   .stroke({color:0xffffff,width:2.5,alpha:.7,cap:'round'});
  root.addChild(handle,lens);
  const hit=new Graphics().circle(-6,-7,19).fill({color:0xffffff,alpha:.001});
- hit.eventMode='static';hit.cursor='zoom-in';hit.on('pointerdown',e=>{e.stopPropagation();onUse?.();});root.addChild(hit);
+ hit.eventMode='static';hit.cursor='zoom-in';hit.on('pointertap',e=>{e.stopPropagation();onUse?.();});root.addChild(hit);
  return root;
 }
 export function buildDrawerCalculator():Container{
@@ -107,7 +107,7 @@ export function buildDrawerCalculator():Container{
     .stroke({color:0xabbac0,width:.55});
   control.eventMode='static';control.cursor='pointer';
   const keyText=label(key,6.3);keyText.position.set(x,y);
-  control.on('pointerdown',e=>{
+  control.on('pointertap',e=>{
    e.stopPropagation();
    if(key==='C'){value='0';stored=null;op='';}
    else if('0123456789'.includes(key))value=value==='0'?key:(value+key).slice(-9);
