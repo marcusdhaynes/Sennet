@@ -2555,7 +2555,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         calculator.position.set(trayX+17,trayTop+58);
         calculator.scale.set(.62);left.addChild(calculator);
       }
-      const life=buildLifeCounter();
+      const life=buildLifeCounter(seat);
       life.position.set(trayX,-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap-53);
       life.scale.set(.72);
       local.addChild(life);
