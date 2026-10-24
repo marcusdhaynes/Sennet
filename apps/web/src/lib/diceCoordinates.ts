@@ -12,14 +12,17 @@ export function diceToCssTransform(
 }
 /** Dice display at the compact source coin diameter, including flipcoins. */
 export const DICE_SOURCE_RACK_SCALE=.902;
+/** Leave breathing room above and below the engraved drawer labels. */
+export const DICE_RACK_LABEL_OFFSET=19;
 export function diceRackLocations(
   boxX:number,top:number
 ):{x:number;y:number}[]{
   // Two columns, four rows below the coin pair, above the book.
-  // 31 units between rows leaves enough room for each 8px label.
+  // Forty-ish units between rows keep both die and embossed label clear;
+  // start higher to preserve book clearance below the final label.
   return Array.from({length:8},(_,i)=>({
     x:boxX+(i%2===0?-15:15),
-    y:top+85+Math.floor(i/2)*31
+    y:top+68+Math.floor(i/2)*39
   }));
 }
 
