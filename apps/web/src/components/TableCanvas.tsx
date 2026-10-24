@@ -39,7 +39,7 @@ import {fitActionScreenToWheel,actionScreenContactCenter} from '../lib/actionScr
 import {fitMatAttachedRadial} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
-import {resolveDiceTheme,type DiceAppearance} from '../lib/diceThemes';
+import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
 import {makePseudo3DBook} from './Pseudo3DBook';
 import {wheelPosition,radialMembership,radialTapMembership,type RadialAction} from '../lib/radialWheel.ts';
@@ -316,7 +316,10 @@ function drawTcgMats(
           const top=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
           const locations=diceRackLocations(rightX,top);
           DICE_TYPES.forEach((sides,index)=>{
-            const die=makeDie(sides);
+            const selectedTheme=remoteAppearance?.dice?
+              DICE_THEMES.find(theme=>theme.id===resolveDiceTheme(
+                normalizeDiceAppearance(remoteAppearance.dice),sides)):undefined;
+            const die=makeDie(sides,undefined,0,selectedTheme?.base);
             die.position.set(locations[index].x,locations[index].y);
             die.scale.set(DICE_SOURCE_RACK_SCALE);
             die.eventMode='none';drawerGroup.addChild(die);
@@ -1968,8 +1971,8 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
     const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number;source:boolean}[]=[];
-    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1)=>{
-      const el=coinDomVisual(value,sign,source,coinAppearance,color,editable);
+    const showCoinAboveArtwork=(piece:Container,value:number|string,sign:1|-1,source:boolean,color='#d8b979',editable=false,displayScale=1,style:CoinAppearance=coinAppearance)=>{
+      const el=coinDomVisual(value,sign,source,style,color,editable);
       mount.current?.appendChild(el);
       coinLayers.push({piece,el,displayScale,source});
       return el;
@@ -2246,7 +2249,15 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           state.players.find(p=>p.id===obj.owner)?.seat)??
         (state.kind==='tcg'?tcgSnapPoint(obj.x,obj.y,state.centerMerges,true)?.seat:undefined);
       if(seatGroups&&!seatGroups.has(assumedOwner??-1))continue;
-      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),coinAppearance);
+      const sourceActor=state.players.find(p=>p.seat===(obj.matSeat??assumedOwner))?.id;
+      const sharedAppearance=sourceActor?state.appearances?.[sourceActor]:undefined;
+      const objectCoin:CoinAppearance=sharedAppearance?.coin?
+        {...coinAppearance,...sharedAppearance.coin,
+          finish:sharedAppearance.coin.finish as CoinAppearance['finish']}:
+        coinAppearance;
+      const objectDice=sharedAppearance?.dice?
+        normalizeDiceAppearance(sharedAppearance.dice):diceAppearance;
+      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),objectCoin);
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
         drag.current.visual=piece;
@@ -2258,7 +2269,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       paintLayers.objects.attach(piece);
-      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.coinText??obj.value??1,obj.tokenSign??1,false,obj.color,obj.coinText!==undefined);
+      if(obj.tokenCoin)showCoinAboveArtwork(piece,obj.coinText??obj.value??1,obj.tokenSign??1,false,obj.color,obj.coinText!==undefined,1,objectCoin);
       if(obj.throwDice){
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
@@ -2276,7 +2287,7 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
           :dieShownAt.current.get(obj.id)?.at??Date.now();
         staticEntries.push({id:obj.id,piece,sides:obj.sides??6,
           shownAt,fadeAfterMs:Math.max(0,diceFadeMs-850),
-          themeId:resolveDiceTheme(diceAppearance,obj.sides??6),quaternion:obj.throwQuaternion,
+          themeId:resolveDiceTheme(objectDice,obj.sides??6),quaternion:obj.throwQuaternion,
           altitude:obj.throwAltitude,
           quantity:obj.throwQuantity,result:display});
       }
