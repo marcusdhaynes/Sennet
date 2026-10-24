@@ -2790,22 +2790,21 @@ body>.reader-backdrop{
  overflow:visible!important;
 }
 
-/* Eye/Castle-matched walnut and brass stack control. The 34px base
-   is scaled in real time to precisely match the Eye button's projected
-   diameter at the current camera zoom (including Castle/mat scaling). */
+/* Small Eye-style stack badge. Intentionally FIXED at 16 CSS pixels:
+   its position follows a card but camera zoom never changes its size. */
 .sennet-stack-count{
- position:absolute;z-index:125;width:34px;height:34px;
- display:grid;place-items:center;transform:translate(-50%,-50%);
- transform-origin:center center;will-change:transform;
+ position:absolute;z-index:125;width:16px;height:16px;min-width:16px;min-height:16px;
+ display:grid;place-items:center;transform:translate(-50%,-50%)!important;
+ transform-origin:center center;
  border:0;padding:0;border-radius:50%;cursor:pointer;touch-action:manipulation;
  background:
    radial-gradient(circle at 36% 27%,#bea37b 0 7%,transparent 25%),
    radial-gradient(circle at 42% 36%,#765739 0%,#533722 59%,#201811 88%);
- box-shadow:inset 0 0 0 2px #caac76,
-   inset 0 0 0 5px #24180f,inset 0 0 0 6px #b49564,
-   0 2px 0 #1b150f,0 3px 8px #000a;
- color:#fff0cb;font:800 13px/1 'Inter',system-ui,sans-serif;
- text-shadow:0 1px 2px #070602,0 0 3px #1a1208;
+ box-shadow:inset 0 0 0 1px #caac76,
+   inset 0 0 0 2.5px #24180f,inset 0 0 0 3.2px #b49564,
+   0 1px 3px #000a;
+ color:#fff0cb;font:800 8px/1 'Inter',system-ui,sans-serif;
+ text-shadow:0 1px 1px #070602;
 }
 .sennet-stack-count:hover,.sennet-stack-count:focus-visible{
  outline:2px solid #f4dc9e;outline-offset:2px;
@@ -2813,8 +2812,8 @@ body>.reader-backdrop{
 }
 .sennet-stack-count.is-held{
  background:radial-gradient(circle at 35% 20%,#9776be,#342143 75%);
- box-shadow:inset 0 0 0 2px #d4b0ff,inset 0 0 0 5px #24152e,
-   inset 0 0 0 6px #aa7adb,0 2px 6px #000c;
+ box-shadow:inset 0 0 0 1px #d4b0ff,inset 0 0 0 2.5px #24152e,
+   inset 0 0 0 3.2px #aa7adb,0 1px 3px #000c;
 }
 .sennet-full-card-peek{
  position:absolute;z-index:1005;inset:0;display:flex;justify-content:center;align-items:center;
