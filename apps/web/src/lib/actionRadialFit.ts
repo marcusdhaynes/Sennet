@@ -91,3 +91,15 @@ export function fitBattleRadialZoom(
   const room=Math.max(1,height/2-padding);
   return baseScale*Math.min(1,room/Math.max(1,distance));
 }
+
+/** Eye, Castle and count badges share this exact on-screen diameter.
+ * The SVG stack control and the inverse-scaled Pixi controls derive their
+ * measurements from this one geometry contract. */
+export const EYE_CONTROL_DIAMETER_PX=34;
+export function fixedMatControlScale(pxPerWorldUnit:number):number{
+  return Number.isFinite(pxPerWorldUnit)&&pxPerWorldUnit>0
+    ?1/pxPerWorldUnit:1;
+}
+export function fixedMatControlHalfSpacing(pxPerWorldUnit:number):number{
+  return 22*Math.max(1,fixedMatControlScale(pxPerWorldUnit));
+}
