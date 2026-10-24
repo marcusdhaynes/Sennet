@@ -679,6 +679,7 @@ function drawTcgMats(
       const index=centerMergeKey(seat,boundary);
       const merged=Boolean(state.centerMerges?.includes(index));
       const marker=new Container();
+      marker.label='locked-table-control';
       const gapCenter=-TCG_MAT_HEIGHT/2+(boundary+1)*TCG_MAT.rowHeight+
         (boundary+.5)*TCG_MAT.gap;
       marker.position.set(0,gapCenter);
@@ -774,6 +775,7 @@ function drawTcgMats(
       // is deliberately tiny (the former merge-button size), screen-
       // fixed through the inverse mat transform in rescale().
       const controls=new Container();
+      controls.label='locked-table-control';
       const eyePosition=viewButtonPosition('eye');
       controls.position.set(0,eyePosition.y);
       mat.addChild(controls);
@@ -903,6 +905,7 @@ function drawTcgMats(
       // It stays on the mat in every view, with the same 32-unit diameter
       // and 19-unit hit radius as Eye and Castle.
       const settings=new Container();
+      settings.label='locked-table-control';
       const position=tcgSettingsButtonPosition();
       settings.position.set(position.x,position.y);
       settings.eventMode='static';
@@ -1975,7 +1978,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           host.style.setProperty('--sennet-control-size',
             controlReferencePixels.current+'px');
         }
-        const desired=controlReferencePixels.current;
+        const referencePixels=controlReferencePixels.current;
         const canvas=app.canvas.getBoundingClientRect();
         const sx=canvas.width/app.screen.width;
         const sy=canvas.height/app.screen.height;
@@ -1992,6 +1995,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const worldX=Math.hypot((oneX.x-origin.x)*sx,(oneX.y-origin.y)*sy);
           const worldY=Math.hypot((oneY.x-origin.x)*sx,(oneY.y-origin.y)*sy);
           if(!(worldX>0&&worldY>0))return;
+          // Only Eye/Castle, merges and Settings use the approved 28 CSS px.
+          // Other controls retain their existing session reference.
+          const desired=node.label==='locked-table-control'?28:referencePixels;
           const factor=desired/sourceDiameter;
           const pxX=factor/worldX,pxY=factor/worldY;
           // Set absolute scales, never multiply an existing scale:
