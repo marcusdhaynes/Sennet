@@ -1414,6 +1414,30 @@ export function applyCommand(state: GameState, command: Command): GameState {
   let centerMerges=state.centerMerges??[];
   const obj=objects.find(o=>o.id===p.id);
   const beforeById=new Map(state.objects.map(o=>[o.id,o]));
+  // Respect the actual landing card rather than letting the grid magnet
+  // place a dropped card beside/through an occupied card. Half-size cards
+  // can occupy four independent quadrants of a full-size card.
+  const stackLanding=(moving:TableObject,x:number,y:number,exclude:Set<string>)=>{
+    if(state.kind!=='tcg'||!['card','deck'].includes(moving.kind))return null;
+    const target=[...objects].reverse().find(card=>{
+      if(exclude.has(card.id)||card.zone!=='TABLE'||
+        !['card','deck'].includes(card.kind)||
+        (card.scale??1)+1e-6<(moving.scale??1))return false;
+      return cardContainsPoint(card,x,y,moving.matSeat??0);
+    });
+    if(!target)return null;
+    const half=(moving.scale??1)<=.500001&&(target.scale??1)>=.999999;
+    if(!half)return {x:target.x,y:target.y,seat:target.matSeat,carrierId:target.id};
+    const angle=playerSeatRotation(target.matSeat??0)+target.rotation*Math.PI/180;
+    const dx=x-target.x,dy=y-target.y;
+    const lx=dx*Math.cos(angle)+dy*Math.sin(angle);
+    const ly=-dx*Math.sin(angle)+dy*Math.cos(angle);
+    const qx=lx<0?-1:1,qy=ly<0?-1:1;
+    const xx=qx*15.5*(target.scale??1),yy=qy*22*(target.scale??1);
+    return {x:target.x+xx*Math.cos(angle)-yy*Math.sin(angle),
+      y:target.y+xx*Math.sin(angle)+yy*Math.cos(angle),
+      seat:target.matSeat,carrierId:target.id};
+  };
   // All physical card drops share the same destination rules, whether
   // one card, one stack or a multi-selection is dragged. Deck order and
   // orientation change atomically in the same replayable command.
@@ -1507,9 +1531,15 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const snapped=snapEligible?tcgPlacementPoint(x,y,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
           ?Number(p.snapMergedSeat):undefined,obj.scale??1,p.freePlacement===true,obj.rotation):null;
-      obj.x=snapped?snapped.x:x;
-      obj.y=snapped?snapped.y:y;
-      if(snapped) { obj.matSeat=snapped.seat;
+      const landing=snapEligible&&tcgDropZone(x,y,state.players.find(p=>p.seat===obj.matSeat)?.seat??Number(p.snapMergedSeat??obj.matSeat??0))?.zone==='TABLE'
+        ?stackLanding(obj,x,y,new Set([obj.id])):null;
+      obj.x=landing?.x??snapped?.x??x;
+      obj.y=landing?.y??snapped?.y??y;
+      if(landing){
+        obj.zone='TABLE';obj.matSeat=landing.seat??obj.matSeat;
+        obj.carrierId=landing.carrierId;
+        message='Stacked '+obj.name;
+      }else if(snapped) { obj.matSeat=snapped.seat;
         if(obj.kind==='card'||obj.kind==='deck')
           applyPocketDrop([obj],snapped.freePlacement?snapped.x:x,
             snapped.freePlacement?snapped.y:y,snapped.seat);
@@ -1531,8 +1561,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const snapped=state.kind==='tcg'?tcgPlacementPoint(requestedX,requestedY,state.centerMerges,p.snapMerged===true,
         Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
           ?Number(p.snapMergedSeat):undefined,obj.scale??1,p.freePlacement===true,obj.rotation):null;
-      const dx=(snapped?.x??requestedX)-obj.x;
-      const dy=(snapped?.y??requestedY)-obj.y;
+      const landing=tcgDropZone(requestedX,requestedY,Number(p.snapMergedSeat??obj.matSeat??0))?.zone==='TABLE'
+        ?stackLanding(obj,requestedX,requestedY,new Set(cards.map(card=>card.id))):null;
+      const dx=(landing?.x??snapped?.x??requestedX)-obj.x;
+      const dy=(landing?.y??snapped?.y??requestedY)-obj.y;
       const ids=new Set(cards.map(o=>o.id));
       for(const card of objects){
         if(!ids.has(card.id))continue;
@@ -1543,7 +1575,11 @@ export function applyCommand(state: GameState, command: Command): GameState {
           else delete card.matSeat;
         }
       }
-      if(snapped){
+      if(landing){
+        for(const card of objects.filter(o=>ids.has(o.id))){
+          card.zone='TABLE';card.matSeat=landing.seat??card.matSeat;
+        }
+      }else if(snapped){
         const placed=objects.filter(card=>ids.has(card.id));
         if(placed.length&&placed.every(card=>card.kind==='card'||card.kind==='deck'))
           applyPocketDrop(placed,snapped.freePlacement?snapped.x:requestedX,
@@ -1561,6 +1597,8 @@ export function applyCommand(state: GameState, command: Command): GameState {
         // a group drift apart. Atomic event = one undo/replay step.
         const anchor=picked.find(card=>card.id===p.anchorId)!;
         const tx=clamp(Number(p.x),0,BOARD_W),ty=clamp(Number(p.y),0,BOARD_H);
+        const landing=tcgDropZone(tx,ty,Number(p.snapMergedSeat??anchor.matSeat??0))?.zone==='TABLE'
+          ?stackLanding(anchor,tx,ty,idSet):null;
         const snapped=(anchor.kind==='card'||anchor.kind==='deck'||anchor.kind==='tile')
           ?tcgPlacementPoint(tx,ty,state.centerMerges,p.snapMerged===true,
           Number.isInteger(p.snapMergedSeat)&&Number(p.snapMergedSeat)>=0&&Number(p.snapMergedSeat)<SEATS
@@ -1572,16 +1610,17 @@ export function applyCommand(state: GameState, command: Command): GameState {
         const maxX=Math.max(...picked.map(card=>card.x));
         const minY=Math.min(...picked.map(card=>card.y));
         const maxY=Math.max(...picked.map(card=>card.y));
-        const dx=clamp((snapped?.x??tx)-anchor.x,-minX,BOARD_W-maxX);
-        const dy=clamp((snapped?.y??ty)-anchor.y,-minY,BOARD_H-maxY);
+        const dx=clamp((landing?.x??snapped?.x??tx)-anchor.x,-minX,BOARD_W-maxX);
+        const dy=clamp((landing?.y??snapped?.y??ty)-anchor.y,-minY,BOARD_H-maxY);
         for(const card of picked){
           card.x=card.x+dx;
           card.y=card.y+dy;
-          if(snapped)card.matSeat=snapped.seat;
+          if(landing){card.matSeat=landing.seat??anchor.matSeat;card.zone='TABLE';}
+          else if(snapped)card.matSeat=snapped.seat;
           else delete card.matSeat;
           if(card.zone==='DECK'&&snapped)card.zone='TABLE';
         }
-        if(snapped&&picked.every(card=>card.kind==='card'||card.kind==='deck'))
+        if(!landing&&snapped&&picked.every(card=>card.kind==='card'||card.kind==='deck'))
           applyPocketDrop(picked,snapped.freePlacement?snapped.x:tx,
             snapped.freePlacement?snapped.y:ty,snapped.seat);
       }
@@ -1619,6 +1658,9 @@ export function applyCommand(state: GameState, command: Command): GameState {
         // inside forEach would otherwise make the base rank drift.
         const ranks=ordered.map(card=>card.order);
         const distinct=new Set(ranks).size===ranks.length;
+        // An identity permutation feels like a broken Shuffle button.
+        if(shuffled.length>1&&shuffled.every((card,i)=>card.id===ordered[i].id))
+          shuffled.push(shuffled.shift()!);
         shuffled.forEach((card,index)=>{
           card.order=distinct?ranks[index]:ranks[0]+index;
         });
@@ -1831,7 +1873,10 @@ export function applyCommand(state: GameState, command: Command): GameState {
       const list=objects.filter(o=>o.zone==='DECK' &&
         (p.matSeat===undefined||o.matSeat===p.matSeat) &&
         (!p.prefix || o.id.startsWith(String(p.prefix))));const rand=prng(finite(p.seed,1));
+      const before=list.slice().sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
+      list.splice(0,list.length,...before);
       for(let i=list.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
+      if(list.length>1&&list.every((o,i)=>o.id===before[i].id))list.push(list.shift()!);
       list.forEach((o,i)=>o.order=i);message=`Shuffled ${list.length} cards`;break;
     }
     case 'NEXT_TURN':{
