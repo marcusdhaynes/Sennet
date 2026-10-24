@@ -1,4 +1,5 @@
-import {Container,Graphics,Text} from 'pixi.js';
+import {Assets,Container,Graphics,Sprite,Text} from 'pixi.js';
+import {LIFE_COUNTER_PHOTO} from './LifeCounterPhoto';
 import {TCGS} from '../lib/tcgCatalog';
 
 const label=(text:string,size:number,color=0xe8faff)=>{
@@ -22,6 +23,26 @@ export function buildLifeCounter(seat=0):Container{
   .circle(0,0,35).fill(0x101923).stroke({color:0x13d4ec,width:2.8})
   .circle(0,0,25).fill(0x151d2b).stroke({color:0x34a8c1,width:2});
  root.addChild(shadow,body);
+ // Use the actual supplied photograph for the bevelled purple housing.
+ // Keep interactive LCD text and game-specific buttons ABOVE the image.
+ // Mask the original white photographic backdrop to the circular silhouette.
+ const housingMask=new Graphics().ellipse(-9,0,49,54).fill(0xffffff);
+ housingMask.eventMode='none';root.addChild(housingMask);
+ void Assets.load(LIFE_COUNTER_PHOTO).then(texture=>{
+  if(root.destroyed)return;
+  const photo=new Sprite(texture);
+  photo.anchor.set(.5);photo.position.set(-9,0);
+  photo.width=98;photo.height=107;photo.eventMode='none';
+  photo.mask=housingMask;
+  root.addChildAt(photo,2);
+  body.visible=false;
+ }).catch(()=>{/* The vector housing remains available offline. */});
+ // Opaque LCD readout replaces the photograph's fixed demonstration 40,
+ // without covering the device's photographed outer ring or casing.
+ const liveLcd=new Graphics().roundRect(-21,-2,42,22,8)
+  .fill({color:0x131e2b,alpha:.96})
+  .stroke({color:0x36b9cc,width:.9,alpha:.8});
+ liveLcd.eventMode='none';root.addChild(liveLcd);
  const turn=label('TURN 1',6);turn.y=-29;root.addChild(turn);
  const player=label('Player 1',7);player.y=-13;root.addChild(player);
  const storageKey='sennet.life-counter.v1.'+seat;
