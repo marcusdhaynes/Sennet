@@ -28,3 +28,32 @@ export function fitMatAttachedRadial(
   // Always stay physically attached to the playmat, regardless of viewport edges.
   return {x:handCenterX,y:handBottomY,size:diameter};
 }
+
+/** Fit the REAL occupied silhouette of a focused player mat, including
+ * top control circles, the complete lower semicircular action radial and
+ * the action screen. Optionally reserve bottom viewport space for a
+ * player-facing Arena-style held hand.
+ *
+ * The returned offset is the mat center's displacement from screen center.
+ * Calculating this from the asymmetric extremities prevents the radial
+ * bottom being cropped even at the largest fitting camera zoom.
+ */
+export function fitSelfMatWithHud(
+  viewportWidth:number,viewportHeight:number,
+  matWidth:number,matHeight:number,completeMatWidth:number,
+  topControlReach:number,lcdReach:number,heldHandPixels=0,padding=12
+):{scale:number;offsetY:number;radialBottom:number}{
+  const w=Math.max(1,viewportWidth),h=Math.max(1,viewportHeight);
+  const reserve=Math.max(0,Math.min(h*.65,heldHandPixels));
+  const top=Math.max(0,topControlReach);
+  const bottom=Math.max(matWidth*.15,lcdReach);
+  const usableH=Math.max(1,h-reserve-padding*2);
+  const usableW=Math.max(1,w-padding*2);
+  const silhouette=matHeight+top+bottom;
+  const scale=Math.min(usableW/Math.max(1,completeMatWidth),
+    usableH/Math.max(1,silhouette));
+  // The mat occupies the center of the free viewport (above the held hand).
+  // The radial extends farther below the mat than the Eye extends above.
+  const offsetY=(top-bottom)*scale/2-reserve/2;
+  return {scale,offsetY,radialBottom:bottom};
+}
