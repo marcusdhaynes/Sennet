@@ -57,3 +57,16 @@ export function fitSelfMatWithHud(
   const offsetY=(top-bottom)*scale/2-reserve/2;
   return {scale,offsetY,radialBottom:bottom};
 }
+
+/** Map a docked radial SVG viewBox to a body-level hover preview.
+ * The HALF wheel's viewBox begins at y=200, so applying a bare
+ * getScreenCTM() or the SVG element's top as y=0 displaces its artwork.
+ * These values are CSS viewport pixels, independent of camera transforms. */
+export function radialHoverMatrix(
+  rect:{left:number;top:number;width:number;height:number},
+  half:boolean
+):{a:number;d:number;e:number;f:number}{
+  const a=rect.width/400;
+  const d=rect.height/(half?200:400);
+  return {a,d,e:rect.left,f:rect.top-(half?200*d:0)};
+}
