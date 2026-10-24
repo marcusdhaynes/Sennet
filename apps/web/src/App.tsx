@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
-import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,expireThrownDice,thrownDieDeadlines,THROWN_DIE_LIFETIME_MS,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance} from '@sennet/core';
+import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,expireThrownDice,thrownDieDeadlines,THROWN_DIE_LIFETIME_MS,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance,type SharedAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
 import TableCanvas from './components/TableCanvas';
 import {formatActionDisplay} from './lib/actionDisplay';
@@ -183,6 +183,7 @@ export default function App(){
   // can never be loaded as the default for another player identity.
   const actor=useMemo(localActor,[]);
   const [playmat,setPlaymat]=useState<PlaymatAppearance>(()=>storedPlaymatAppearance(actor));
+  const [labelScale,setLabelScale]=useState<number>(()=>storedPreference('sennet.mat.label-scale.v1',1.25,.75,2));
   const [coinAppearance,setCoinAppearance]=useState<CoinAppearance>(()=>{try{
     const saved=JSON.parse(localStorage.getItem('sennet.coin.appearance.v1')||'null');
     return saved&&['polished','brushed','matte','enamel'].includes(saved.finish)&&
@@ -246,6 +247,10 @@ export default function App(){
     setReceipt(rows=>[...rows,{id:createId(),at:Date.now(),type,location,description}]);
   };
   const connection=useRef<RoomConnection|null>(null);
+  const snapshotRoom=useRef('');
+  const appearanceRef=useRef<()=>SharedAppearance>(()=>({}));
+  appearanceRef.current=()=>({playmat,dice:diceAppearance,coin:coinAppearance,
+    coinText:customCoinText,coinValue:customCoinValue,labelScale});
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
   const viewedGame=replayAt===null?game:expireThrownDice(
@@ -290,7 +295,7 @@ export default function App(){
     }catch(e){inform(e instanceof Error?e.message:String(e));}
   }
   function disconnect(){
-    connection.current?.close();connection.current=null;
+    connection.current?.close();connection.current=null;snapshotRoom.current='';
     setConnected(false);setOnlineStatus(endpoint?'Ready to join another table':'Hosting not configured · local table only');
     const link=new URL(window.location.href);
     link.searchParams.delete('room');link.searchParams.delete('relay');
@@ -314,6 +319,7 @@ export default function App(){
       connection.current=new RoomConnection(address,roomId,game.kind,actor,seat,playerName,playerToken(),{
         onJoined:(assigned,joinedRoom)=>{
           if(assigned!==null)setSeat(assigned);
+          connection.current?.publishAppearance(appearanceRef.current());
           const known:OnlineRoom={room:joinedRoom,endpoint:address,updated:Date.now(),seat:assigned};
           setOnlineRoomsList(previous=>{
             const next=[known,...previous.filter(entry=>entry.room!==joinedRoom||entry.endpoint!==address)].slice(0,10);
@@ -323,9 +329,14 @@ export default function App(){
         },
         onState:state=>{
           const clean=expireThrownDice(state,Date.now());
-          current.current=clean;setGame(clean);setInitial(clean);
-          setHistory([]);setRedoStack([]);setReceipt([]);
-          setReplayAt(null);setConnected(true);setBook(null);
+          const cosmeticsOnly=snapshotRoom.current===clean.roomId&&clean.seq===current.current.seq;
+          current.current=clean;setGame(clean);
+          if(!cosmeticsOnly){
+            snapshotRoom.current=clean.roomId;
+            setInitial(clean);setHistory([]);setRedoStack([]);setReceipt([]);
+            setReplayAt(null);setBook(null);
+          }
+          setConnected(true);
         },
         onEvent:event=>{try{
           if(event.seq!==current.current.seq+1)throw new Error('Sequence gap');
@@ -414,6 +425,10 @@ export default function App(){
   },[game,history]);
   useEffect(()=>{try{localStorage.setItem(MERGE_OPACITY_KEY,String(mergeOpacity));}catch{/* Storage unavailable. */}},[mergeOpacity]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.v1',String(customCoinValue));}catch{}},[customCoinValue]);
+  useEffect(()=>{try{localStorage.setItem('sennet.mat.label-scale.v1',String(labelScale));}catch{}},[labelScale]);
+  useEffect(()=>{
+    connection.current?.publishAppearance(appearanceRef.current());
+  },[playmat,diceAppearance,coinAppearance,customCoinText,customCoinValue,labelScale]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.text.v1',customCoinText);}catch{}},[customCoinText]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
@@ -550,16 +565,28 @@ export default function App(){
     const action=choosePseudoBotAction(current.current);
     if(action)takeAction(action.type,action.payload);else inform('No available move.');
   }
+  async function addDeckToLiveTable(objects:TableObject[]):Promise<void>{
+    if(game.kind!=='tcg'){inform('Start or join a Trading Card Game table before adding your deck.');return;}
+    if(!isConnected){inform('Join an online table first.');return;}
+    const count=objects.length;
+    for(let i=0;i<count;i+=24){
+      const batch=objects.slice(i,i+24).map(o=>({...o,matSeat:seat,owner:actor}));
+      try{connection.current?.send({id:createId(),type:'ADD_MANY',actor,payload:{objects:batch}});}
+      catch(error){inform('Deck upload interrupted: '+String(error));return;}
+      if(i+24<count)await new Promise(resolve=>window.setTimeout(resolve,85));
+    }
+    inform('Submitted '+count+' cards to your multiplayer table.');
+  }
   function createDeck(){
     const next=createGame('tcg');
     let order=0;
     const objects:TableObject[]=cards.flatMap(card=>Array.from({length:card.amount},()=>({
       id:'deck-'+createId(),kind:'card' as const,name:card.name,x:tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!.x,y:tcgMatCells(seat).find(c=>c.row===1&&c.column===2)!.y,rotation:0,faceUp:false,color:'#a7a0c7',zone:'DECK' as const,matSeat:seat,order:order++
     })));
+    if(isConnected){void addDeckToLiveTable(objects);return;}
     resetWith({...next,objects,message:deckName+' · '+objects.length+' cards'});
   }
   async function loadStudioDeck(deck:SavedDeck){
-    if(isConnected){inform('To replace a live multiplayer table, disconnect first.');return;}
     if(replayAt!==null){inform('Exit replay first.');return;}
     // Saved/imported decks may contain name-only cards or older catalogue
     // entries with blank artwork. Resolve images before building table pieces.
@@ -599,7 +626,9 @@ export default function App(){
           description:entry.card.text.slice(0,250),order:order++
         }));
       });
-    resetWith({...next,objects,message:deck.name+' · '+objects.length+' cards loaded'});
+    if(isConnected){
+      await addDeckToLiveTable(objects);
+    }else resetWith({...next,objects,message:deck.name+' · '+objects.length+' cards loaded'});
     setTcgStudioOpen(false);
     inform(deck.name+' loaded onto the table');
   }
@@ -630,7 +659,7 @@ export default function App(){
           writeReceipt('Move','Book · '+Math.round(bookOffset.x)+','+Math.round(bookOffset.y)+
             ' → '+Math.round(point.x)+','+Math.round(point.y),'Reposition');
           setBookOffset(point);
-        }} onBookOpen={()=>{writeReceipt('Open','Book','Sennet');setBook('sennet');}} state={viewedGame} seat={seat} playerName={playerName} actorId={actor} selected={selected}
+        }} onBookOpen={()=>{writeReceipt('Open','Book','Sennet');setBook('sennet');}} state={viewedGame} labelScale={labelScale} seat={seat} playerName={playerName} actorId={actor} selected={selected}
         onSelect={setSelected} wheelMode="docked"
         onOpenReceipt={()=>setActionLogOpen(true)}
         onInterfaceAction={(type,location,description)=>writeReceipt(type,location,description)}
@@ -890,7 +919,12 @@ export default function App(){
               <div className="reader-block"><h3>Current table</h3><p>{nameFor(game.kind)} · {game.objects.length} objects · {history.length} moves</p><button className="reader-secondary" onClick={returnToEmpty}>Clear view and open an empty table</button></div>
             </>}
             {settingsPage==='playmat'&&
-              <><div className="reader-block"><h3>Wooden side boxes</h3><p>Two empty wooden trays, one card wide and three cards tall, follow your playmat in every view.</p>
+              <><div className="reader-block"><h3>Playmat label size</h3>
+                <label htmlFor="playmat-label-scale">Label scale — {Math.round(labelScale*100)}%
+                <input id="playmat-label-scale" type="range" min={75} max={200} step={5}
+                  value={Math.round(labelScale*100)} onChange={e=>setLabelScale(Number(e.target.value)/100)}/></label>
+                <button className="reader-secondary" type="button" onClick={()=>setLabelScale(1.25)}>Reset to 125%</button>
+              </div><div className="reader-block"><h3>Wooden side boxes</h3><p>Two empty wooden trays, one card wide and three cards tall, follow your playmat in every view.</p>
                 <label htmlFor="wood-box-finish">Wood finish</label>
                 <select id="wood-box-finish" value={playmat.sideBoxStyle}
                   onChange={e=>setPlaymat(p=>({...p,sideBoxStyle:e.target.value as PlaymatAppearance['sideBoxStyle']}))}>
