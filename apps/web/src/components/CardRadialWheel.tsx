@@ -141,6 +141,28 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
            style={{pointerEvents:'none',overflow:'visible'}}>
            <path d={REVEAL_HANDS_ICON_PATH} fill="#fff" fillRule="evenodd"/>
          </svg>
+       : act.id==='flip'
+       ? <svg x={p.x-(half?26:35)} y={p.y-(half?26:35)}
+           width={half?52:70} height={half?52:70}
+           viewBox="0 0 100 100" role="img" aria-hidden="true"
+           style={{pointerEvents:'none',overflow:'visible'}}>
+           {/* A face-down card turns over into a face-up card. The single
+               curved return arrow reads as flipping, not deck shuffling. */}
+           <g stroke="#fff" strokeLinecap="round" strokeLinejoin="round">
+             <rect x="49" y="30" width="37" height="49" rx="4"
+               fill="none" strokeWidth="5" transform="rotate(12 67.5 54.5)"/>
+             <path d="M37 20 61 26 61 78 37 72Z"
+               fill="#fff" strokeWidth="3.2"/>
+             <path d="M32 24 42 20 42 73 32 77Z" fill="#fff"
+               strokeWidth="2.5"/>
+             <path d="M22 24C29 8 60 5 76 20" fill="none"
+               strokeWidth="6"/>
+             <path d="m60 17 19 7-2-19" fill="none"
+               strokeWidth="6"/>
+             <path d="M55 43 71 47M55 51 67 54" fill="none"
+               strokeWidth="3.2" opacity=".95"/>
+           </g>
+         </svg>
        : <text x={p.x} y={p.y}
            textAnchor="middle" dominantBaseline="central"
            fontSize={glyphSize} fontWeight="700"
