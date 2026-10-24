@@ -43,10 +43,31 @@ const arr=(v:unknown):Record<string,unknown>[]=>Array.isArray(v)?v.filter(x=>x&&
 const rec=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{};
 const words=(v:unknown):string[]=>Array.isArray(v)?v.map(x=>s(x)).filter(Boolean):s(v)?[s(v)]:[];
 const img=(v:unknown)=>typeof v==='string'&&/^https:\/\//i.test(v)?v:'';
+/** Prefer source-resolution art, including saved decks and cached catalogues
+ * created before the high-resolution imagery upgrade. Only transform known
+ * official provider URL conventions; leave unknown hosts unchanged. */
+export function bestCardImage(src:string):string{
+ if(!src)return src;
+ try{
+  const url=new URL(src);
+  if(url.hostname==='cards.scryfall.io'){
+   if(/^\/(small|normal|large)\/(front|back)\//.test(url.pathname)){
+    url.pathname=url.pathname.replace(/^\/(small|normal|large)\//,'/png/')
+      .replace(/\.jpe?g$/i,'.png');
+   }
+  }else if(/(^|\.)tcgdex\.net$/.test(url.hostname)){
+   url.pathname=url.pathname.replace(/\/low\.webp$/i,'/high.webp');
+  }else if(url.hostname==='images.ygoprodeck.com'){
+   url.pathname=url.pathname.replace('/images/cards_small/','/images/cards/');
+  }
+  return url.toString();
+ }catch{return src;}
+}
 const key=(game:TcgId,id:unknown)=>game+':'+s(id);
 const card=(game:TcgId,id:unknown,name:unknown,opts:Partial<CatalogCard>={}):CatalogCard=>({
  id:key(game,id),game,name:s(name)||'Unnamed card',number:'',set:'',rarity:'',type:'',types:[],colors:[],
- cost:'',text:'',image:'',price:null,legalities:{},attributes:{},...opts
+ cost:'',text:'',image:'',price:null,legalities:{},attributes:{},...opts,
+ image:bestCardImage(opts.image||'')
 });
 export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
  const x=rec(value);if(!x||!Object.keys(x).length)return null;
@@ -56,7 +77,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
   number:s(x.collector_number),set:s(set.name||set.code),rarity:s(x.rarity),
   type:words(x.type).join(' / '),types:words(x.type),
   colors:words(x.ink),cost:s(x.cost),text:s(x.text),
-  image:img(digital.small||digital.normal),price:n(rec(x.prices).usd),
+  image:img(digital.png||digital.large||digital.normal||digital.small),price:n(rec(x.prices).usd),
   legalities:Object.fromEntries(Object.entries(rec(x.legalities)).map(([k,v])=>[k,s(v)])),
   attributes:{Inkable:s(x.inkwell),Strength:s(x.strength),Willpower:s(x.willpower),Lore:s(x.lore),'Set Code':s(set.code)}
  });
@@ -73,7 +94,9 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
    number:s(x.collector_number),set:s(x.set_name||x.set),rarity:s(x.rarity),
    type:s(x.type_line||first.type_line),types:s(x.type_line||first.type_line).split(/[\s—]+/).filter(Boolean),
    colors:words(x.color_identity),cost:s(x.cmc??x.mana_cost),
-   text:s(x.oracle_text||first.oracle_text),image:img(rec(x.image_uris).small||facesUris.small),
+   text:s(x.oracle_text||first.oracle_text),image:img(rec(x.image_uris).png||facesUris.png||
+       rec(x.image_uris).large||facesUris.large||rec(x.image_uris).normal||facesUris.normal||
+       rec(x.image_uris).small||facesUris.small),
    price:n(rec(x.prices).usd),legalities:Object.fromEntries(
     Object.entries(rec(x.legalities)).map(([k,v])=>[k,s(v)])),
    attributes:{Mana:s(x.mana_cost),Power:s(x.power),Toughness:s(x.toughness),Artist:s(x.artist),'Set Code':s(x.set),'MTGO ID':s(x.mtgo_id)}
@@ -98,7 +121,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
    number:s(x.localId||x.number),set:s(original.name||original.id||s(x.id).replace(/-[^-]+$/,'')),
    rarity:s(x.rarity),type:s(x.category),types:words(x.category),colors:words(x.types),
    cost:s(x.retreat),text:words(x.effect).join('\n')||words(x.abilities).map(a=>s(rec(a).effect)).join('\n'),
-   image:img(x.image)?s(x.image)+ '/low.webp':'',
+   image:img(x.image)?s(x.image).replace(/\/(low|high)\.webp$/i,'')+'/high.webp':'',
    legalities:Object.fromEntries(Object.entries(rec(x.legal)).map(([k,v])=>[k,s(v)])),
    attributes:{HP:s(x.hp),Stage:s(x.stage),Dex:s(x.dexId)}
   });
@@ -109,7 +132,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
    number:s(x.collectorNumber),set:s(x.set),rarity:s(x.rarity),
    type:s(x.type),types:words(x.type),colors:words(x.faction||x.domain),
    cost:s(rec(x.stats).cost??rec(x.stats).energy),
-   text:s(x.description),image:img(art.thumbnailURL||art.fullURL||
+   text:s(x.description),image:img(art.fullURL||art.thumbnailURL||
     media.find(m=>/image|thumbnail|card/i.test(s(m.type)))?.url),
    attributes:{Energy:s(rec(x.stats).energy),Might:s(rec(x.stats).might),
      Tags:words(x.tags).join(', '),Keywords:words(x.keywords).join(', ')}
@@ -121,7 +144,7 @@ export function normalizeTcgCard(game:TcgId,value:unknown):CatalogCard|null{
   return card(game,x.id,x.name,{
    number:s(x.id),set:s(arr(x.card_sets)[0]?.set_name),rarity:s(arr(x.card_sets)[0]?.set_rarity),
    type:s(x.type),types:words(x.type),colors:words(x.attribute),
-   cost:s(x.level??x.linkval),text:s(x.desc),image:img(ci.image_url_small||ci.image_url),
+   cost:s(x.level??x.linkval),text:s(x.desc),image:img(ci.image_url||ci.image_url_small),
    price:n(prices.tcgplayer_price),attributes:{
      ATK:s(x.atk),DEF:s(x.def),Race:s(x.race),Attribute:s(x.attribute),
      Archetype:s(x.archetype),TCG:s(banned.ban_tcg),OCG:s(banned.ban_ocg),
