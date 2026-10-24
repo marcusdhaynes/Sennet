@@ -3,10 +3,10 @@ import {createServer,type IncomingMessage,type ServerResponse} from 'node:http';
 import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {createHash,randomInt,randomUUID} from 'node:crypto';
-import {applyCommand,createGame,projectForActor,sanitizeObject,type Command,type EventRecord,type GameKind,type GameState,type Player} from '@sennet/core';
+import {applyCommand,createGame,projectForActor,sanitizeObject,normalizePlaymatAppearance,type SharedAppearance,type Command,type EventRecord,type GameKind,type GameState,type Player} from '@sennet/core';
 const PORT=Number(process.env.PORT||8787);
 const DATA_DIR=process.env.SENNET_DATA_DIR||'.sennet-server';
-const MAX_MESSAGE=16*1024;
+const MAX_MESSAGE=1024*1024;
 type RoomEntry={state:GameState;history:EventRecord[];seen:Set<string>;sockets:Set<WebSocket>;owner:string;identities:Record<string,string>};
 const rooms=new Map<string,RoomEntry>();
 const loadingRooms=new Map<string,Promise<RoomEntry>>();
@@ -122,6 +122,37 @@ function authorize(entry:NonNullable<ReturnType<typeof rooms.get>>,actor:string,
     throw new Error('That saved player belongs to a different browser identity');
   return signature;
 }
+function setAppearance(room:string,actor:string,value:unknown){
+  const entry=rooms.get(room);
+  if(!entry?.state.players.some(p=>p.id===actor))throw Error('Only seated players can share customizations');
+  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid appearance');
+  const raw=value as Record<string,unknown>;
+  const incoming=JSON.stringify(raw);
+  if(incoming.length>800000)throw Error('Appearance too large to share');
+  const next:SharedAppearance={};
+  if(raw.playmat!==undefined)next.playmat=normalizePlaymatAppearance(raw.playmat);
+  if(raw.dice&&typeof raw.dice==='object'){
+    const d=raw.dice as {all?:unknown;overrides?:unknown};
+    next.dice={all:String(d.all||'classic').slice(0,40),overrides:{}};
+    if(d.overrides&&typeof d.overrides==='object')
+      for(const [k,v] of Object.entries(d.overrides).slice(0,20))
+        if(/^\d{1,3}$/.test(k)&&typeof v==='string')
+          next.dice.overrides[k]=v.slice(0,40);
+  }
+  if(raw.coin&&typeof raw.coin==='object'){
+    const c=raw.coin as Record<string,unknown>;
+    next.coin={finish:String(c.finish||'polished').slice(0,20),
+      shine:Math.max(0,Math.min(100,Number(c.shine)||0)),
+      bevel:Math.max(0,Math.min(100,Number(c.bevel)||0)),
+      size:Math.max(.55,Math.min(1.3,Number(c.size)||1))};
+  }
+  if(typeof raw.coinText==='string')next.coinText=raw.coinText.slice(0,20);
+  if(typeof raw.coinValue==='number')next.coinValue=Math.max(1,Math.min(9999,Math.floor(raw.coinValue)));
+  if(typeof raw.labelScale==='number')next.labelScale=Math.max(.75,Math.min(2,raw.labelScale||1.25));
+  entry.state.appearances={...entry.state.appearances,[actor]:next};
+  persist(room);
+  for(const client of entry.sockets)projectedSnapshot(room,client);
+}
 function applyAction(room:string,actor:string,rawAction:Command){
   const entry=rooms.get(room);
   if(!entry||!entry.state.players.some(player=>player.id===actor))throw new Error('Not seated in this room');
@@ -193,6 +224,8 @@ async function httpRoom(req:IncomingMessage,res:ServerResponse,path:string){
     updatePresence(room);
     if(path==='/api/room/command'){
       applyAction(room,actor,body.command as Command);
+    }else if(path==='/api/room/appearance'){
+      setAppearance(room,actor,body.appearance);
     }else if(path!=='/api/room/sync')throw new Error('Unknown room action');
     res.end(JSON.stringify({type:'snapshot',state:projectForActor(entry.state,actor)}));
   }catch(error){
@@ -252,6 +285,7 @@ wss.on('connection',ws=>{
       const session=sessions.get(ws);if(!session)throw new Error('Join room first');
       const entry=rooms.get(session.room)!;
       if(msg.type==='resync'){projectedSnapshot(session.room,ws);return;}
+      if(msg.type==='appearance'){setAppearance(session.room,session.actor,msg.appearance);return;}
       if(msg.type==='command'){
         if(!entry.state.players.some(p=>p.id===session.actor))throw new Error('Spectators cannot modify the table');
         const record=applyAction(session.room,session.actor,msg.command as Command);
