@@ -18,9 +18,9 @@ test('radial uses actual zoomed/castle transformed mat width',()=>{
   assert.equal(close.size,60);
   assert.equal(zoomed.size,120);
 });
-test('expanded semicircle fits fully in a tight viewport',()=>{
+test('radial stays physically anchored even in a tight viewport',()=>{
   const fit=fitMatAttachedRadial(600,800,800,600,640);
-  assert.ok(fit.x-fit.size/2>=8);
-  assert.ok(fit.x+fit.size/2<=592);
-  assert.ok(fit.y>=8&&fit.y+fit.size/2<=632);
+  assert.equal(fit.x,600);
+  assert.equal(fit.y,800);
+  assert.equal(fit.size,240);
 });
