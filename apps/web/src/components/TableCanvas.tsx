@@ -1567,7 +1567,18 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   };
   useEffect(()=>{
     restartSelectionIdle.current();
-    return()=>{if(selectIdleTimer.current!==null)window.clearTimeout(selectIdleTimer.current);};
+    // Any active interaction restarts the idle clock, not just adding a
+    // card. Capture also covers wheel controls that stop propagation.
+    const activity=()=>{if(selectedSet.current.size)restartSelectionIdle.current();};
+    window.addEventListener('pointerdown',activity,true);
+    window.addEventListener('keydown',activity,true);
+    window.addEventListener('wheel',activity,true);
+    return()=>{
+      if(selectIdleTimer.current!==null)window.clearTimeout(selectIdleTimer.current);
+      window.removeEventListener('pointerdown',activity,true);
+      window.removeEventListener('keydown',activity,true);
+      window.removeEventListener('wheel',activity,true);
+    };
   },[autoDeselect,deselectMs]);
   const cardPeekRef=useRef(cardPeek);cardPeekRef.current=cardPeek;
   const lastTap=useRef<{id:string;at:number;x:number;y:number}|null>(null);
