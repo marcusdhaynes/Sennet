@@ -2025,10 +2025,12 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         // Click diameter agrees with larger 3D die while remaining clear
         // of its adjacent column's click target.
         source.hitArea=new Circle(0,0,13*DICE_SOURCE_RACK_SCALE+2);
-        // A die's physical size must never change just because the pointer
-        // enters its hit area. Use the native cursor, not hover zoom.
-        source.on('pointerover',()=>{source.cursor='grab';});
-        source.on('pointerout',()=>{source.cursor='grab';});
+        source.on('pointerover',()=>{
+          source.cursor='grab';staticDice3D.current?.setEmphasis('source-'+sides,true);
+        });
+        source.on('pointerout',()=>{
+          source.cursor='grab';staticDice3D.current?.setEmphasis('source-'+sides,false);
+        });
         source.on('pointerdown',e=>{
           if(e.button!==0)return;
           e.stopPropagation();
@@ -2337,6 +2339,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         }).catch(()=>{/* Keep vector fallback for unavailable artwork. */});
       }
       if(!readonly){
+        if(obj.kind==='die'||obj.throwDice){
+          piece.on('pointerover',()=>staticDice3D.current?.setEmphasis(obj.id,true));
+          piece.on('pointerout',()=>staticDice3D.current?.setEmphasis(obj.id,false));
+        }
         piece.eventMode='static';piece.cursor=obj.throwDice?'pointer':obj.locked?'pointer':'grab';
         piece.on('pointerdown',(e)=>{
           if(e.button!==0)return;
