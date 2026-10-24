@@ -100,7 +100,7 @@ import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '.
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
 import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom,
-  EYE_CONTROL_DIAMETER_PX,fixedMatControlScale} from '../lib/actionRadialFit';
+  EYE_CONTROL_DIAMETER_PX,fixedMatControlScale,eyeOpponentReferencePixels} from '../lib/actionRadialFit';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
 import {stepDicePhysics,throwVelocity,type DiceBody,type CollisionRect} from '../lib/dicePhysics';
@@ -687,7 +687,9 @@ function drawTcgMats(
       marker.hitArea=new Circle(0,0,19);
       marker.cursor='default';
       marker.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',merged));
-      if(seat===viewerSeat)onMergeReady(marker);
+      // Every seat's merge control must share the same screen-space size,
+      // including opponents whose mat is scaled down in Castle view.
+      onMergeReady(marker);
       const sign=label(merged?'−':'+',29,0xf4e1b9,'bold');
       sign.eventMode='none';sign.position.set(0,-1);marker.addChild(sign);
       if(seat===viewerSeat&&!readonly){
@@ -744,6 +746,7 @@ function drawTcgMats(
         button.hitArea=new Circle(0,0,19);
         button.cursor='pointer';
         button.addChild(woodenControl(16,seatPlaymat.sideBoxStyle??'walnut'));
+        onMergeReady(button);
         // A 180-degree facing rotation makes a local right-arrow appear
         // as a LEFT arrow on screen, and vice-versa.
         const tip=allyHere?(left?-5:5):(left?5:-5);
@@ -906,6 +909,7 @@ function drawTcgMats(
       settings.cursor='pointer';
       settings.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
       settings.addChild(woodenControl(VIEW_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut'));
+      onMergeReady(settings);
       // Eight-tooth fine-line gear, centered on the same 32-unit disk.
       const gear=new Graphics();
       for(let i=0;i<32;i++){
@@ -951,6 +955,7 @@ function drawTcgMats(
           button.cursor='pointer';
           button.hitArea=new Circle(0,0,OPPONENT_RELATION_BUTTON_HIT_RADIUS);
           button.addChild(woodenControl(OPPONENT_RELATION_BUTTON_RADIUS,seatPlaymat.sideBoxStyle??'walnut',active));
+          onMergeReady(button);
           const glyph=new Graphics();
           if(isSword){
             // Single upright sword: blade, crossguard, grip, pommel.
@@ -1490,6 +1495,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const eyeHitTarget=useRef<Container|null>(null);
   const castleHitTarget=useRef<Container|null>(null);
   const mergeHitTargets=useRef<Container[]>([]);
+  // Exactly one reference diameter per mounted session: the actual
+  // initial Eye-view opponent button footprint, not a guessed 16/34px.
+  const controlReferencePixels=useRef<number|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
   useEffect(()=>installTopLayerBookHover(),[]);
@@ -1967,6 +1975,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         c.panX=bounded.panX;c.panY=bounded.panY;
         scene.scale.set(scale);
         scene.position.set(w/2-BOARD_CENTER*scale+c.panX,h/2-BOARD_CENTER*scale+c.panY);
+        if(controlReferencePixels.current===null){
+          const referenceBounds=battlefieldFitBounds(1,BATTLEFIELD_PLAYMAT_PADDING,true);
+          controlReferencePixels.current=eyeOpponentReferencePixels(
+            w,h,referenceBounds,TCG_MAT_WIDTH,TCG_MAT_HEIGHT);
+          // Count badges use the same reference but stay DOM overlays
+          // independent of card zoom; their SVG viewBox is unchanged.
+          mount.current.style.setProperty('--sennet-control-size',
+            controlReferencePixels.current+'px');
+        }
+        const targetPixels=controlReferencePixels.current;
         // Fixed-size controls: Eye, Castle, merge and counters all have
         // the SAME SMALL 16px silhouette at every zoom.
         // Their anchor positions NEVER change. Only the Pixi container
@@ -1987,7 +2005,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             (unit.x-origin.x)*rect.width/app.screen.width,
             (unit.y-origin.y)*rect.height/app.screen.height);
           if(Number.isFinite(pxPerWorld)&&pxPerWorld>0){
-            const inverse=fixedMatControlScale(pxPerWorld);
+            const inverse=fixedMatControlScale(pxPerWorld,targetPixels);
             // Camera scale cancels against 16/34. The fixed group
             // stays at its original world anchor, with no X/Y edits.
             group.scale.set(inverse);
@@ -1996,9 +2014,18 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               button.scale.set(1);
               button.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
             }
+            // Other controls can have a DIFFERENT parent mat scale
+            // (opponent, Castle grids, or full table). Measure each
+            // parent independently, rather than reusing the viewer's.
             for(const merge of mergeHitTargets.current){
-              if(!merge||merge.destroyed)continue;
-              merge.scale.set(inverse);
+              if(!merge||merge.destroyed||!merge.parent)continue;
+              const parent=merge.parent;
+              const matOrigin=parent.toGlobal(new Point(0,0));
+              const matUnit=parent.toGlobal(new Point(1,0));
+              const matPx=Math.hypot(
+                (matUnit.x-matOrigin.x)*rect.width/app.screen.width,
+                (matUnit.y-matOrigin.y)*rect.height/app.screen.height);
+              merge.scale.set(fixedMatControlScale(matPx,targetPixels));
               merge.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
             }
           }
