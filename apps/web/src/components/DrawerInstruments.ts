@@ -1,5 +1,4 @@
-import {Assets,Container,Graphics,Sprite,Text} from 'pixi.js';
-import {LIFE_COUNTER_PHOTO} from './LifeCounterPhoto';
+import {Container,Graphics,Text} from 'pixi.js';
 import {TCGS} from '../lib/tcgCatalog';
 
 const label=(text:string,size:number,color=0xe8faff)=>{
@@ -16,32 +15,29 @@ const button=(x:number,y:number,r:number,caption:string,callback:()=>void,color=
 /** Styled, functional electronic life counter, with seven game selectors. */
 export function buildLifeCounter(seat=0):Container{
  const root=new Container();root.label='life-counter-device';
- const shadow=new Graphics().ellipse(4,7,48,51).fill({color:0x02040a,alpha:.35});
- const body=new Graphics().circle(-4,1,48).fill(0x080c13)
-  .circle(1,0,46).fill(0x291340).stroke({color:0x62418c,width:6})
-  .circle(0,0,42).fill(0x0a0d17).stroke({color:0x8e60b9,width:2})
-  .circle(0,0,35).fill(0x101923).stroke({color:0x13d4ec,width:2.8})
-  .circle(0,0,25).fill(0x151d2b).stroke({color:0x34a8c1,width:2});
+ // Original front-facing reconstruction: no photograph, perspective, or image texture.
+ // The hardware and LCD are genuine Pixi geometry and remain crisp at zoom.
+ const shadow=new Graphics().ellipse(2,6,49,49).fill({color:0x02030a,alpha:.42});
+ const body=new Graphics()
+  .circle(0,2,49).fill(0x0a0913)
+  .circle(0,0,47).fill(0x30164e).stroke({color:0x644098,width:3})
+  .circle(0,-1,44).stroke({color:0x9467c1,width:2,alpha:.8})
+  .circle(0,0,40).fill(0x090d16).stroke({color:0x251839,width:2.5})
+  .circle(0,0,36).fill(0x141e2c).stroke({color:0x21d4e9,width:2.8})
+  .circle(0,0,32).stroke({color:0x58bfe3,width:.75,alpha:.7})
+  .circle(0,0,26).fill(0x101622).stroke({color:0x2787a9,width:2.7})
+  .circle(0,0,23.5).stroke({color:0x64efff,width:1,alpha:.9});
  root.addChild(shadow,body);
- // Use the actual supplied photograph for the bevelled purple housing.
- // Keep interactive LCD text and game-specific buttons ABOVE the image.
- // Mask the original white photographic backdrop to the circular silhouette.
- const housingMask=new Graphics().ellipse(-9,0,49,54).fill(0xffffff);
- housingMask.eventMode='none';root.addChild(housingMask);
- void Assets.load(LIFE_COUNTER_PHOTO).then(texture=>{
-  if(root.destroyed)return;
-  const photo=new Sprite(texture);
-  photo.anchor.set(.5);photo.position.set(-9,0);
-  photo.width=98;photo.height=107;photo.eventMode='none';
-  photo.mask=housingMask;
-  root.addChildAt(photo,2);
-  body.visible=false;
- }).catch(()=>{/* The vector housing remains available offline. */});
- // Opaque LCD readout replaces the photograph's fixed demonstration 40,
- // without covering the device's photographed outer ring or casing.
- const liveLcd=new Graphics().roundRect(-21,-2,42,22,8)
-  .fill({color:0x131e2b,alpha:.96})
-  .stroke({color:0x36b9cc,width:.9,alpha:.8});
+ // Fine segmented cyan LCD progress arc.
+ const segments=new Graphics();
+ for(let i=0;i<20;i++){
+  const start=(-210+i*10)*Math.PI/180,end=(start+7*Math.PI/180);
+  segments.arc(0,0,25,start,end).stroke({color:i<15?0x22c9e3:0x1b5167,width:2.6,cap:'round'});
+ }
+ segments.eventMode='none';root.addChild(segments);
+ const liveLcd=new Graphics().roundRect(-20,-3,40,23,7)
+  .fill({color:0x131c29,alpha:.98})
+  .stroke({color:0x2c7899,width:.85});
  liveLcd.eventMode='none';root.addChild(liveLcd);
  const turn=label('TURN 1',6);turn.y=-29;root.addChild(turn);
  const player=label('Player 1',7);player.y=-13;root.addChild(player);
