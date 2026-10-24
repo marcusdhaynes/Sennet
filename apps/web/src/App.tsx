@@ -732,10 +732,14 @@ export default function App(){
           // Shuffling a card in a pile shuffles the whole physical pile,
           // rather than silently shuffling only the one visible card.
           if(action==='shuffle'){
-            const expanded=new Set(ids);
-            for(const id of ids)for(const card of cardStackMembers(current.current,id))
-              expanded.add(card.id);
-            ids=[...expanded];
+            // Shuffle only the pressed physical pile on this player's mat.
+            // Do not expand an unrelated multi-selection across other seats.
+            const anchor=current.current.objects.find(o=>o.id===ids[0]);
+            if(!anchor||anchor.matSeat!==seat)return;
+            const expanded=cardStackMembers(current.current,anchor.id)
+              .filter(card=>card.matSeat===seat&&card.zone===anchor.zone&&
+                (!card.owner||card.owner===actorId||card.owner==='local'));
+            ids=(expanded.length?expanded:[anchor]).map(card=>card.id);
           }
           // One authoritative event applies to the ENTIRE selection.
           // State is validated atomically; invalid or opponent-owned
