@@ -1175,7 +1175,7 @@ function coinDomVisual(value:number|string,sign:1|-1,source:boolean,style:CoinAp
   }
   return root;
 }
-function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
+function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance,isHeldStack=false){
   const box=new Container();box.position.set(o.x,o.y);box.eventMode=o.locked?'none':'static';box.cursor=o.locked?'default':'grab';
   // Diffuse overhead contact shading, not the old oversized oval/rectangle.
   const shadow=new Graphics();
@@ -1203,7 +1203,7 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance){
     box.addChild(face);
     const t=label(o.name,12,0xf2ead7,'bold');t.position.set(0,-110);box.addChild(t);
   }else if(o.kind==='card'||o.kind==='deck'){
-    box.addChild(new Graphics().roundRect(-31,-44,62,88,7).fill(0x101e20).stroke({color:isSelected?0xf4d59b:0x6d6c60,width:isSelected?3:1}));
+    box.addChild(new Graphics().roundRect(-31,-44,62,88,7).fill(0x101e20).stroke({color:isHeldStack?0xbb85ff:isSelected?0xf4d59b:0x6d6c60,width:isSelected||isHeldStack?3:1}));
     box.addChild(new Graphics().roundRect(-27,-40,54,80,5).fill(o.faceUp?rgb(o.color):0x253c43));
     if(o.faceUp){box.addChild(new Graphics().roundRect(-22,-31,44,42,3).fill({color:0xede8cf,alpha:.25}));
       const emblem=label('✦',29,0xf1e7d0);emblem.position.set(0,-10);box.addChild(emblem);
@@ -2063,8 +2063,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     const pileKey=(o:TableObject)=>state.kind==='tcg'?
       'seat-'+String(o.matSeat??seat):o.id.split('-')[0];
     const deckTop=new Map<string,TableObject>();
-    for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order))
-      if(!deckTop.has(pileKey(o)))deckTop.set(pileKey(o),o);
+    const deckUnderlay=new Map<string,TableObject>();
+    for(const o of state.objects.filter(o=>o.zone==='DECK').sort((a,b)=>a.order-b.order)){
+      const key=pileKey(o);
+      if(!deckTop.has(key))deckTop.set(key,o);
+      else if(!deckUnderlay.has(key))deckUnderlay.set(key,o);
+    }
     const byId=new Map(state.objects.map(o=>[o.id,o]));
     const visible=state.objects.filter(o=>{
       // Carried tokens remain attached to cards in hands and decks, but a
@@ -2076,7 +2080,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           parent.owner!==actorId&&parent.owner!=='local'))return false;
         ancestor=parent;
       }
-      return o.zone!=='DECK'||deckTop.get(pileKey(o))?.id===o.id;
+      return o.zone!=='DECK'||deckTop.get(pileKey(o))?.id===o.id||
+        deckUnderlay.get(pileKey(o))?.id===o.id;
     });
     // Draw lower stack-order cards first, so a wheel Shuffle visibly
     // changes which overlapping card sits on top, without disrupting
@@ -2103,8 +2108,29 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(da!==db)return da-db;
       const area=footprint(b)-footprint(a);
       if(Math.abs(area)>1)return area;
-      return drawGroup(a)===drawGroup(b)?a.order-b.order:0;
+      return drawGroup(a)===drawGroup(b)?
+        (a.zone==='DECK'?b.order-a.order:a.order-b.order):0;
     });
+    // Collapse identical overlapping card layers into one actual top card.
+    // Keeping 100+ invisible card canvases alive made mass zone moves stutter.
+    // Half-size quadrant stacks remain separate because their centers differ.
+    const stackKey=(o:TableObject)=>
+      [o.zone,o.matSeat??-1,Math.round(o.x),Math.round(o.y),o.scale??1].join(':');
+    const stacks=new Map<string,TableObject[]>();
+    for(const o of state.objects){
+      if(o.kind!=='card'&&o.kind!=='deck')continue;
+      const key=stackKey(o),group=stacks.get(key)??[];
+      group.push(o);stacks.set(key,group);
+    }
+    const topRenderedId=new Map<string,string>();
+    for(const o of visible){
+      if(o.kind!=='card'&&o.kind!=='deck')continue;
+      if(o.zone==='DECK')continue;
+      topRenderedId.set(stackKey(o),o.id);
+    }
+    const renderable=visible.filter(o=>
+      (o.kind!=='card'&&o.kind!=='deck')||
+      o.zone==='DECK'||topRenderedId.get(stackKey(o))===o.id);
     // Selection contains only currently existing, visible members; never
     // allow a stale deleted card ID into a later wheel action.
     const validIds=new Set(state.objects.map(o=>o.id));
@@ -2118,6 +2144,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(!state.objects.some(object=>object.id===id))dieShownAt.current.delete(id);
     }
     const coinLayers:{piece:Container;el:HTMLDivElement;displayScale:number;source:boolean}[]=[];
+    // Stack badges live ABOVE the high-resolution HTML card artwork.
+    // They remain independent hit targets when the underlying 99 cards
+    // are efficiently culled from Pixi and the browser's image compositor.
+    const stackBadges:{piece:Container;button:HTMLButtonElement;size:number}[]=[];
     // Only the VISUAL copy is magnified. Every source or placed coin keeps
     // its Pixi pointer hit area, center click and drag behavior unchanged.
     // Append the 3x preview directly to <body>, beside the top-tier dice and
@@ -2378,6 +2408,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const rect=session.current.app.canvas.getBoundingClientRect();
       const sx=rect.width/session.current.app.screen.width;
       const sy=rect.height/session.current.app.screen.height;
+      for(const {piece,button,size} of stackBadges){
+        if(piece.destroyed||!button.isConnected)continue;
+        const p=piece.toGlobal(new Point(29,41));
+        button.style.left=(p.x*sx)+'px';
+        button.style.top=(p.y*sy)+'px';
+        button.style.display=size>1?'grid':'none';
+      }
       for(const {piece,img} of artLayers){
         if(piece.destroyed||!img.isConnected)continue;
         const p=piece.toGlobal(new Point(0,0));
@@ -2483,7 +2520,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
     };
     session.current?.app.ticker.add(syncCardArtwork);
-    for(const obj of visible){
+    for(const obj of renderable){
       const assumedOwner=obj.matSeat??
         (obj.owner===actorId||obj.owner==='local'?seat:
           state.players.find(p=>p.id===obj.owner)?.seat)??
@@ -2497,7 +2534,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         coinAppearance;
       const objectDice=sharedAppearance?.dice?
         normalizeDiceAppearance(sharedAppearance.dice):diceAppearance;
-      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),objectCoin);
+      const count=stacks.get(stackKey(obj))?.length??1;
+      const stackSelected=count>1&&(stacks.get(stackKey(obj))??[])
+        .every(card=>selectedSet.current.has(card.id));
+      const piece=createPiece(obj,obj.id===selected||selectedSet.current.has(obj.id),objectCoin,stackSelected);
       visuals.current.set(obj.id,piece);
       if(drag.current?.id===obj.id){
         drag.current.visual=piece;
@@ -2509,6 +2549,26 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       piece.scale.set(obj.scale??1);
       (seatGroups?.get(ownerSeat??-1)??board).addChild(piece);
       paintLayers.objects.attach(piece);
+      if(count>1&&['card','deck'].includes(obj.kind)&&
+         (obj.zone!=='DECK'||deckTop.get(pileKey(obj))?.id===obj.id)){
+        const group=stacks.get(stackKey(obj))??[];
+        const button=document.createElement('button');
+        button.type='button';button.className='sennet-stack-count'+(stackSelected?' is-held':'');
+        button.textContent=String(count);
+        button.title='Select all '+count+' cards in this stack';
+        button.setAttribute('aria-label',button.title);
+        button.addEventListener('pointerdown',e=>{e.stopPropagation();restartSelectionIdle.current();});
+        button.addEventListener('click',e=>{
+          e.stopPropagation();
+          const ids=group.map(card=>card.id);
+          const full=ids.every(id=>selectedSet.current.has(id));
+          const rest=[...selectedSet.current].filter(id=>!ids.includes(id));
+          updateSelection(full?rest:[...rest,...ids]);
+          callbacks.current.onSelect(obj.id);
+        });
+        mount.current?.appendChild(button);
+        stackBadges.push({piece,button,size:count});
+      }
       if(obj.tokenCoin){
         const visual=showCoinAboveArtwork(piece,obj.coinText??obj.value??1,
           obj.tokenSign??1,false,obj.color,obj.coinText!==undefined,1,objectCoin);
@@ -2563,7 +2623,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // records which still contain old thumbnail-sized provider URLs.
       const originalUrl=obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||'');
       const url=bestCardImage(originalUrl);
-      if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot){
+      if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot&&
+         !(obj.zone==='DECK'&&deckTop.get(pileKey(obj))?.id!==obj.id)){
         // Reuse DOM card artwork across journal updates, particularly die
         // roll completion. Destroying/recreating every <img> made the ENTIRE
         // tabletop visibly flicker whenever a die stopped tumbling.
@@ -2757,6 +2818,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // They are released only when removed from the game or on unmount.
       clearCoinHover();
       for(const {el} of coinLayers)el.remove();
+      for(const {button} of stackBadges)button.remove();
     };
   },[state,seat,playerName,actorId,selected,selectedIds,readonly,ready,mergeOpacity,mergeHoverMs,playmat,labelScale,bookDesign,bookDock,bookOffset,eyeView,relations,viewport,coinAppearance,diceAppearance,customCoinValue,customCoinText,coinSources,boxClosed,diceFadeMs,diceHoldMs]);
 
