@@ -50,7 +50,13 @@ export function bestCardImage(src:string):string{
  if(!src)return src;
  try{
   const url=new URL(src);
-  if(url.hostname==='cards.scryfall.io'){
+  // Older saved Disney Lorcana decks and locally cached catalogues still
+  // contain the small/normal AVIF URL. Lorcast publishes a full-size
+  // "large" rendition at the same card ID and query string.
+  if(url.hostname==='cards.lorcast.io'){
+   url.pathname=url.pathname.replace(
+    /^\/card\/digital\/(small|normal)\//i,'/card/digital/large/');
+  }else if(url.hostname==='cards.scryfall.io'){
    if(/^\/(small|normal|large)\/(front|back)\//.test(url.pathname)){
     url.pathname=url.pathname.replace(/^\/(small|normal|large)\//,'/png/')
       .replace(/\.jpe?g$/i,'.png');
