@@ -1,6 +1,4 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
-import {createPortal} from 'react-dom';
-import {radialHoverMatrix} from '../lib/actionRadialFit';
+import {useEffect,useRef,useState} from 'react';
 import {RADIAL_ACTIONS,RADIAL_CATEGORIES,radialHit,type RadialAction} from '../lib/radialWheel.ts';
 
 type Props={
@@ -90,11 +88,10 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
   'scale-smaller':'Decrease','scale-original':'Original','scale-bigger':'Increase'
  };
  const centerLabel=hoveredAction?hoveredLabel[hoveredAction]:'Actions';
- // The artwork for each sector can be duplicated visually without cloning
- // its pointer handlers or changing the wheel's original hit geometry.
- const wheelId=useId().replace(/:/g,'');
- const svgRef=useRef<SVGSVGElement|null>(null);
- const magnifierPortalRef=useRef<HTMLDivElement|null>(null);
+ // Hover must magnify the ONE existing sector exactly at its own center:
+ // never create a second SVG, <use>, document.body portal or floating preview.
+ // A transparent stationary hit path keeps the hover target stable while
+ // the visible sector enlarges.
  const [collapsed,setCollapsed]=useState(false);
  const toggleCollapsed=()=>{
    const next=!collapsed;
@@ -154,35 +151,10 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  // Wheel open is tied to one held pointer; visual state is local.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[pointerId,onChoose,onCancel]);
- // The docked radial is an SVG whose viewBox starts at Y=200.
- // getScreenCTM() differs between browsers for a viewBox offset inside a
- // transformed DOM parent; its result previously teleported hover previews.
- // Map the exact rendered SVG rectangle back to our 400-unit artwork, with
- // the 200-unit origin adjustment only for the bottom semicircle.
- // The preview lives under <body>, is pointer-transparent, and preserves
- // its position while the camera or browser viewport is moved.
- useLayoutEffect(()=>{
-  if(!hoveredAction||collapsed)return;
-  let frame=0;
-  const syncMagnifier=()=>{
-   const svg=svgRef.current,portal=magnifierPortalRef.current;
-   if(svg&&portal){
-    const bounds=svg.getBoundingClientRect();
-    const {a,d,e,f}=radialHoverMatrix(bounds,half);
-    if(a>0&&d>0){
-      const matrix=`matrix(${a},0,0,${d},${e},${f})`;
-      if(portal.style.transform!==matrix)portal.style.transform=matrix;
-    }
-   }
-   frame=window.requestAnimationFrame(syncMagnifier);
-  };
-  syncMagnifier();
-  return ()=>window.cancelAnimationFrame(frame);
- },[hoveredAction,collapsed,half]);
  return <div className={'card-radial-wheel'+(collapsed?' is-collapsed':'')+(half?' is-half':'')+(hoveredAction?' has-sector-preview':'')} style={{width:size,height:half?size/2:size,left:(dragOffset?.x??x)-size/2,top:half?y:(dragOffset?.y??y)-size/2,transition:half||dragOffset?'none':'left .38s cubic-bezier(.18,.82,.2,1), top .38s cubic-bezier(.18,.82,.2,1)'}}
   role="dialog" aria-label={'Selected '+count+' cards · radial action wheel'}
   onContextMenu={e=>e.preventDefault()} onPointerDown={e=>e.stopPropagation()} onPointerUp={e=>e.stopPropagation()}>
-  <svg ref={svgRef} viewBox={half?"0 200 400 200":"0 0 400 400"} role="img" aria-label="Position, Scale and State action wheel">
+  <svg viewBox={half?"0 200 400 200":"0 0 400 400"} role="img" aria-label="Position, Scale and State action wheel">
    <g className="sennet-radial-rings" aria-hidden={collapsed} style={{pointerEvents:collapsed?'none':'auto'}}>
    <circle cx={200} cy={200} r={198} fill="#0c1016" fillOpacity=".42"/>
    {RADIAL_CATEGORIES.map((name,i)=>{
@@ -212,7 +184,14 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       onClick={e=>{e.preventDefault();e.stopPropagation();}}
       onKeyDown={e=>{if((e.key==='Enter'||e.key===' ')&&selected){e.preventDefault();onChoose(act.id);}}}
       style={{pointerEvents:'auto'}}>
-     <g id={wheelId+'-'+act.id}>
+     {/* Hit testing stays at the ORIGINAL, unmagnified wedge. The visible
+         wedge is the SAME artwork transformed in place, never duplicated. */}
+     <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
+       fill="transparent" stroke="none" pointerEvents="all"/>
+     <g pointerEvents="none"
+       transform={hoveredAction===act.id&&!collapsed
+         ?`translate(${p.x} ${p.y}) scale(1.45) translate(${-p.x} ${-p.y})`
+         :undefined}>
      <path d={sector(127,192,half?90+i*60+j*20:i*120+j*40,half?90+i*60+(j+1)*20:i*120+(j+1)*40)}
       fill={hot?'#9472d8':selected?'#382853':'#120e1b'}
       stroke={hot?'#f4e2ff':selected?'#9077b1':'#443556'}
@@ -344,22 +323,5 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
       lengthAdjust="spacingAndGlyphs">{centerLabel}</text>
    </g>
   </svg>
-  {hoveredAction&&!collapsed&&typeof document!=='undefined'&&createPortal(
-   <div ref={magnifierPortalRef} className="sennet-radial-hover-top-layer"
-     aria-hidden="true">
-    <svg viewBox="0 0 400 400" width="400" height="400"
-      style={{display:'block',overflow:'visible',pointerEvents:'none'}}>
-     <g className="sennet-sector-magnifier" pointerEvents="none">
-      {RADIAL_ACTIONS.flatMap((actions,i)=>actions.map((item,j)=>{
-       if(item.id!==hoveredAction)return null;
-       const mid=half?90+i*60+j*20+10:i*120+j*40+20;
-       const p=point(157,mid);
-       return <use key={item.id} href={'#'+wheelId+'-'+item.id}
-         pointerEvents="none"
-         transform={`translate(${p.x} ${p.y}) scale(3) translate(${-p.x} ${-p.y})`}/>;
-      }))}
-     </g>
-    </svg>
-   </div>,document.body)}
  </div>;
 }
