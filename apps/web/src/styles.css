@@ -2790,30 +2790,30 @@ body>.reader-backdrop{
  overflow:visible!important;
 }
 
-/* Small Eye-style stack badge. Intentionally FIXED at 16 CSS pixels:
-   its position follows a card but camera zoom never changes its size. */
+/* One unified Eye/Castle control face for stack and card numbers.
+   Its SVG is exactly 34 CSS pixels: all camera/object zoom changes
+   affect its position ONLY, never the control's size or geometry. */
 .sennet-stack-count{
- position:absolute;z-index:125;width:16px;height:16px;min-width:16px;min-height:16px;
+ position:absolute;z-index:125;width:34px!important;height:34px!important;
+ min-width:34px!important;min-height:34px!important;max-width:34px!important;max-height:34px!important;
  display:grid;place-items:center;transform:translate(-50%,-50%)!important;
- transform-origin:center center;
- border:0;padding:0;border-radius:50%;cursor:pointer;touch-action:manipulation;
- background:
-   radial-gradient(circle at 36% 27%,#bea37b 0 7%,transparent 25%),
-   radial-gradient(circle at 42% 36%,#765739 0%,#533722 59%,#201811 88%);
- box-shadow:inset 0 0 0 1px #caac76,
-   inset 0 0 0 2.5px #24180f,inset 0 0 0 3.2px #b49564,
-   0 1px 3px #000a;
- color:#fff0cb;font:800 8px/1 'Inter',system-ui,sans-serif;
- text-shadow:0 1px 1px #070602;
+ transform-origin:center center;flex:none;border:0!important;
+ border-radius:50%;padding:0!important;overflow:visible;
+ cursor:pointer;touch-action:manipulation;
+ background:transparent!important;box-shadow:none!important;
+ color:#fff2cd;font:800 13px/1 'Inter',system-ui,sans-serif;
+}
+.sennet-stack-count svg{
+ display:block;width:34px;height:34px;min-width:34px;min-height:34px;
+ pointer-events:none;overflow:visible;
+ filter:drop-shadow(0 2px 2px #0008);
 }
 .sennet-stack-count:hover,.sennet-stack-count:focus-visible{
  outline:2px solid #f4dc9e;outline-offset:2px;
- filter:brightness(1.18);
+ filter:brightness(1.12);
 }
-.sennet-stack-count.is-held{
- background:radial-gradient(circle at 35% 20%,#9776be,#342143 75%);
- box-shadow:inset 0 0 0 1px #d4b0ff,inset 0 0 0 2.5px #24152e,
-   inset 0 0 0 3.2px #aa7adb,0 1px 3px #000c;
+.sennet-stack-count.is-held svg{
+ filter:drop-shadow(0 0 3px #b98aff) drop-shadow(0 2px 2px #0008);
 }
 .sennet-full-card-peek{
  position:absolute;z-index:1005;inset:0;display:flex;justify-content:center;align-items:center;
