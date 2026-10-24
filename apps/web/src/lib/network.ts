@@ -1,4 +1,4 @@
-import type {Command,EventRecord,GameKind,GameState,Player} from '@sennet/core';
+import type {Command,EventRecord,GameKind,GameState,Player,SharedAppearance} from '@sennet/core';
 
 export interface RoomCallbacks {
   onState:(state:GameState)=>void;
@@ -30,6 +30,8 @@ export class RoomConnection {
   private lastSeq=-1;
   private lastPresence='';
   private failures=0;
+  private appearance:SharedAppearance|null=null;
+  private lastCosmetics='';
   private readonly httpRoot:string;
   private readonly payload:JoinMessage;
   private readonly handlers:RoomCallbacks;
@@ -43,12 +45,15 @@ export class RoomConnection {
   }
   private announce(joined:RoomMessage,viaHttp=false){
     this.joined=true;this.failures=0;
+    if(this.appearance)this.publishAppearance(this.appearance);
     this.handlers.onJoined?.(joined.seat??null,joined.room||this.payload.room);
     this.handlers.onStatus(joined.seat==null?'Watching table · all seats occupied':
       'Online · seat '+(joined.seat+1)+(viaHttp?' · VPN-compatible mode':''));
   }
   private receiveSnapshot(state:GameState){
-    if(state.seq!==this.lastSeq){
+    const cosmetics=JSON.stringify(state.appearances||{});
+    if(state.seq!==this.lastSeq||cosmetics!==this.lastCosmetics){
+      this.lastCosmetics=cosmetics;
       this.lastSeq=state.seq;
       this.handlers.onState(state);
     }
@@ -136,6 +141,18 @@ export class RoomConnection {
     }
     const delay=this.failures?Math.min(12000,1200*Math.pow(1.6,Math.min(5,this.failures))):LOOP;
     this.tick=window.setTimeout(()=>this.poll(!this.joined),delay);
+  }
+  publishAppearance(appearance:SharedAppearance){
+    this.appearance=appearance;
+    if(!this.joined)return;
+    if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN){
+      this.ws.send(JSON.stringify({type:'appearance',appearance}));return;
+    }
+    if(this.mode==='http'){
+      void this.post('appearance',{appearance}).then(msg=>{
+        if(!this.stopped&&msg.state)this.receiveSnapshot(msg.state);
+      }).catch(error=>this.handlers.onError('Could not sync appearance: '+String(error)));
+    }
   }
   requestSnapshot(){
     if(this.mode==='websocket'&&this.ws?.readyState===WebSocket.OPEN)
