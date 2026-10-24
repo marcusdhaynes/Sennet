@@ -329,13 +329,18 @@ function drawTcgMats(
             const selectedTheme=remoteAppearance?.dice?
               DICE_THEMES.find(theme=>theme.id===resolveDiceTheme(
                 normalizeDiceAppearance(remoteAppearance.dice),sides)):undefined;
+            // Keep this die AND its caption within one drawer-local object:
+            // no independently sorted label layer or unmasked text siblings.
+            const source=new Container();
+            source.position.set(locations[index].x,locations[index].y);
+            source.eventMode='none';
             const die=makeDie(sides,undefined,0,selectedTheme?.base);
-            die.position.set(locations[index].x,locations[index].y);
             die.scale.set(DICE_SOURCE_RACK_SCALE);
-            die.eventMode='none';drawerGroup.addChild(die);
+            source.addChild(die);
             const mark=drawerLabel(diceLabel(sides));
-            mark.position.set(locations[index].x,locations[index].y+DICE_RACK_LABEL_OFFSET);
-            drawerGroup.addChild(mark);
+            mark.position.set(0,DICE_RACK_LABEL_OFFSET);
+            source.addChild(mark);
+            drawerGroup.addChild(source);
           });
           const c=remoteAppearance?.coin;
           const coinStyle:CoinAppearance={
@@ -343,11 +348,15 @@ function drawTcgMats(
             shine:c?.shine??65,bevel:c?.bevel??50,size:c?.size??1
           };
           [remoteAppearance?.coinText??'1',remoteAppearance?.coinValue??10].forEach((value,index)=>{
+            const source=new Container();
+            source.position.set(rightX+(index===0?-15:15),top+25);
+            source.eventMode='none';
             const coin=makeCoin(value,coinStyle,true,1,index===0?'#c4d8d9':'#d8b979',index===0);
-            coin.position.set(rightX+(index===0?-15:15),top+25);
-            coin.scale.set(.68);drawerGroup.addChild(coin);
+            coin.scale.set(.68);source.addChild(coin);
             const mark=drawerLabel(index===0?'∞':'∑',index===0?17.6:8.8);
-            mark.position.set(coin.x,top+43);drawerGroup.addChild(mark);
+            mark.position.set(0,18);
+            source.addChild(mark);
+            drawerGroup.addChild(source);
           });
         }
 
@@ -2045,7 +2054,10 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         quantity.eventMode='none';
         source.addChild(quantity);
         diceBadges.current.set(sides,{body:quantity,count});
-        mat.addChild(source);paintLayers.objects.attach(source);
+        // Sources and their fallback labels must share their own wooden
+        // drawer's accessory paint layer; the real 3D die and caption use
+        // one 3D pass in Dice3DStatic.
+        mat.addChild(source);
         diceSources.current.set(sides,source);
         staticEntries.push({id:'source-'+sides,piece:source,sides,source:true,
           quantity:badge,themeId:resolveDiceTheme(diceAppearance,sides)});
@@ -2106,8 +2118,9 @@ export default function TableCanvas({diceHoldMs,diceFadeMs,latestAction,canUndo,
         const highlight=new Graphics();
         highlight.scale.set(coinAppearance.size*1.08*sourceScale);
         highlight.eventMode='none';source.addChild(highlight);
+        // The Pixi coin and its lettering remain in the drawer accessory
+        // layer together. HTML coin art follows the same source transform.
         mat.addChild(source);
-        paintLayers.objects.attach(source);
         const coinOverlay=showCoinAboveArtwork(source,isEditable?faces[index]:value,1,true,color,isEditable,sourceScale);
         if(readonly)return;
         source.eventMode='static';source.cursor='pointer';
