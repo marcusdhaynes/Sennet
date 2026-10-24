@@ -306,7 +306,23 @@ export default function App(){
     const command:Command={id:createId(),actor:isConnected?actor:'local',type,
       payload:type==='THROW_TRAY'||type==='REROLL_DIE'
         ?{...payload,expiresAt:Date.now()+THROWN_DIE_LIFETIME_MS}:payload};
-    if(isConnected){try{connection.current?.send(command);}catch(e){inform(String(e));}return;}
+    if(isConnected){
+      // Apply movement optimistically on this client's playmat, instead of
+      // waiting for the relay round trip to snap a just-released card.
+      // The next authoritative onState always reconciles the preview.
+      const immediate=type==='MOVE'||type==='MOVE_STACK'||
+        (type==='BATCH_CARD_ACTION'&&payload.action==='move');
+      const before=current.current;
+      if(immediate){
+        try{
+          const preview=applyCommand(before,command);
+          current.current=preview;setGame(preview);
+        }catch{/* The server will validate and resolve the command. */}
+      }
+      try{connection.current?.send(command);}
+      catch(e){if(immediate){current.current=before;setGame(before);}inform(String(e));}
+      return;
+    }
     try{
       const before=current.current;
       const next=applyCommand(before,command);current.current=next;setGame(next);
