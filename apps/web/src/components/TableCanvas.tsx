@@ -99,7 +99,7 @@ import {expandDiceSources} from '../lib/diceSourceExpansion';
 import {DICE_SOURCE_RACK_SCALE,DICE_RACK_LABEL_OFFSET,diceRackLocations} from '../lib/diceCoordinates';
 import {bookOpenPoseX,bookSavedOffset,drawerInnerWell,isBookWithinDrawer,isBookCenterWithinDrawer} from '../lib/bookDrawerPlacement';
 import {fitActionScreenToWheel,actionScreenContactCenter,ACTION_LCD_HEIGHT} from '../lib/actionScreenFit';
-import {fitMatAttachedRadial,fitDockedRadial,fitSelfMatWithHud} from '../lib/actionRadialFit';
+import {fitMatAttachedRadial,fitSelfMatWithHud,fitBattleRadialZoom} from '../lib/actionRadialFit';
 import {eyeHitBounds} from '../lib/eyeHitArea';
 import {TABLE_PAINT_ORDER,playmatPaintLayer} from '../lib/castlePaintOrder';
 import {DICE_THEMES,resolveDiceTheme,normalizeDiceAppearance,type DiceAppearance} from '../lib/diceThemes';
@@ -130,6 +130,51 @@ const COLORS={wood:0x79593b,woodDark:0x342b23,felt:0x183d39,line:0x426761,gold:0
 const rgb=(s:string)=>parseInt(s.replace('#',''),16)||0x95b7b2;
 /** Unified walnut/brass button casing, matching the actual wooden side drawers
  * and the action-screen frame. Preserve original radii, hitboxes and gestures. */
+/** The same five concentric Eye/Castle walnut rings, at a fixed 34px.
+ * The stack's digit is the only difference. No camera-scaled layer. */
+function createEyeStyleCounter(value:number,finish:string,selectable=true,held=false):HTMLButtonElement{
+  const p=drawerPalette(finish),ns='http://www.w3.org/2000/svg';
+  const button=document.createElement('button');
+  button.type='button';
+  button.className='sennet-stack-count'+(held?' is-held':'');
+  button.setAttribute('aria-label',selectable
+    ?'Select all '+value+' cards in this stack'
+    :'Card counter: '+value);
+  button.title=button.getAttribute('aria-label')??'Card counter';
+  if(!selectable){button.tabIndex=-1;button.style.pointerEvents='none';}
+  const svg=document.createElementNS(ns,'svg');
+  svg.setAttribute('viewBox','0 0 34 34');
+  svg.setAttribute('width','34');svg.setAttribute('height','34');
+  svg.setAttribute('aria-hidden','true');
+  const circle=(cx:number,cy:number,r:number,fill:string,stroke?:string,width?:number)=>{
+    const node=document.createElementNS(ns,'circle');
+    node.setAttribute('cx',String(cx));node.setAttribute('cy',String(cy));
+    node.setAttribute('r',String(r));node.setAttribute('fill',fill);
+    if(stroke){node.setAttribute('stroke',stroke);node.setAttribute('stroke-width',String(width??1));}
+    svg.appendChild(node);
+  };
+  circle(17,18,17,p.deep);
+  circle(17,17,16,held?p.highlight:p.base);
+  circle(17,17,15.1,'none',p.hardware,1.55);
+  circle(17,17,13,'none',p.deep,2);
+  circle(17,17,11,'none',p.highlight,.8);
+  const glint=document.createElementNS(ns,'path');
+  glint.setAttribute('d','M 8.7 8.5 A 11 11 0 0 1 20.7 6.7');
+  glint.setAttribute('fill','none');glint.setAttribute('stroke',p.hardware);
+  glint.setAttribute('stroke-width','1.2');glint.setAttribute('opacity','.85');
+  svg.appendChild(glint);
+  const text=document.createElementNS(ns,'text');
+  const num=String(value);
+  text.textContent=num;text.setAttribute('x','17');text.setAttribute('y','18');
+  text.setAttribute('text-anchor','middle');text.setAttribute('dominant-baseline','middle');
+  text.setAttribute('font-size',num.length>=4?'8':num.length===3?'10.5':'13');
+  text.setAttribute('font-family','Inter,system-ui,sans-serif');
+  text.setAttribute('font-weight','800');text.setAttribute('fill','#fff1d0');
+  text.setAttribute('stroke',p.deep);text.setAttribute('stroke-width','.45');
+  text.setAttribute('paint-order','stroke');
+  svg.appendChild(text);button.appendChild(svg);
+  return button;
+}
 function woodenControl(radius:number,finish:string,active=false):Graphics{
   const p=drawerPalette(finish);
   return new Graphics()
@@ -1230,16 +1275,8 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance,i
     const lock=label('LOCKED',8,0xffd496,'bold');
     lock.position.set(0,51);lock.eventMode='none';box.addChild(lock);
   }
-  if((o.counters??0)>0){
-    const counter=new Container();
-    counter.position.set(27,-37);counter.eventMode='none';
-    counter.addChild(new Graphics().circle(0,0,14)
-      .fill({color:0x1f3d31,alpha:.98})
-      .stroke({color:0xf1d39a,width:2}));
-    const number=label(String(o.counters),13,0xffebbc,'bold');
-    number.eventMode='none';counter.addChild(number);
-    box.addChild(counter);
-  }
+  // Card counts use the shared fixed-size Eye control overlay below.
+  // Never draw a Pixi counter here: it would magnify with the camera.
   return box;
 }
 /** In opposing view, player identification retracts off-screen while a
@@ -1443,6 +1480,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   },[handHoldView]);
   const dockedWheelRef=useRef<HTMLDivElement|null>(null);
   const dockedWheelGeometry=useRef({x:0,y:0,size:0});
+  const battleMinZoom=useRef(1);
   const eyeHitTarget=useRef<Container|null>(null);
   const actionScreenLatest=useRef({left:0,y:0,width:0,heightScale:1,visible:false});
   const session=useRef<{app:Application;scene:Container;board:Container}|null>(null);
@@ -1955,14 +1993,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           // Original radial diameter = 30% of the visible playmat width.
           // Measure the real transformed mat, so 1v1/Castle use the same
           // relationship even when the seat has a separate view transform.
-          const raw=fitMatAttachedRadial(
+          // ALWAYS use the mat-projected center and original size.
+          // Never clamp, slide, or shrink the radial to fit the viewport.
+          // Eye/Castle camera framing is responsible for its visibility.
+          const next=fitMatAttachedRadial(
             projected.x,projected.y,matScreenWidth,w,h);
-          // In Eye/self view the camera fits the complete radial. For
-          // manual extreme zooms and battlefield layouts, clamp only as an
-          // emergency viewport fallback so actions are never unreachable.
-          const next=raw.y+raw.size/2>h-8||raw.x-raw.size/2<8||
-            raw.x+raw.size/2>w-8||raw.y<8
-              ?fitDockedRadial(raw.x,raw.y,raw.size,w,h,8):raw;
           dockedWheelGeometry.current=next;
           const dock=dockedWheelRef.current;
           if(dock){
@@ -2207,7 +2242,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // Stack badges live ABOVE the high-resolution HTML card artwork.
     // They remain independent hit targets when the underlying 99 cards
     // are efficiently culled from Pixi and the browser's image compositor.
-    const stackBadges:{piece:Container;button:HTMLButtonElement;size:number}[]=[];
+    const stackBadges:{piece:Container;button:HTMLButtonElement;size:number;offset:Point}[]=[];
     const shuffleFx:{piece:Container;el:HTMLDivElement}[]=[];
     // Only the VISUAL copy is magnified. Every source or placed coin keeps
     // its Pixi pointer hit area, center click and drag behavior unchanged.
@@ -2497,14 +2532,13 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         el.style.left=(p.x*sx)+'px';
         el.style.top=(p.y*sy)+'px';
       }
-      for(const {piece,button,size} of stackBadges){
+      for(const {piece,button,size,offset} of stackBadges){
         if(piece.destroyed||!button.isConnected)continue;
-        // Follow the card's position only. The counter is a screen-space
-        // control, never transformed with card, seat or camera zoom.
-        const p=piece.toGlobal(new Point(29,41));
+        // Project the attachment point, never the size.
+        const p=piece.toGlobal(offset);
         button.style.left=(p.x*sx)+'px';
         button.style.top=(p.y*sy)+'px';
-        button.style.display=size>1?'grid':'none';
+        button.style.display=size>0?'grid':'none';
       }
       for(const {piece,img} of artLayers){
         if(piece.destroyed||!img.isConnected)continue;
@@ -2649,11 +2683,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(count>1&&['card','deck'].includes(obj.kind)&&
          (obj.zone!=='DECK'||deckTop.get(pileKey(obj))?.id===obj.id)){
         const group=stacks.get(stackKey(obj))??[];
-        const button=document.createElement('button');
-        button.type='button';button.className='sennet-stack-count'+(stackSelected?' is-held':'');
-        button.textContent=String(count);
-        button.title='Select all '+count+' cards in this stack';
-        button.setAttribute('aria-label',button.title);
+        const button=createEyeStyleCounter(count,playmat.sideBoxStyle??'walnut',true,stackSelected);
         button.addEventListener('pointerenter',()=>clearCoinHover());
         button.addEventListener('pointermove',()=>clearCoinHover());
         button.addEventListener('pointerdown',e=>{
@@ -2670,7 +2700,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           callbacks.current.onSelect(obj.id);
         });
         mount.current?.appendChild(button);
-        stackBadges.push({piece,button,size:count});
+        stackBadges.push({piece,button,size:count,offset:new Point(29,41)});
+      }
+      if((obj.counters??0)>0){
+        const button=createEyeStyleCounter(obj.counters!,playmat.sideBoxStyle??'walnut',false);
+        mount.current?.appendChild(button);
+        stackBadges.push({piece,button,size:obj.counters!,offset:new Point(27,-37)});
       }
       if(obj.tokenCoin){
         const visual=showCoinAboveArtwork(piece,obj.coinText??obj.value??1,
