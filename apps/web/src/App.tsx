@@ -250,7 +250,7 @@ export default function App(){
   const snapshotRoom=useRef('');
   const appearanceRef=useRef<()=>SharedAppearance>(()=>({}));
   appearanceRef.current=()=>({playmat,dice:diceAppearance,coin:coinAppearance,
-    coinText:customCoinText,coinValue:customCoinValue,labelScale});
+    coinText:customCoinText,coinValue:customCoinValue,labelScale,bookDesign,bookDock,bookOffset});
   const activeObject=game.objects.find(o=>o.id===selected);
   const replayIndex=replayAt===null?-1:history.findIndex(h=>h.seq===replayAt);
   const viewedGame=replayAt===null?game:expireThrownDice(
@@ -428,7 +428,7 @@ export default function App(){
   useEffect(()=>{try{localStorage.setItem('sennet.mat.label-scale.v1',String(labelScale));}catch{}},[labelScale]);
   useEffect(()=>{
     connection.current?.publishAppearance(appearanceRef.current());
-  },[playmat,diceAppearance,coinAppearance,customCoinText,customCoinValue,labelScale]);
+  },[playmat,diceAppearance,coinAppearance,customCoinText,customCoinValue,labelScale,bookDesign,bookDock,bookOffset]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.custom.text.v1',customCoinText);}catch{}},[customCoinText]);
   useEffect(()=>{try{localStorage.setItem('sennet.coin.appearance.v1',JSON.stringify(coinAppearance));}catch{}},[coinAppearance]);
   useEffect(()=>{try{localStorage.setItem('sennet.dice.appearance.v1',JSON.stringify(diceAppearance));}catch{}},[diceAppearance]);
