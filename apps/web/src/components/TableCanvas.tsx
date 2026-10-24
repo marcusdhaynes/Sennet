@@ -1381,6 +1381,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const rerollDieNow=useRef<(id:string,x:number,y:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const dieShownAt=useRef(new Map<string,{fingerprint:string;at:number}>());
   const artworkCache=useRef(new Map<string,{img:HTMLImageElement;url:string}>());
+  const play00Conceal=useRef(new Map<string,boolean>());
+  const previousHandState=useRef<GameState|null>(null);
   const lastShuffleAnimated=useRef<GameState|null>(null);
   const rollBubbles=useRef(new Map<string,{node:HTMLDivElement;timer:number}>());
   const showRollBubble=useRef<(id:string,result?:string)=>void>(()=>{});
@@ -2064,6 +2066,23 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
     paintLayers.objects.attach(snapOverlay);snapHighlight.current=snapOverlay;
+    // Play 00 face state is presentation-only; retain the real card's
+    // canonical direction in game state for normal hand mode and replay.
+    if(previousHandState.current!==state){
+      const before=new Map((previousHandState.current?.objects??[])
+        .map(card=>[card.id,card]));
+      for(const card of state.objects){
+        if(card.zone!=='HAND'){play00Conceal.current.delete(card.id);continue;}
+        const prior=before.get(card.id);
+        if(prior?.zone==='HAND')continue;
+        if(prior){
+          const pocket=tcgDropZone(prior.x,prior.y,prior.matSeat??seat);
+          const fromReserve=prior.zone==='TABLE'&&pocket?.row===1&&pocket?.column===0;
+          play00Conceal.current.set(card.id,prior.zone==='DECK'||fromReserve||!prior.faceUp);
+        }else play00Conceal.current.set(card.id,true);
+      }
+      previousHandState.current=state;
+    }
     // Every TCG seat has its own physical DECK pocket; sending a card
     // to the top/bottom via gestures must not leave an extra visible card
     // because its source ID uses a different prefix than that deck.
@@ -2552,7 +2571,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const count=stacks.get(stackKey(obj))?.length??1;
       const stackSelected=count>1&&(stacks.get(stackKey(obj))??[])
         .every(card=>selectedSet.current.has(card.id));
-      const piece=createPiece(handPlayMode&&obj.zone==='HAND'&&obj.matSeat===seat
+      const faceDownInPlay00=handPlayMode&&obj.zone==='HAND'&&obj.matSeat===seat&&
+        (play00Conceal.current.get(obj.id)??true);
+      const piece=createPiece(faceDownInPlay00
         ?{...obj,faceUp:false}:obj,
         obj.id===selected||selectedSet.current.has(obj.id),objectCoin,stackSelected);
       visuals.current.set(obj.id,piece);
@@ -2639,7 +2660,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // through projectForActor and cannot recover private front art.
       // Render native full-resolution art, including saved/imported card
       // records which still contain old thumbnail-sized provider URLs.
-      const play00Concealed=handPlayMode&&obj.zone==='HAND'&&obj.matSeat===seat;
+      const play00Concealed=faceDownInPlay00;
       const originalUrl=!play00Concealed&&obj.faceUp ? (frame||obj.faceUrl||'') : (obj.backUrl||'');
       const url=bestCardImage(originalUrl);
       if(url&&(obj.kind==='card'||obj.kind==='deck')&&imagesRoot&&
