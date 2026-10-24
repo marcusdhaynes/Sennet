@@ -1019,7 +1019,7 @@ const deck = (prefix: string, x: number, y: number, count: number, owner?: strin
 const object = (id: string, kind: ObjectKind, name: string, x: number, y: number, color: string, extra: Partial<TableObject> = {}): TableObject => ({
   id, kind, name, x:x+BOARD_CENTER-500, y:y+BOARD_CENTER-330, color, zone: 'TABLE', order: 0, rotation: 0, faceUp: true, ...extra
 });
-export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameState {
+export function createGame(kind: GameKind = 'sandbox', roomId = 'local', demoCards = true): GameState {
   const shared = [
     object('token-moon','token','Moon',425,280,'#8fbdc1'),
     object('token-sun','token','Sun',560,355,'#d9aa73'),
@@ -1030,14 +1030,19 @@ export function createGame(kind: GameKind = 'sandbox', roomId = 'local'): GameSt
   const presets: Record<GameKind, TableObject[]> = {
     sandbox: shared,
     boardgame: [object('game-board','board','Checkered board',500,330,'#ad9879',{locked:true}), ...Array.from({length:8},(_,i)=>object(`pawn-${i}`,'token',`Piece ${i+1}`,370+i*37,300,i%2?'#bf9d70':'#86b6a8'))],
-    tcg: [],
+    tcg: [
+      ...deck('alpha',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(0).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:0})),
+      ...deck('beta',0,0,12).map(o=>({...o,...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.x,tcgMatCells(6).find(c=>c.row===1&&c.column===2)!.y)!,matSeat:6})),
+      object('hero-a','card','Guardian',500,330,'#6baaa6',{...tcgSnapPoint(tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(0).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:0}),
+      object('hero-b','card','Invoker',500,330,'#ba8ab6',{...tcgSnapPoint(tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.x,tcgMatCells(6).find(c=>c.row===2&&c.column===1)!.y)!,matSeat:6})
+    ],
     rpg: [object('map','board','Campaign Map',500,330,'#538175',{locked:true}),object('hero','miniature','Hero',460,290,'#d9c391'),object('enemy','miniature','Goblin',570,367,'#b69e89'),object('rpg-die','die','D20',340,440,'#dce3df',{sides:20,value:17})],
     wargame: [object('map','board','Battlefield',500,330,'#647e60',{locked:true}),...Array.from({length:6},(_,i)=>object(`soldier-${i}`,'miniature',`Unit ${i+1}`,345+60*(i%3),235+150*Math.floor(i/3),i<3?'#bd9985':'#83b5a6'))],
     dice: [4,6,8,10,12,20].map((sides,i)=>object(`die-${sides}`,'die',`D${sides}`,290+i*82,340,i%2?'#edc890':'#c1c9e9',{sides,value:1})),
     party: [object('prompt-card','card','Your turn',500,320,'#e8bd77'),...shared.slice(0,2)],
     custom: []
   };
-  return { version:1, roomId, kind, mode:'sandbox', seq:0, turnSeat:0, round:1, objects:presets[kind], players:[], message:'Table ready. Your rules, your world.' };
+  return { version:1, roomId, kind, mode:'sandbox', seq:0, turnSeat:0, round:1, objects:kind==='tcg'&&!demoCards?[]:presets[kind], players:[], message:'Table ready. Your rules, your world.' };
 }
 function textValue(v: unknown, max = 120): string { return String(v ?? '').slice(0,max); }
 function safeUrl(v: unknown): string | undefined {
