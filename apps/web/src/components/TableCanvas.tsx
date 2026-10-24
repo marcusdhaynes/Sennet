@@ -1235,7 +1235,10 @@ function createPiece(o:TableObject,isSelected:boolean,coinStyle:CoinAppearance,i
   shadow.eventMode='none';box.addChild(shadow);
   if(o.tokenCoin){
     box.hitArea=new Circle(0,0,17*coinStyle.size*1.08);
-    box.addChild(makeCoin(o.coinText??o.value??1,coinStyle,false,o.tokenSign??1,o.color,o.coinText!==undefined));
+    const artwork=makeCoin(o.coinText??o.value??1,coinStyle,false,o.tokenSign??1,o.color,o.coinText!==undefined);
+    artwork.eventMode='none';
+    for(const child of artwork.children)child.eventMode='none';
+    box.addChild(artwork);
     if(isSelected)box.addChild(new Graphics().circle(0,0,18*coinStyle.size*1.08).stroke({color:0x9effee,width:2.2}));
   }else if(o.kind==='deck-box'){
     // Keep its clickable footprint precise; other tabletop pieces
@@ -2593,10 +2596,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           coinOverlay.dataset.hover=String(side);
         };
         source.on('pointerover',e=>{
-          highlightSide(e.global);
+          coinHighlight(highlight,0);
+          coinOverlay.dataset.hover='0';
           setCoinHover(source,coinOverlay);
         });
-        source.on('pointermove',e=>highlightSide(e.global));
+        // Treat the entire coin as one hover target; switching regions inside
+        // its face must not repeatedly invalidate the magnified preview.
         source.on('pointerout',()=>{
           coinHighlight(highlight,0);
           coinOverlay.dataset.hover='0';
@@ -2919,11 +2924,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       }
       const old=oldLocations.current.get(obj.id);
       // A physically settled die must remain EXACTLY where it landed.
+      // Never tween card position on state arrival: release and zone snap are immediate.
       // A completed drag/drop must never interpolate backward from a stale
       // position: the pointer already moved its sprite there in real time.
       // Other remote/state-initiated moves may still use a short ease.
       const locallyDropped=recentLocalDrops.current.has(obj.id);
-      if(!skipMassAnimations&&!locallyDropped&&!obj.throwDice&&old &&
+      if(false && !skipMassAnimations&&!locallyDropped&&!obj.throwDice&&old &&
          (Math.abs(old.x-obj.x)>2 || Math.abs(old.y-obj.y)>2)){
         const start=performance.now(),duration=95;
         const animate=(now:number)=>{
