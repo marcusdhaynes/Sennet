@@ -63,6 +63,12 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
  const [dragOffset,setDragOffset]=useState<{x:number;y:number}|null>(null);
  const [category,setCategory]=useState<number|null>(null);
  const [hoveredAction,setHoveredAction]=useState<RadialAction|null>(null);
+ const hoveredLabel:Record<RadialAction,string>={
+  'rotate-cw':'+45°','tap-toggle':tapLabel,'rotate-ccw':'−45°',
+  'shuffle':'Shuffle','flip':'Flip','reveal':'Reveal',
+  'scale-smaller':'Decrease','scale-original':'Original','scale-bigger':'Increase'
+ };
+ const centerLabel=hoveredAction?hoveredLabel[hoveredAction]:'Actions';
  // The artwork for each sector can be duplicated visually without cloning
  // its pointer handlers or changing the wheel's original hit geometry.
  const wheelId=useId().replace(/:/g,'');
@@ -303,7 +309,11 @@ export default function CardRadialWheel({x,y,size,count,allLocked,pointerId,onCh
      }}
      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleCollapsed();clearHighlight();}}}>
    <circle cx="200" cy="200" r="64" fill="#1c142c" stroke="#ad94cf" strokeWidth={collapsed?5:3}/>
-   <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800" fontSize={half?21:22} textAnchor="middle">{count} Selected</text>
+   <text x="200" y={half?225:201} fill="#fff6e9" fontWeight="800"
+      fontSize={centerLabel.length>8?18:half?21:22}
+      textAnchor="middle" dominantBaseline="middle"
+      textLength={centerLabel.length>9?112:undefined}
+      lengthAdjust="spacingAndGlyphs">{centerLabel}</text>
    </g>
   </svg>
   {hoveredAction&&!collapsed&&typeof document!=='undefined'&&createPortal(
