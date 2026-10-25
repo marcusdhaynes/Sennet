@@ -95,6 +95,7 @@ const coinSector=(index:number)=>{
 import {makeDie,DICE_TYPES,diceLabel} from './DiceArt';
 import type {StaticDice3DRenderer,StaticDiePlacement} from '../lib/Dice3DStatic';
 import {roll3DDice} from '../lib/Dice3D';
+import {measureDieRelease,type DiePointerSample} from '../lib/diceThrowEngine';
 import {formatDiceSelection} from '../lib/actionDisplay';
 import {fallbackDiceResults,type RollFallbackResult} from '../lib/diceFallback';
 import {expandDiceSources} from '../lib/diceSourceExpansion';
@@ -1432,7 +1433,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const rerollPointer=useRef<{
     pointerId:number;id:string;x:number;y:number;lastX:number;lastY:number;
     at:number;held:boolean;timer:number;piece:Container;
-    oldX:number;oldY:number
+    oldX:number;oldY:number;history:DiePointerSample[]
   }|null>(null);
   const rerollDieNow=useRef<(id:string,x:number,y:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
   const dieShownAt=useRef(new Map<string,{fingerprint:string;at:number}>());
@@ -3150,7 +3151,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             const held={
               pointerId:e.pointerId,id:obj.id,x:e.clientX,y:e.clientY,
               lastX:e.clientX,lastY:e.clientY,at:performance.now(),
-              held:false,timer:0,piece,oldX:piece.x,oldY:piece.y
+              held:false,timer:0,piece,oldX:piece.x,oldY:piece.y,
+              history:[{x:e.clientX,y:e.clientY,t:performance.now()}]
             };
             held.timer=window.setTimeout(()=>{
               if(rerollPointer.current!==held)return;
@@ -3372,25 +3374,16 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(!commit)return;
       const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
       if(!d.held&&Math.hypot(dx,dy)<10){addDiceCount(d.sides);return;}
-      // Release velocity is measured from the most recent pointer motion,
-      // not the entire distance dragged since pickup. Stopping before release
-      // therefore drops straight down, while a last-moment flick follows its
-      // actual direction (both horizontal and vertical).
-      const now=performance.now();
-      // Use the FINAL 50 ms of motion, not a 140 ms averaged drag.
-      // A change in direction at the end of the gesture must determine
-      // the throw's launch vector; older movement can otherwise reverse it.
-      const previous=d.history.filter(point=>now-point.t<=50);
-      const base=previous[0]??d.history[d.history.length-1];
-      const aimX=e.clientX-base.x,aimY=e.clientY-base.y;
-      const gestureMs=Math.max(16,now-base.t);
-      const releaseSpeed=Math.hypot(aimX,aimY)/gestureMs;
-      const flick=d.held&&now-d.lastAt<95&&releaseSpeed>=.48&&
-        Math.hypot(aimX,aimY)>=12;
+      // Interpret the final meaningful pointer trajectory, cutting off
+      // any earlier movement when the hand reverses. The same estimator
+      // is used for rerolls; stationary releases always drop vertically.
+      const gesture=measureDieRelease(d.history,
+        {x:e.clientX,y:e.clientY},performance.now());
+      const flick=d.held&&gesture.flick;
       const canvasRect=session.current?.app.canvas.getBoundingClientRect();
       if(!canvasRect)return;
-      throwDiceNow.current(d.sides,flick?aimX:0,flick?aimY:0,
-        flick?gestureMs:120,
+      throwDiceNow.current(d.sides,flick?gesture.dx:0,flick?gesture.dy:0,
+        flick?gesture.durationMs:120,
         {x:e.clientX-canvasRect.left,y:e.clientY-canvasRect.top},
         !flick);
     };
@@ -3430,6 +3423,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const active=rerollPointer.current;
       if(!active||active.pointerId!==e.pointerId)return;
       active.lastX=e.clientX;active.lastY=e.clientY;
+      const sampleTime=performance.now();
+      active.history.push({x:e.clientX,y:e.clientY,t:sampleTime});
+      while(active.history.length>2&&active.history[1].t<sampleTime-130)
+        active.history.shift();
       if(!active.held)return;
       const current=session.current,piece=active.piece;
       if(!current||piece.destroyed||!piece.parent)return;
@@ -3462,9 +3459,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         showRollBubble.current(active.id);
         return;
       }
-      const elapsed=Math.max(80,performance.now()-active.at);
-      const dx=e.clientX-active.x,dy=e.clientY-active.y;
-      rerollDieNow.current(active.id,e.clientX,e.clientY,dx,dy,elapsed);
+      const gesture=measureDieRelease(active.history,
+        {x:e.clientX,y:e.clientY},performance.now());
+      rerollDieNow.current(active.id,e.clientX,e.clientY,
+        gesture.flick?gesture.dx:0,gesture.flick?gesture.dy:0,
+        gesture.flick?gesture.durationMs:120);
     };
     window.addEventListener('pointermove',move);
     window.addEventListener('pointerup',release);
