@@ -3009,13 +3009,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         piece.on('pointerupoutside',()=>clearCoinHover(piece));
         piece.on('pointercancel',()=>clearCoinHover(piece));
       }
-      if(obj.throwDice){
+      if(obj.throwDice||obj.kind==='die'&&obj.description==='Placed die'){
+        const placed=!obj.throwDice;
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
           heads+'H/'+((obj.throwQuantity??1)-heads)+'T'):String(obj.throwTotal??obj.value??1);
         const signature=(obj.throwRolls??[]).join(',')+'|'+obj.throwTotal;
         const previousRoll=dieShownAt.current.get(obj.id);
-        if(!previousRoll||previousRoll.fingerprint!==signature){
+        if(!placed&&(!previousRoll||previousRoll.fingerprint!==signature)){
           dieShownAt.current.set(obj.id,{fingerprint:signature,at:Date.now()});
           queueMicrotask(()=>showRollBubble.current(obj.id));
         }
@@ -3025,7 +3026,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           ?obj.throwExpiresAt-THROWN_DIE_LIFETIME_MS
           :dieShownAt.current.get(obj.id)?.at??Date.now();
         staticEntries.push({id:obj.id,piece,sides:obj.sides??6,
-          shownAt,fadeAfterMs:Math.max(0,diceFadeMs-850),
+          ...(placed?{}:{shownAt,fadeAfterMs:Math.max(0,diceFadeMs-850)}),
           themeId:resolveDiceTheme(objectDice,obj.sides??6),quaternion:obj.throwQuaternion,
           altitude:obj.throwAltitude,
           quantity:obj.throwQuantity,result:display});
