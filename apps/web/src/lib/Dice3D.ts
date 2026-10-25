@@ -40,6 +40,8 @@ export interface Dice3DOptions {
   reroll?:boolean;
   /** Released gently from a held position: gravity only, no forced throw. */
   gentleDrop?:boolean;
+  /** Source was picked up and released at this exact screen coordinate. */
+  heldRelease?:boolean;
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
   /** A GPU/context/physics failure must never strand the roll in flight. */
@@ -160,11 +162,13 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     fixed.position.set(p.x,h-p.y,12);world.addBody(fixed);
   }
   const aimLength=Math.hypot(opts.aimX,opts.aimY);
-  // Make hand throws respond with more power, especially on short flicks.
-  const throwSpeed=opts.gentleDrop?0:THREE.MathUtils.clamp(
-    aimLength/Math.max(.105,Math.min(.75,opts.durationMs/1000))*1.42,190,1180);
-  const vx=aimLength>5?opts.aimX/aimLength:1,
-    vy=aimLength>5?-opts.aimY/aimLength:.19;
+  // A held drop has ZERO horizontal launch. A throw follows the last
+  // pointer-movement vector (not the start-to-release drag displacement).
+  const gentleDrop=opts.gentleDrop===true;
+  const throwSpeed=gentleDrop?0:THREE.MathUtils.clamp(
+    aimLength/Math.max(.035,Math.min(.24,opts.durationMs/1000))*1.08,180,1250);
+  const vx=aimLength>1?opts.aimX/aimLength:0;
+  const vy=aimLength>1?-opts.aimY/aimLength:0;
   const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
     body:CANNON.Body;faces:NumberedFace[];shadow:THREE.Mesh;screenRadius:number}[]=[];
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=64;shadowCanvas.height=64;
@@ -198,7 +202,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     }
     // The rim remains physically solid; release on the aim-facing side.
     // Inward flicks from the right drawer must launch LEFT into play.
-    if(!opts.reroll&&!opts.gentleDrop){
+    if(!opts.reroll&&!opts.heldRelease&&!gentleDrop){
       const launch=spawnOutsideTray(startX,startY,r,opts.trays,opts.aimX,opts.aimY);
       startX=launch.x;startY=launch.y;
     }
@@ -206,14 +210,21 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     const theta=Math.atan2(vy,vx)+scatter;
     body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
       THREE.MathUtils.clamp(startY,r+2,h-r-2),
-      Math.max(r+6,(opts.gentleDrop?55:42)*(source.scale??1))+i*7);
+      Math.max(r+6,(gentleDrop?65:48)*(source.scale??1))+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
-    body.velocity.set(Math.cos(theta)*throwSpeed*(.94+Math.random()*.22),
-      Math.sin(theta)*throwSpeed*(.94+Math.random()*.22),
-      235+throwSpeed*.22);
-    body.angularVelocity.set((Math.random()-.5)*24,(Math.random()-.5)*24,
-      (Math.random()-.5)*23);
+    // True drop: gravity and contact alone. Zero planar velocity means
+    // neither the die nor its animation can shoot in a random direction.
+    // A genuine throw gets an upward arc and spin coupled to travel direction.
+    const spread=.97+Math.random()*.06;
+    const spin=Math.min(25,Math.max(7,throwSpeed/(Math.max(8,r)*3.2)));
+    body.velocity.set(vx*throwSpeed*spread,vy*throwSpeed*spread,
+      gentleDrop?0:205+throwSpeed*.27);
+    body.angularVelocity.set(gentleDrop?(Math.random()-.5)*1.2:
+      vy*spin+(Math.random()-.5)*3.5,
+      gentleDrop?(Math.random()-.5)*1.2:
+      -vx*spin+(Math.random()-.5)*3.5,
+      gentleDrop?(Math.random()-.5)*.8:(Math.random()-.5)*9);
     containDiceInView(body,currentScreenBounds,screenRadius,h);
     world.addBody(body);scene.add(mesh);
     const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
