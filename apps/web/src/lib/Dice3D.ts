@@ -38,6 +38,8 @@ export interface Dice3DOptions {
   sources:Dice3DSource[];aimX:number;aimY:number;durationMs:number;
   /** A picked-up die must launch at the pointer, not be pushed out of a source tray. */
   reroll?:boolean;
+  /** Released gently from a held position: gravity only, no forced throw. */
+  gentleDrop?:boolean;
   trays:Dice3DRect[];obstacles:{x:number;y:number}[];
   done:(results:Dice3DResult[])=>void;
   /** A GPU/context/physics failure must never strand the roll in flight. */
@@ -159,8 +161,8 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   }
   const aimLength=Math.hypot(opts.aimX,opts.aimY);
   // Make hand throws respond with more power, especially on short flicks.
-  const throwSpeed=THREE.MathUtils.clamp(
-    aimLength/Math.max(.105,Math.min(.75,opts.durationMs/1000))*1.42,330,1420);
+  const throwSpeed=opts.gentleDrop?0:THREE.MathUtils.clamp(
+    aimLength/Math.max(.105,Math.min(.75,opts.durationMs/1000))*1.42,190,1180);
   const vx=aimLength>5?opts.aimX/aimLength:1,
     vy=aimLength>5?-opts.aimY/aimLength:.19;
   const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
@@ -196,14 +198,15 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     }
     // The rim remains physically solid; release on the aim-facing side.
     // Inward flicks from the right drawer must launch LEFT into play.
-    if(!opts.reroll){
+    if(!opts.reroll&&!opts.gentleDrop){
       const launch=spawnOutsideTray(startX,startY,r,opts.trays,opts.aimX,opts.aimY);
       startX=launch.x;startY=launch.y;
     }
     const scatter=(i-(opts.sources.length-1)/2)*.18;
     const theta=Math.atan2(vy,vx)+scatter;
     body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
-      THREE.MathUtils.clamp(startY,r+2,h-r-2),Math.max(r+6,42*(source.scale??1))+i*7);
+      THREE.MathUtils.clamp(startY,r+2,h-r-2),
+      Math.max(r+6,(opts.gentleDrop?55:42)*(source.scale??1))+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
     body.velocity.set(Math.cos(theta)*throwSpeed*(.94+Math.random()*.22),
@@ -246,7 +249,7 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       },{score:-Infinity,value:rand(obj.sides)});
       const visible=obj.sides===2?
         new THREE.Vector3(0,0,1).applyQuaternion(q).z>=0?1:2:
-        obj.sides===100?rand(100):winning.value;
+        winning.value;
       const rolls=Array.from({length:obj.quantity},(_,i)=>i===0?visible:rand(obj.sides));
       // Clamp once more before saving, with the full model's footprint.
       containDiceInView(obj.body,currentScreenBounds,obj.screenRadius,h);
