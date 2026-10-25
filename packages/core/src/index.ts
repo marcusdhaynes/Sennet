@@ -1380,7 +1380,23 @@ export function validateCommand(state: GameState, command: Command): string | nu
   if (command.type === 'CLONE' && (typeof command.payload.newId !== 'string' || !String(command.payload.newId).trim())) return 'Clone ID required for deterministic replay';
   if (command.type === 'CLONE' && state.objects.some(o=>o.id===String(command.payload.newId))) return 'Duplicate clone ID';
   if (command.type==='SET_MODE' && !['sandbox','turn-based','asynchronous'].includes(String(command.payload.mode))) return 'Invalid play mode';
-  if (command.type==='DRAW' && !state.objects.some(o=>o.zone==='DECK')) return 'Deck is empty';
+  if(command.type==='DRAW'){
+    const source=command.payload.source;
+    if(source!==undefined&&source!=='DECK'&&source!=='RESERVE')
+      return 'Invalid draw source';
+    if(source==='RESERVE'){
+      const seat=command.payload.matSeat;
+      if(!Number.isInteger(seat)||Number(seat)<0||Number(seat)>=SEATS)
+        return 'Choose a reserve mat';
+      if(!state.objects.some(o=>(o.kind==='card'||o.kind==='deck')&&
+        o.zone==='TABLE'&&o.matSeat===seat&&
+        (!o.owner||o.owner===command.actor||
+          (!state.players.length&&o.owner==='local'))&&
+        tcgDropZone(o.x,o.y,Number(seat))?.row===1&&
+        tcgDropZone(o.x,o.y,Number(seat))?.column===0))
+        return 'Reserve is empty';
+    }else if(!state.objects.some(o=>o.zone==='DECK'))return 'Deck is empty';
+  }
   return null;
 }
 /** Exact, fewest-coin positive change, including the user's Custom denomination.
@@ -1873,8 +1889,16 @@ export function applyCommand(state: GameState, command: Command): GameState {
     }break;
     case 'ROLL':if(obj){const n=obj.sides||6;const rng=prng(finite(p.seed,1));obj.value=1+Math.floor(rng()*n);message=`Rolled ${obj.name}: ${obj.value}`;}break;
     case 'DRAW':{
-      const available=objects.filter(o=>o.zone==='DECK' && (!p.prefix||o.id.startsWith(String(p.prefix))) &&
-        (p.matSeat===undefined||(o.matSeat===p.matSeat&&(!o.owner||o.owner===command.actor)))).sort((a,b)=>a.order-b.order);
+      const fromReserve=p.source==='RESERVE';
+      const available=objects.filter(o=>fromReserve
+        ?(o.kind==='card'||o.kind==='deck')&&o.zone==='TABLE'&&
+          o.matSeat===p.matSeat&&(!o.owner||o.owner===command.actor||
+            (!state.players.length&&o.owner==='local'))&&
+          tcgDropZone(o.x,o.y,Number(p.matSeat))?.row===1&&
+          tcgDropZone(o.x,o.y,Number(p.matSeat))?.column===0
+        :o.zone==='DECK'&&(!p.prefix||o.id.startsWith(String(p.prefix)))&&
+          (p.matSeat===undefined||(o.matSeat===p.matSeat&&(!o.owner||o.owner===command.actor))))
+        .sort((a,b)=>a.order-b.order||a.id.localeCompare(b.id));
       const card=available[0];if(!card) throw new Error('No cards in that deck');
       card.zone='HAND';card.owner=command.actor;card.faceUp=true;
       const handCount=objects.filter(o=>o.zone==='HAND'&&o.owner===command.actor&&(p.matSeat===undefined||o.matSeat===p.matSeat)).length;
@@ -1886,7 +1910,7 @@ export function applyCommand(state: GameState, command: Command): GameState {
           return tcgMatWorld(local.x+((handCount-1)%7-3)*(TCG_MAT.cardWidth+2),local.y,seat);})();
       card.x=handPosition.x;card.y=handPosition.y;
       if(p.matSeat===undefined)delete card.matSeat;else card.matSeat=seat;
-      message=`${command.actor.slice(0,8)} drew a card`;break;
+      message=`${command.actor.slice(0,8)} drew from ${fromReserve?'reserve':'deck'}`;break;
     }
     case 'SHUFFLE':{
       const list=objects.filter(o=>o.zone==='DECK' &&
