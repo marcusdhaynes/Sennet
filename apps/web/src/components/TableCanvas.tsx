@@ -2551,17 +2551,17 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         for(const instrument of instruments){
           const {node,key}=instrument;
           node.position.set(instrument.x,instrument.y);
-          // Mirror all three instruments horizontally as well as the existing vertical flip.
+          // Preserve the chosen magnifier orientation.
           node.scale.set(-instrument.scale,-instrument.scale);
           left.addChild(node);
-          // The left drawer stencil and its accessory paint layer own all
-          // three tools at rest. Attaching life to the buttons layer removed
-          // it from that layer and made it disappear in previous builds.
+          // When stored, use the same drawer parent as the stowed book.
+          // Once on the table, use the book's objects paint layer.
           const storageKey='sennet.instrument-position.v2.'+seat+'.'+key;
           try{
             const saved=JSON.parse(localStorage.getItem(storageKey)||'null');
             if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){
               local.addChild(node);
+              paintLayers.objects.attach(node);
               node.position.set(saved.x,saved.y);
               if(Number.isFinite(saved.rotation))node.rotation=saved.rotation;
             }
@@ -2597,6 +2597,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
                 const newParentAngle=Math.atan2(local.worldTransform.b,local.worldTransform.a);
                 const place=local.toLocal(initialGlobal);
                 if(node.parent!==local)local.addChild(node);
+                paintLayers.objects.attach(node);
                 node.position.copyFrom(place);
                 // Preserve orientation, including both existing flip axes.
                 node.rotation=initialRotation+oldParentAngle-newParentAngle;
@@ -2616,6 +2617,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               node.cursor='grab';
               if(event.type==='pointercancel'){
                 if(node.parent!==initialParent)initialParent.addChild(node);
+                if(initialParent===left)paintLayers.objects.detach(node);
+                else paintLayers.objects.attach(node);
                 node.position.copyFrom(initialPos);
                 node.rotation=initialRotation;
                 return;
@@ -2623,6 +2626,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               if(!moved)return;
               const dock=local.toLocal(left.toGlobal(new Point(instrument.x,instrument.y)));
               if(key==='life'&&Math.hypot(node.x-dock.x,node.y-dock.y)<22){
+                paintLayers.objects.detach(node);
                 left.addChild(node);
                 node.position.set(instrument.x,instrument.y);
                 node.rotation=0;
