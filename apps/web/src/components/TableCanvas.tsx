@@ -1387,6 +1387,9 @@ const isBattleView=(kind:EyeView['kind'])=>kind==='versus'||kind==='castle';
 export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,handHoldView,holdSelectStacks,handPlayMode,diceHoldMs,diceFadeMs,latestAction,canUndo,canRedo,onUndo,onRedo,onOpenReceipt,onInterfaceAction,bookDesign,bookDock,bookOffset,onBookMove,onBookOpen,drawer,wheelMode,state,seat,playerName,actorId,selected,onSelect,onMove,onMoveStack,onMoveSelection,onDrawMat,onDrawReserve,onOpenTcgSettings,onCardAction,onGestureAction,onRadialAction,mergeOpacity,mergeHoverMs,playmat,labelScale,diceAppearance,onMergeCenter,onViewChange,coinAppearance,customCoinValue,customCoinText,onCustomCoinText,onCustomCoinValue,onTokenPlace,onTokenAdjust,onDicePlace,onDiceThrow,onDiceReroll,onCoinModify,onCoinDuplicate,readonly=false}:Props){
   const [ready,setReady]=useState(false);
   const [diceQuantities,setDiceQuantities]=useState<Record<number,number>>({});
+  // A completed die roll takes LCD priority over a previously queued
+  // selection until the player explicitly selects another die.
+  const [showDiceSelection,setShowDiceSelection]=useState(true);
   const selectionReadout=formatDiceSelection(diceQuantities);
   const diceQuantitiesRef=useRef<Record<number,number>>({});
   const clearDiceQueueRef=useRef<()=>void>(()=>{});
@@ -1840,6 +1843,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           rotation:((result.rotation%360)+360)%360,
           quaternion:result.quaternion,altitude:result.altitude};
       });
+      // A held die may coexist with a queued ROLL selection. Keep that
+      // selection intact, but always show the completed face/result in the LCD.
+      if(release)setShowDiceSelection(false);
       diceThrowCallback.current(throws);
     };
     const recoverThrow=(error:unknown)=>{
@@ -1972,6 +1978,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     if(diceThrowAnimation.current!==null||dice3DActive.current)return;
     const next=Math.min(20,(diceQuantitiesRef.current[sides]??0)+1);
     diceQuantitiesRef.current={...diceQuantitiesRef.current,[sides]:next};
+    setShowDiceSelection(true);
     setDiceQuantities({...diceQuantitiesRef.current});
     staticDice3D.current?.setSourceQuantity(sides,next);
     const badge=diceBadges.current.get(sides);
@@ -3370,7 +3377,10 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // therefore drops straight down, while a last-moment flick follows its
       // actual direction (both horizontal and vertical).
       const now=performance.now();
-      const previous=d.history.filter(point=>now-point.t<=140);
+      // Use the FINAL 50 ms of motion, not a 140 ms averaged drag.
+      // A change in direction at the end of the gesture must determine
+      // the throw's launch vector; older movement can otherwise reverse it.
+      const previous=d.history.filter(point=>now-point.t<=50);
       const base=previous[0]??d.history[d.history.length-1];
       const aimX=e.clientX-base.x,aimY=e.clientY-base.y;
       const gestureMs=Math.max(16,now-base.t);
@@ -4474,7 +4484,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           onClick={onOpenReceipt}
           onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onOpenReceipt();}}}
           title="Open complete action receipt">
-          <span>{selectionReadout||latestAction}</span>
+          <span>{(showDiceSelection&&selectionReadout)||latestAction}</span>
         </div>
         {(selectionReadout||dicePointer.current)&&<button type="button" className="sennet-action-lcd-roll" title="Throw selected dice"
           onClick={()=>{const die=DICE_TYPES.find(s=>diceQuantities[s]);
