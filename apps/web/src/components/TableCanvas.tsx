@@ -2553,7 +2553,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         for(const instrument of instruments){
           const {node,key}=instrument;
           node.position.set(instrument.x,instrument.y);
-          node.scale.set(instrument.scale);
+          // Vertically mirror all three drawer instruments, including their controls.
+          node.scale.set(instrument.scale,-instrument.scale);
           left.addChild(node);
           // The left drawer stencil and its accessory paint layer own all
           // three tools at rest. Attaching life to the buttons layer removed
