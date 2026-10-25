@@ -7,6 +7,7 @@ import {DEFAULT_DICE_THEME,type DiceThemeId} from './diceThemes.ts';
 export {dieGeometry,createDie3DModel} from './Dice3DGeometry.ts';
 import * as CANNON from 'cannon-es';
 import {containDiceInView,safeDiceFootprint,visibleDiceBounds,type DiceScreenBounds,type ScreenRect} from './diceScreenWalls.ts';
+import {dieLaunchVelocity} from './diceThrowEngine.ts';
 
 export interface Dice3DSource {sides:number;quantity:number;x:number;y:number;scale?:number;themeId?:DiceThemeId}
 const rand=(max:number)=>{
@@ -161,14 +162,10 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       shape:new CANNON.Sphere(12)});
     fixed.position.set(p.x,h-p.y,12);world.addBody(fixed);
   }
-  const aimLength=Math.hypot(opts.aimX,opts.aimY);
-  // A held drop has ZERO horizontal launch. A throw follows the last
-  // pointer-movement vector (not the start-to-release drag displacement).
+  // All dice launch using the same measured screen-space gesture. Physics
+  // receives Y-up coordinates, but the direction is never randomized.
   const gentleDrop=opts.gentleDrop===true;
-  const throwSpeed=gentleDrop?0:THREE.MathUtils.clamp(
-    aimLength/Math.max(.035,Math.min(.24,opts.durationMs/1000))*1.08,180,1250);
-  const vx=aimLength>1?opts.aimX/aimLength:0;
-  const vy=aimLength>1?-opts.aimY/aimLength:0;
+  const launch=dieLaunchVelocity(opts.aimX,opts.aimY,opts.durationMs,gentleDrop);
   const objects:{sides:number;quantity:number;scale:number;mesh:THREE.Group;
     body:CANNON.Body;faces:NumberedFace[];shadow:THREE.Mesh;screenRadius:number}[]=[];
   const shadowCanvas=document.createElement('canvas');shadowCanvas.width=64;shadowCanvas.height=64;
@@ -214,25 +211,28 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     const insideTray=opts.trays.some(t=>
       startX>=Math.min(t.left,t.right)-r&&startX<=Math.max(t.left,t.right)+r&&
       startY>=Math.min(t.top,t.bottom)-r&&startY<=Math.max(t.top,t.bottom)+r);
-    const handLaunchHeight=opts.heldRelease&&!gentleDrop&&insideTray?126+r:0;
+    const handLaunchHeight=(opts.heldRelease||opts.reroll)&&!gentleDrop&&insideTray?
+      110+Math.max(r,geom.boundingSphere?.radius??r)+20:0;
     body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
       THREE.MathUtils.clamp(startY,r+2,h-r-2),
       Math.max(r+6,(gentleDrop?65:48)*(source.scale??1),handLaunchHeight)+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
-    // True drop: gravity and contact alone. Zero planar velocity means
-    // neither the die nor its animation can shoot in a random direction.
-    // A genuine throw gets an upward arc and spin coupled to travel direction.
-    const spread=.97+Math.random()*.06;
-    const spin=Math.min(25,Math.max(7,throwSpeed/(Math.max(8,r)*3.2)));
-    body.velocity.set(vx*throwSpeed*spread,vy*throwSpeed*spread,
-      gentleDrop?0:205+throwSpeed*.27);
-    body.angularVelocity.set(gentleDrop?(Math.random()-.5)*1.2:
-      vy*spin+(Math.random()-.5)*3.5,
-      gentleDrop?(Math.random()-.5)*1.2:
-      -vx*spin+(Math.random()-.5)*3.5,
-      gentleDrop?(Math.random()-.5)*.8:(Math.random()-.5)*9);
+    // IMPORTANT: project the spawn point INSIDE the actual visible bounds
+    // BEFORE assigning throw velocity. Previously this bounds correction
+    // reflected an outward-pointing velocity at time zero, making some
+    // dice launch in precisely the OPPOSITE direction to the hand.
+    body.velocity.set(0,0,0);
     containDiceInView(body,currentScreenBounds,screenRadius,h);
+    // No random linear-vector rotation; tiny speed variance cannot change
+    // its sign. Spin/tumbling are independent of the launch heading.
+    const spread=.97+Math.random()*.06;
+    body.velocity.set(launch.x*spread,launch.y*spread,launch.z);
+    body.angularVelocity.set(gentleDrop?(Math.random()-.5)*1.2:
+      launch.spinX+(Math.random()-.5)*2,
+      gentleDrop?(Math.random()-.5)*1.2:
+      launch.spinY+(Math.random()-.5)*2,
+      gentleDrop?(Math.random()-.5)*.8:(Math.random()-.5)*8);
     world.addBody(body);scene.add(mesh);
     const shadow=new THREE.Mesh(new THREE.CircleGeometry(32,48),
       new THREE.MeshBasicMaterial({map:shadowTex,transparent:true,opacity:.44,depthWrite:false}));
