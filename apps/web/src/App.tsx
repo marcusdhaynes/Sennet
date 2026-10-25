@@ -780,7 +780,7 @@ export default function App(){
         onCoinModify={(id,changes)=>takeAction('COIN_MODIFY',{id,...changes})}
         onCoinDuplicate={id=>takeAction('CLONE',{id,newId:createId()})}
         onTokenAdjust={(ids,value,sign)=>takeAction('TOKEN_ADJUST',{ids,value,sign,custom:customCoinValue,seat})}
-        onDicePlace={(sides,x,y)=>takeAction('ADD',{object:{id:createId(),kind:'die',name:'D'+String(sides).padStart(2,'0'),x,y,rotation:0,faceUp:true,color:'#b9c6b9',zone:'TABLE',order:game.objects.length+100,sides,value:1,matSeat:seat,description:'Placed die'}})}
+        onDicePlace={(sides,x,y)=>takeAction('ADD',{object:{id:createId(),kind:'die',name:'D'+String(sides).padStart(2,'0'),x,y,rotation:0,faceUp:true,color:'#b9c6b9',zone:'TABLE',order:game.objects.length+100,sides,value:1,matSeat:seat,description:'Placed die',throwDice:true,throwRolls:[1],throwQuantity:1,throwTotal:1,throwExpiresAt:Date.now()+THROWN_DIE_LIFETIME_MS}})}
         onDiceThrow={throws=>takeAction('THROW_TRAY',{seat,throws})}
         onDiceReroll={(id,rolls,x,y,rotation,quaternion,altitude)=>takeAction('REROLL_DIE',{id,rolls,x,y,rotation,quaternion,altitude})}
         onMergeCenter={(targetSeat,boundary,merged)=>takeAction('SET_CENTER_MERGE',{seat:targetSeat,boundary,merged})}
