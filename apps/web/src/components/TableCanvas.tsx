@@ -1423,7 +1423,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const dice3DStop=useRef<(()=>void)|null>(null);
   const [dice3DError,setDice3DError]=useState<string|null>(null);
   const diceFlying=useRef<Container[]>([]);
-  const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number)=>void>(()=>{});
+  const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number,release?:{x:number;y:number})=>void>(()=>{});
   const diceThrowCallback=useRef(onDiceThrow);diceThrowCallback.current=onDiceThrow;
   const diceRerollCallback=useRef(onDiceReroll);diceRerollCallback.current=onDiceReroll;
   const rerollPointer=useRef<{
@@ -1756,7 +1756,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   /** Roll all selected denominations simultaneously using one visible body
    * per type. Extra copies are sampled fairly but represented by one die.
    * Game results are committed only after the bodies physically settle. */
-  throwDiceNow.current=(pressed,dx,dy,elapsed)=>{
+  throwDiceNow.current=(pressed,dx,dy,elapsed,release)=>{
     const current=session.current,host=mount.current;
     if(!current||!host||currentState.current.kind!=='tcg'||dice3DActive.current)return;
     // The last roll may still be showing its final static/3D handoff.
@@ -1797,7 +1797,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     });
     // One independently simulated mesh, trajectory and roll result per
     // selected die while the combined quantity is 20 or fewer.
-    const physicalSources=expandDiceSources(sources);
+    const physicalSources=expandDiceSources(sources).map(source=>
+      release&&source.sides===pressed?{...source,x:release.x,y:release.y}:source);
     const obstacles=[...visuals.current.entries()].filter(([id])=>{
       const obj=currentState.current.objects.find(o=>o.id===id);
       return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
@@ -3335,7 +3336,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // A flick supplies horizontal impulse; a drop supplies gravity only.
       const flick=d.held&&Math.hypot(dx,dy)>24&&d.speed>0.25;
       throwDiceNow.current(d.sides,flick?dx:0,flick?dy:0,
-        flick?Math.max(90,performance.now()-d.at):120);
+        flick?Math.max(90,performance.now()-d.at):120,
+        d.held?{x:e.clientX-session.current!.app.canvas.getBoundingClientRect().left,
+          y:e.clientY-session.current!.app.canvas.getBoundingClientRect().top}:undefined);
     };
     const move=(e:PointerEvent)=>{
       const d=dicePointer.current;
