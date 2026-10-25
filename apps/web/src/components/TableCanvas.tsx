@@ -2565,6 +2565,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             if(saved&&Number.isFinite(saved.x)&&Number.isFinite(saved.y)){
               local.addChild(node);
               node.position.set(saved.x,saved.y);
+              if(Number.isFinite(saved.rotation))node.rotation=saved.rotation;
             }
           }catch{/* Storage is optional. */}
           node.eventMode='static';
@@ -2573,34 +2574,40 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           node.on('pointerdown',e=>{
             if(e.button!==0)return;
             e.stopPropagation();
-            // The camera pan handler ignores this pointer all the way to
-            // pointerup, exactly as it does for cards and dice.
             controlPointer.current=e.pointerId;
             const pointer=e.pointerId;
-            const global=node.toGlobal(new Point(0,0));
-            const place=local.toLocal(global);
-            // Preserve the instrument's screen-facing angle while changing
-            // parent from the sliding drawer to the seat's playmat layer.
-            // Position alone is insufficient: parent rotations differ.
-            const worldAngle=Math.atan2(node.worldTransform.b,node.worldTransform.a);
-            if(node.parent!==local)local.addChild(node);
-            node.position.copyFrom(place);
-            const parentAngle=Math.atan2(local.worldTransform.b,local.worldTransform.a);
-            node.rotation=worldAngle-parentAngle;
-            const origin=local.toLocal(e.global);
-            const startX=node.x,startY=node.y;
-            node.cursor='grabbing';
+            const rect=app.canvas.getBoundingClientRect();
+            const toStage=(x:number,y:number)=>new Point(
+              (x-rect.left)*app.renderer.width/rect.width,
+              (y-rect.top)*app.renderer.height/rect.height);
+            const startScreen=toStage(e.clientX,e.clientY);
+            const initialParent=node.parent!;
+            const initialPos=new Point(node.x,node.y);
+            const initialRotation=node.rotation;
+            const initialGlobal=node.toGlobal(new Point(0,0));
             let moved=false;
+            let origin=new Point();
+            let startingLocal=new Point();
+            node.cursor='grabbing';
             const move=(event:PointerEvent)=>{
               if(event.pointerId!==pointer||!session.current)return;
-              const rect=app.canvas.getBoundingClientRect();
-              if(!rect.width||!rect.height)return;
-              const point=new Point((event.clientX-rect.left)*app.renderer.width/rect.width,
-                (event.clientY-rect.top)*app.renderer.height/rect.height);
+              const point=toStage(event.clientX,event.clientY);
+              if(!moved){
+                if(Math.hypot(point.x-startScreen.x,point.y-startScreen.y)<4)return;
+                moved=true;
+                const oldParentAngle=Math.atan2(initialParent.worldTransform.b,initialParent.worldTransform.a);
+                const newParentAngle=Math.atan2(local.worldTransform.b,local.worldTransform.a);
+                const place=local.toLocal(initialGlobal);
+                if(node.parent!==local)local.addChild(node);
+                node.position.copyFrom(place);
+                // Preserve orientation, including both existing flip axes.
+                node.rotation=initialRotation+oldParentAngle-newParentAngle;
+                startingLocal.copyFrom(place);
+                origin=local.toLocal(startScreen,app.stage);
+              }
               const current=local.toLocal(point,app.stage);
-              const dx=current.x-origin.x,dy=current.y-origin.y;
-              if(Math.hypot(dx,dy)>2)moved=true;
-              node.position.set(startX+dx,startY+dy);
+              node.position.set(startingLocal.x+current.x-origin.x,
+                startingLocal.y+current.y-origin.y);
             };
             const finish=(event:PointerEvent)=>{
               if(event.pointerId!==pointer)return;
@@ -2609,32 +2616,27 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               window.removeEventListener('pointercancel',finish);
               if(controlPointer.current===pointer)controlPointer.current=null;
               node.cursor='grab';
-              if(!moved){
-                // A click is not a move. Return the untouched item to its
-                // actual drawer parent instead of leaving it floating above.
-                if(node.parent===local&&startX===place.x&&startY===place.y){
-                  const home=left.toLocal(node.toGlobal(new Point(0,0)));
-                  const priorAngle=Math.atan2(node.worldTransform.b,node.worldTransform.a);
-                  left.addChild(node);
-                  node.position.copyFrom(home);
-                  node.rotation=priorAngle-Math.atan2(left.worldTransform.b,left.worldTransform.a);
-                }
+              if(event.type==='pointercancel'){
+                if(node.parent!==initialParent)initialParent.addChild(node);
+                node.position.copyFrom(initialPos);
+                node.rotation=initialRotation;
                 return;
               }
+              if(!moved)return;
               const dock=local.toLocal(left.toGlobal(new Point(instrument.x,instrument.y)));
               if(key==='life'&&Math.hypot(node.x-dock.x,node.y-dock.y)<22){
                 left.addChild(node);
                 node.position.set(instrument.x,instrument.y);
                 node.rotation=0;
-                try{localStorage.removeItem(storageKey);}catch{/* ignore */}
+                try{localStorage.removeItem(storageKey);}catch{/* optional */}
               }else{
-                try{localStorage.setItem(storageKey,JSON.stringify({x:node.x,y:node.y}));}catch{/* ignore */}
+                try{localStorage.setItem(storageKey,JSON.stringify({x:node.x,y:node.y,rotation:node.rotation}));}catch{/* optional */}
               }
             };
             window.addEventListener('pointermove',move);
             window.addEventListener('pointerup',finish);
             window.addEventListener('pointercancel',finish);
-          });
+          });;
         }
       }
     }
