@@ -3320,7 +3320,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const place=parent.toLocal(global,app.stage);
       // A RELEASE is a placement, never automatically a throw.
       // Throwing requires a quick flick with actual pointer momentum.
-      if(d.speed>1.8&&Math.hypot(dx,dy)>36){
+      if(d.held&&Math.hypot(dx,dy)>28&&d.speed>0.5){
         throwDiceNow.current(d.sides,dx,dy,performance.now()-d.at);
       }else onDicePlace(d.sides,place.x,place.y);
     };
@@ -4479,7 +4479,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
     {state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
       <div className="sennet-radial-overlay" style={{pointerEvents:'none'}}>
-        <div ref={setDockedWheelNode} style={{position:'absolute',left:0,top:0,
+        <div ref={attachDockedWheel} style={{position:'absolute',left:0,top:0,
           width:180,height:180,transformOrigin:'top left',pointerEvents:'auto',
           zIndex:120}}>
           <CardRadialWheel x={90} y={0} size={180} count={selectedIds.length||Number(!!selected)}
