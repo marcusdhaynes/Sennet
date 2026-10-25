@@ -1415,7 +1415,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const diceSources=useRef(new Map<number,Container>());
   const diceBadges=useRef(new Map<number,{body:Container;count:Text}>());
   const diceTrayMat=useRef<Container|null>(null);
-  const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number;lastX:number;lastY:number;lastAt:number;speed:number;timer?:number;ghost?:Container;held?:boolean}|null>(null);
+  const dicePointer=useRef<{pointerId:number;sides:number;startX:number;startY:number;at:number;lastX:number;lastY:number;lastAt:number;speed:number;timer?:number;ghost?:Container;held?:boolean;pickup?:()=>void;history:{x:number;y:number;t:number}[]}|null>(null);
   const diceThrowAnimation=useRef<number|null>(null);
   const staticDice3D=useRef<StaticDice3DRenderer|null>(null);
   const staticDiceEntries=useRef<StaticDiePlacement[]>([]);
@@ -1762,7 +1762,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // The last roll may still be showing its final static/3D handoff.
     // Close that old renderer before allocating a new WebGL context.
     dice3DStop.current?.();dice3DStop.current=null;
-    const selected={...diceQuantitiesRef.current};
+    // Picking one physical model releases exactly that one die, not the
+    // rest of the queued dice in the rack.
+    const selected=release?{[pressed]:1}:{...diceQuantitiesRef.current};
     if(!selected[pressed])selected[pressed]=1;
     const types=DICE_TYPES.filter(sides=>(selected[sides]??0)>0);
     const mat=diceTrayMat.current;
@@ -1803,10 +1805,12 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const obj=currentState.current.objects.find(o=>o.id===id);
       return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
     }).slice(-60).map(([,visual])=>convert(visual.toGlobal(new Point(0,0))));
-    diceQuantitiesRef.current={};setDiceQuantities({});
-    for(const sides of DICE_TYPES)staticDice3D.current?.setSourceQuantity(sides,0);
-    for(const {body,count} of diceBadges.current.values()){
-      body.children[0].visible=false;count.text='';
+    if(!release){
+      diceQuantitiesRef.current={};setDiceQuantities({});
+      for(const sides of DICE_TYPES)staticDice3D.current?.setSourceQuantity(sides,0);
+      for(const {body,count} of diceBadges.current.values()){
+        body.children[0].visible=false;count.text='';
+      }
     }
     let thrown=false;
     const commitResults=(results:RollFallbackResult[])=>{
@@ -1846,7 +1850,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const d=roll3DDice({host,width:rect.width,height:rect.height,
           canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
           sources:physicalSources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
-          gentleDrop,
+          gentleDrop,heldRelease:!!release,
           done:commitResults,onError:recoverThrow});
         dice3DStop.current=d;
       }catch(err){recoverThrow(err);}
@@ -2525,14 +2529,14 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           const held={pointerId:e.pointerId,sides,startX:e.clientX,startY:e.clientY,
             lastX:e.clientX,lastY:e.clientY,lastAt:performance.now(),speed:0,
             at:performance.now(),held:false,ghost:undefined as Container|undefined,
+            history:[{x:e.clientX,y:e.clientY,t:performance.now()}],
             timer:undefined as number|undefined};
-          // A sustained press lifts a visual copy off the dice rack before
-          // the throw begins. The generator itself never leaves the drawer.
-          held.timer=window.setTimeout(()=>{
-            if(dicePointer.current!==held||!session.current)return;
+          // The same Three.js die lifts on hold OR when a fast throw starts.
+          // Dragging immediately does not have to wait for the hold timer.
+          const pickup=()=>{
+            if(dicePointer.current!==held||held.held||!session.current)return;
             held.held=true;
-            // Use the IDENTICAL Three.js geometry and theme as the real die,
-            // not a flat Pixi placeholder. Its Pixi anchor only tracks pose.
+            if(held.timer!==undefined)window.clearTimeout(held.timer);
             const ghost=new Container();
             ghost.eventMode='none';
             ghost.position.copyFrom(board.toLocal(source.toGlobal(new Point(0,0))));
@@ -2543,7 +2547,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
               themeId:resolveDiceTheme(diceAppearance,sides)
             }]);
             staticDice3D.current?.sync(true);
-          },170);
+          };
+          held.pickup=pickup;
+          held.timer=window.setTimeout(pickup,170);
           dicePointer.current=held;
         });
       });
@@ -3332,15 +3338,24 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       if(!commit)return;
       const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
       if(!d.held&&Math.hypot(dx,dy)<10){addDiceCount(d.sides);return;}
-      // Every released die is a genuine physics roll (including a gentle
-      // drop). Never manufacture a fixed-value ADD object on the table.
-      // A flick supplies horizontal impulse; a drop supplies gravity only.
-      const flick=d.held&&Math.hypot(dx,dy)>24&&d.speed>0.25;
-      throwDiceNow.current(d.sides,flick?dx:0,flick?dy:0,
-        flick?Math.max(90,performance.now()-d.at):120,
-        d.held?{x:e.clientX-session.current!.app.canvas.getBoundingClientRect().left,
-          y:e.clientY-session.current!.app.canvas.getBoundingClientRect().top}:undefined,
-        d.held&&!flick);
+      // Release velocity is measured from the most recent pointer motion,
+      // not the entire distance dragged since pickup. Stopping before release
+      // therefore drops straight down, while a last-moment flick follows its
+      // actual direction (both horizontal and vertical).
+      const now=performance.now();
+      const previous=d.history.filter(point=>now-point.t<=140);
+      const base=previous[0]??d.history[d.history.length-1];
+      const aimX=e.clientX-base.x,aimY=e.clientY-base.y;
+      const gestureMs=Math.max(16,now-base.t);
+      const releaseSpeed=Math.hypot(aimX,aimY)/gestureMs;
+      const flick=d.held&&now-d.lastAt<95&&releaseSpeed>=.48&&
+        Math.hypot(aimX,aimY)>=12;
+      const canvasRect=session.current?.app.canvas.getBoundingClientRect();
+      if(!canvasRect)return;
+      throwDiceNow.current(d.sides,flick?aimX:0,flick?aimY:0,
+        flick?gestureMs:120,
+        {x:e.clientX-canvasRect.left,y:e.clientY-canvasRect.top},
+        !flick);
     };
     const move=(e:PointerEvent)=>{
       const d=dicePointer.current;
@@ -3348,6 +3363,11 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const now=performance.now(),dt=Math.max(1,now-d.lastAt);
       d.speed=Math.hypot(e.clientX-d.lastX,e.clientY-d.lastY)/dt;
       d.lastAt=now;d.lastX=e.clientX;d.lastY=e.clientY;
+      d.history.push({x:e.clientX,y:e.clientY,t:now});
+      // Keep the sample immediately before the window to measure velocity.
+      while(d.history.length>2&&d.history[1].t<now-140)d.history.shift();
+      if(!d.held&&Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>6)
+        d.pickup?.();
       if(!d.held||!d.ghost||!session.current)return;
       const app=session.current.app,rect=app.canvas.getBoundingClientRect();
       if(!rect.width||!rect.height)return;
