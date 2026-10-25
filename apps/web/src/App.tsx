@@ -717,6 +717,7 @@ export default function App(){
       }}/>}
         onOpenTcgSettings={()=>{setBook('settings');setSettingsPage('playmat');}}
         onDrawMat={()=>takeAction('DRAW',{matSeat:seat})}
+        onDrawReserve={()=>takeAction('DRAW',{matSeat:seat,source:'RESERVE'})}
         onCardAction={(id,action)=>{
           const card=game.objects.find(o=>o.id===id);
           if(!card)return;
