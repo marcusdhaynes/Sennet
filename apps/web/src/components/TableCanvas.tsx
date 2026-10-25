@@ -2269,6 +2269,25 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       button=>{castleHitTarget.current=button;},
       button=>{mergeHitTargets.current.push(button);},handPlayMode);
     duelLayers.current=seatGroups;
+    // Always-visible native radial on the actual hand edge. Unlike the DOM
+    // overlay it cannot disappear due to overlay transforms or CSS stacking.
+    if(state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seatGroups?.has(seat)){
+      const hand=tcgMatCells(seat).find(cell=>cell.row===3&&cell.column===1);
+      if(hand){
+        const x=hand.x-Math.sin(hand.angle)*hand.height/2;
+        const y=hand.y+Math.cos(hand.angle)*hand.height/2;
+        const radial=makePlaymatRadial(x,y,TCG_MAT_WIDTH,
+          action=>{
+            const ids=[...selectedSet.current];
+            if(ids.length)callbacks.current.onRadialAction(ids,action);
+          },
+          expanded=>interfaceAction.current(expanded?'Expand':'Collapse',
+            'Action radial',expanded?'Show actions':'Hide actions'),
+          ()=>selectedSet.current.size?String(selectedSet.current.size):'Actions');
+        seatGroups.get(seat)!.addChild(radial);
+        paintLayers.buttons.attach(radial);
+      }
+    }
     // The docked radial is rendered as a pointer-interactive HTML overlay.
     // Its geometry is synchronized to the actual mat every animation frame,
     // avoiding clipping and paint-layer invisibility of the Pixi fallback.
@@ -3320,7 +3339,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const place=parent.toLocal(global,app.stage);
       // A RELEASE is a placement, never automatically a throw.
       // Throwing requires a quick flick with actual pointer momentum.
-      if(d.held&&Math.hypot(dx,dy)>28&&d.speed>0.5){
+      if(d.held&&Math.hypot(dx,dy)>24&&d.speed>0.25){
         throwDiceNow.current(d.sides,dx,dy,performance.now()-d.at);
       }else onDicePlace(d.sides,place.x,place.y);
     };
@@ -4411,7 +4430,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           title="Open complete action receipt">
           <span>{selectionReadout||latestAction}</span>
         </div>
-        {selectionReadout&&<button type="button" className="sennet-action-lcd-roll" title="Throw selected dice"
+        {(selectionReadout||dicePointer.current)&&<button type="button" className="sennet-action-lcd-roll" title="Throw selected dice"
           onClick={()=>{const die=DICE_TYPES.find(s=>diceQuantities[s]);
             if(die!==undefined)throwDiceNow.current(die,0,0,240);}}>ROLL</button>}
         <button type="button" className="sennet-action-lcd-button"
@@ -4477,7 +4496,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
-    {state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
+    {false&&state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
       <div className="sennet-radial-overlay" style={{pointerEvents:'none'}}>
         <div ref={attachDockedWheel} style={{position:'absolute',left:0,top:0,
           width:180,height:180,transformOrigin:'top left',pointerEvents:'auto',
