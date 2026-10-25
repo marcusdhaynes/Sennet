@@ -1423,7 +1423,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   const dice3DStop=useRef<(()=>void)|null>(null);
   const [dice3DError,setDice3DError]=useState<string|null>(null);
   const diceFlying=useRef<Container[]>([]);
-  const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number,release?:{x:number;y:number})=>void>(()=>{});
+  const throwDiceNow=useRef<(sides:number,dx:number,dy:number,elapsed:number,release?:{x:number;y:number},gentleDrop?:boolean)=>void>(()=>{});
   const diceThrowCallback=useRef(onDiceThrow);diceThrowCallback.current=onDiceThrow;
   const diceRerollCallback=useRef(onDiceReroll);diceRerollCallback.current=onDiceReroll;
   const rerollPointer=useRef<{
@@ -1756,7 +1756,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
   /** Roll all selected denominations simultaneously using one visible body
    * per type. Extra copies are sampled fairly but represented by one die.
    * Game results are committed only after the bodies physically settle. */
-  throwDiceNow.current=(pressed,dx,dy,elapsed,release)=>{
+  throwDiceNow.current=(pressed,dx,dy,elapsed,release,gentleDrop=false)=>{
     const current=session.current,host=mount.current;
     if(!current||!host||currentState.current.kind!=='tcg'||dice3DActive.current)return;
     // The last roll may still be showing its final static/3D handoff.
@@ -1846,6 +1846,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const d=roll3DDice({host,width:rect.width,height:rect.height,
           canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
           sources:physicalSources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
+          gentleDrop,
           done:commitResults,onError:recoverThrow});
         dice3DStop.current=d;
       }catch(err){recoverThrow(err);}
@@ -3338,7 +3339,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       throwDiceNow.current(d.sides,flick?dx:0,flick?dy:0,
         flick?Math.max(90,performance.now()-d.at):120,
         d.held?{x:e.clientX-session.current!.app.canvas.getBoundingClientRect().left,
-          y:e.clientY-session.current!.app.canvas.getBoundingClientRect().top}:undefined);
+          y:e.clientY-session.current!.app.canvas.getBoundingClientRect().top}:undefined,
+        d.held&&!flick);
     };
     const move=(e:PointerEvent)=>{
       const d=dicePointer.current;
