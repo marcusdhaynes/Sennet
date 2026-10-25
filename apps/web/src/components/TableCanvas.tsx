@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState,type ReactNode,type PointerEvent as ReactPointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import CoinColorPicker from './CoinColorPicker';
-import {buildLifeCounter,buildDrawerMagnifier,buildDrawerCalculator} from './DrawerInstruments';
+import {buildDrawerMagnifier} from './DrawerInstruments';
 import {Application,Assets,Circle,Container,Graphics,Point,Rectangle,RenderLayer,Sprite,Text} from 'pixi.js';
 import CardRadialWheel,{RadialActionGlyph} from './CardRadialWheel';
 import {makePlaymatRadial} from './PlaymatActionRadial';
@@ -2546,9 +2546,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const trayX=-TCG_MAT_WIDTH/2-TCG_MAT.cardWidth/2-3;
         const trayTop=-TCG_MAT_HEIGHT/2+TCG_MAT.rowHeight+TCG_MAT.gap;
         const instruments=[
-          {key:'life',node:buildLifeCounter(seat),x:trayX,y:trayTop+39,scale:.57},
-          {key:'magnifier',node:buildDrawerMagnifier(),x:trayX-9,y:trayTop+112,scale:.52},
-          {key:'calculator',node:buildDrawerCalculator(),x:trayX+4,y:trayTop+175,scale:.62}
+          {key:'magnifier',node:buildDrawerMagnifier(),x:trayX-9,y:trayTop+112,scale:.52}
         ];
         for(const instrument of instruments){
           const {node,key}=instrument;
