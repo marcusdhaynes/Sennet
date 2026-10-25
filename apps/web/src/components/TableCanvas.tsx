@@ -3223,7 +3223,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       const point=tcgMatWorld(center.x+TCG_MAT.cardWidth/2,
         center.y-TCG_MAT.cardHeight/2,seat);
       const draw=new Container();draw.position.set(point.x,point.y);draw.rotation=cell.angle;
-      draw.label='draw-control';
+      // Same native 32-unit circle and camera scaling as Eye, Castle, Gear, and Merge.
+      // Do not apply the old draw-only inverse zoom compensation.
+      draw.label='table-scale-control';
       drawControlRef.current=draw;
       draw.alpha=mergeOpacity;
       draw.eventMode='static';draw.cursor='pointer';draw.hitArea=new Circle(0,0,VIEW_BUTTON_HIT_RADIUS);
