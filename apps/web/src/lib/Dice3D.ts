@@ -72,9 +72,14 @@ export function convexShape(geom:THREE.BufferGeometry):CANNON.Shape{
   }
   return new CANNON.ConvexPolyhedron({vertices,faces});
 }
+/** Dice only collide with the floor and visible screen walls.
+ * Separate collision groups make dice pass through one another. */
+export const DIE_COLLISION_LAYER=1;
+export const SCREEN_BOUNDARY_LAYER=2;
 function boxAt(world:CANNON.World,x:number,y:number,z:number,
   wx:number,wy:number,wz:number,friction:CANNON.Material):CANNON.Body{
   const body=new CANNON.Body({mass:0,material:friction,
+    collisionFilterGroup:SCREEN_BOUNDARY_LAYER,collisionFilterMask:DIE_COLLISION_LAYER,
     shape:new CANNON.Box(new CANNON.Vec3(wx/2,wy/2,wz/2))});
   body.position.set(x,y,z);world.addBody(body);
   return body;
@@ -101,9 +106,10 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   const dieMat=new CANNON.Material('polyhedral'),wallMat=new CANNON.Material('felt');
   world.addContactMaterial(new CANNON.ContactMaterial(dieMat,wallMat,
     {friction:.43,restitution:.35}));
-  world.addContactMaterial(new CANNON.ContactMaterial(dieMat,dieMat,
-    {friction:.30,restitution:.56}));
-  const floor=new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:wallMat});
+  // The supporting floor is retained so the dice can tumble, settle,
+  // and display a physical face. No die-to-die contact exists.
+  const floor=new CANNON.Body({mass:0,shape:new CANNON.Plane(),material:wallMat,
+    collisionFilterGroup:SCREEN_BOUNDARY_LAYER,collisionFilterMask:DIE_COLLISION_LAYER});
   world.addBody(floor);
   // The original 156-unit-high walls allowed powerful throws to vault
   // straight over the screen edge. Tall rigid walls give real rebounds;
@@ -147,21 +153,9 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
   };
   let currentScreenBounds=visibleViewport();
   moveScreenWalls(currentScreenBounds);
-  for(const tray of opts.trays){
-    const left=Math.min(tray.left,tray.right),right=Math.max(tray.left,tray.right),
-      top=Math.min(tray.top,tray.bottom),bottom=Math.max(tray.top,tray.bottom);
-    const cy=h-(top+bottom)/2,cz=55,thick=9;
-    // A frame rather than a solid slab: dice can bounce off every tray edge.
-    boxAt(world,left-thick/2,cy,cz,thick,bottom-top+thick,110,wallMat);
-    boxAt(world,right+thick/2,cy,cz,thick,bottom-top+thick,110,wallMat);
-    boxAt(world,(left+right)/2,h-top+thick/2,cz,right-left+thick,thick,110,wallMat);
-    boxAt(world,(left+right)/2,h-bottom-thick/2,cz,right-left+thick,thick,110,wallMat);
-  }
-  for(const p of opts.obstacles.slice(-70)){
-    const fixed=new CANNON.Body({mass:0,material:wallMat,
-      shape:new CANNON.Sphere(12)});
-    fixed.position.set(p.x,h-p.y,12);world.addBody(fixed);
-  }
+  // Trays, coins, playmat accessories, cards, and other tabletop pieces are
+  // visuals only; none creates a Cannon collider. Only screen walls and the
+  // supporting floor participate in physics.
   // All dice launch using the same measured screen-space gesture. Physics
   // receives Y-up coordinates, but the direction is never randomized.
   const gentleDrop=opts.gentleDrop===true;
@@ -181,7 +175,9 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
     geom.computeBoundingSphere();
     const screenRadius=Math.max(32,safeDiceFootprint(r,geom.boundingSphere?.radius??r));
     const body=new CANNON.Body({mass:side===2?.85:1.05+side/170,
-      material:dieMat,linearDamping:.13,angularDamping:.14,
+      material:dieMat,collisionFilterGroup:DIE_COLLISION_LAYER,
+      collisionFilterMask:SCREEN_BOUNDARY_LAYER,
+      linearDamping:.13,angularDamping:.14,
       allowSleep:true,sleepSpeedLimit:.22,sleepTimeLimit:.7});
     body.addShape(side===2?
       new CANNON.Cylinder(r,r,4,32):convexShape(geom),
@@ -197,25 +193,11 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       startX=meanX+(i%3-1)*37;
       startY=meanY+Math.floor(i/3)*35-25;
     }
-    // The rim remains physically solid; release on the aim-facing side.
-    // Inward flicks from the right drawer must launch LEFT into play.
-    if(!opts.reroll&&!opts.heldRelease&&!gentleDrop){
-      const launch=spawnOutsideTray(startX,startY,r,opts.trays,opts.aimX,opts.aimY);
-      startX=launch.x;startY=launch.y;
-    }
-    // A held die released INSIDE a raised wooden tray otherwise launches
-    // at z=48 while the tray rim extends to z=110. Cannon immediately
-    // strikes the wall and may fling the die sideways/opposite its flick.
-    // For a real throw, the hand lifts it over that lip before the launch;
-    // for a gentle drop it stays over the exact release point.
-    const insideTray=opts.trays.some(t=>
-      startX>=Math.min(t.left,t.right)-r&&startX<=Math.max(t.left,t.right)+r&&
-      startY>=Math.min(t.top,t.bottom)-r&&startY<=Math.max(t.top,t.bottom)+r);
-    const handLaunchHeight=(opts.heldRelease||opts.reroll)&&!gentleDrop&&insideTray?
-      110+Math.max(r,geom.boundingSphere?.radius??r)+20:0;
+    // Release directly from the die's actual position. Invisible drawer
+    // walls can no longer teleport the die or reverse its throw direction.
     body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
       THREE.MathUtils.clamp(startY,r+2,h-r-2),
-      Math.max(r+6,(gentleDrop?65:48)*(source.scale??1),handLaunchHeight)+i*7);
+      Math.max(r+6,(gentleDrop?65:48)*(source.scale??1))+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
     // IMPORTANT: project the spawn point INSIDE the actual visible bounds
