@@ -2269,25 +2269,6 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       button=>{castleHitTarget.current=button;},
       button=>{mergeHitTargets.current.push(button);},handPlayMode);
     duelLayers.current=seatGroups;
-    // Always-visible native radial on the actual hand edge. Unlike the DOM
-    // overlay it cannot disappear due to overlay transforms or CSS stacking.
-    if(state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seatGroups?.has(seat)){
-      const hand=tcgMatCells(seat).find(cell=>cell.row===3&&cell.column===1);
-      if(hand){
-        const x=hand.x-Math.sin(hand.angle)*hand.height/2;
-        const y=hand.y+Math.cos(hand.angle)*hand.height/2;
-        const radial=makePlaymatRadial(x,y,TCG_MAT_WIDTH,
-          action=>{
-            const ids=[...selectedSet.current];
-            if(ids.length)callbacks.current.onRadialAction(ids,action);
-          },
-          expanded=>interfaceAction.current(expanded?'Expand':'Collapse',
-            'Action radial',expanded?'Show actions':'Hide actions'),
-          ()=>selectedSet.current.size?String(selectedSet.current.size):'Actions');
-        seatGroups.get(seat)!.addChild(radial);
-        paintLayers.buttons.attach(radial);
-      }
-    }
     // The docked radial is rendered as a pointer-interactive HTML overlay.
     // Its geometry is synchronized to the actual mat every animation frame,
     // avoiding clipping and paint-layer invisibility of the Pixi fallback.
@@ -3012,8 +2993,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         piece.on('pointerupoutside',()=>clearCoinHover(piece));
         piece.on('pointercancel',()=>clearCoinHover(piece));
       }
-      if(obj.throwDice||obj.kind==='die'&&obj.description==='Placed die'){
-        const placed=!obj.throwDice;
+      if(obj.throwDice){
+        const placed=obj.description==='Placed die';
         const heads=(obj.throwRolls??[]).filter(n=>n===1).length;
         const display=obj.sides===2?((obj.throwQuantity??1)===1?(heads?'H':'T'):
           heads+'H/'+((obj.throwQuantity??1)-heads)+'T'):String(obj.throwTotal??obj.value??1);
@@ -4496,7 +4477,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
-    {false&&state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
+    {state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
       <div className="sennet-radial-overlay" style={{pointerEvents:'none'}}>
         <div ref={attachDockedWheel} style={{position:'absolute',left:0,top:0,
           width:180,height:180,transformOrigin:'top left',pointerEvents:'auto',
