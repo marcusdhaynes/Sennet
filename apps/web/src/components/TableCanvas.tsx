@@ -2530,7 +2530,8 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
             lastX:e.clientX,lastY:e.clientY,lastAt:performance.now(),speed:0,
             at:performance.now(),held:false,ghost:undefined as Container|undefined,
             history:[{x:e.clientX,y:e.clientY,t:performance.now()}],
-            timer:undefined as number|undefined};
+            timer:undefined as number|undefined,
+            pickup:undefined as (()=>void)|undefined};
           // The same Three.js die lifts on hold OR when a fast throw starts.
           // Dragging immediately does not have to wait for the hold timer.
           const pickup=()=>{
