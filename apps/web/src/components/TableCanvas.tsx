@@ -3010,7 +3010,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
           ?obj.throwExpiresAt-THROWN_DIE_LIFETIME_MS
           :dieShownAt.current.get(obj.id)?.at??Date.now();
         staticEntries.push({id:obj.id,piece,sides:obj.sides??6,
-          ...(placed?{}:{shownAt,fadeAfterMs:Math.max(0,diceFadeMs-850)}),
+          shownAt,fadeAfterMs:Math.max(0,diceFadeMs-850),
           themeId:resolveDiceTheme(objectDice,obj.sides??6),quaternion:obj.throwQuaternion,
           altitude:obj.throwAltitude,
           quantity:obj.throwQuantity,result:display});
