@@ -2269,25 +2269,9 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       button=>{castleHitTarget.current=button;},
       button=>{mergeHitTargets.current.push(button);},handPlayMode);
     duelLayers.current=seatGroups;
-    if(state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seatGroups?.has(seat)){
-      // Put the wheel IN the playmat's Pixi container. There is no separate
-      // HTML overlay to chase the camera, and no second coordinate space.
-      const hand=tcgMatCells(seat).find(cell=>cell.row===3&&cell.column===1);
-      if(hand){
-        const x=hand.x-Math.sin(hand.angle)*hand.height/2;
-        const y=hand.y+Math.cos(hand.angle)*hand.height/2;
-        const radial=makePlaymatRadial(x,y,TCG_MAT_WIDTH,
-          action=>{
-            const targets=[...selectedSet.current];
-            if(targets.length)callbacks.current.onRadialAction(targets,action);
-          },
-          expanded=>interfaceAction.current(expanded?'Expand':'Collapse',
-            'Action radial',expanded?'Show actions':'Hide actions'),
-          ()=>selectedSet.current.size?String(selectedSet.current.size):'Actions');
-        seatGroups.get(seat)!.addChild(radial);
-        paintLayers.buttons.attach(radial);
-      }
-    }
+    // The docked radial is rendered as a pointer-interactive HTML overlay.
+    // Its geometry is synchronized to the actual mat every animation frame,
+    // avoiding clipping and paint-layer invisibility of the Pixi fallback.
     updateView.current();
     const snapOverlay=new Graphics();snapOverlay.eventMode='none';board.addChild(snapOverlay);
     paintLayers.objects.attach(snapOverlay);snapHighlight.current=snapOverlay;
@@ -4493,6 +4477,28 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       onApply={applyCoinColor} onCancel={()=>setCoinColorsOpen(false)}
     />,document.body)}
     {drawer&&<div data-outward={playerTagGeometry.outward} className="sennet-player-tag-anchor" style={{left:playerTagGeometry.x,top:playerTagGeometry.y,'--seat-scale':playerTagGeometry.scale,'--drawer-width':`${playerTagGeometry.width}px`} as React.CSSProperties}>{drawer}</div>}
+    {state.kind==='tcg'&&!readonly&&wheelMode==='docked'&&seat>=0&&seat<12&&
+      <div className="sennet-radial-overlay" style={{pointerEvents:'none'}}>
+        <div ref={setDockedWheelNode} style={{position:'absolute',left:0,top:0,
+          width:180,height:180,transformOrigin:'top left',pointerEvents:'auto',
+          zIndex:120}}>
+          <CardRadialWheel x={90} y={0} size={180} count={selectedIds.length||Number(!!selected)}
+            allLocked={(selectedIds.length?selectedIds:(selected?[selected]:[]))
+              .every(id=>state.objects.find(o=>o.id===id)?.locked)}
+            pointerId={null} docked={false} half={true}
+            tapLabel={(selectedIds.length?selectedIds:(selected?[selected]:[]))
+              .some(id=>{const obj=state.objects.find(o=>o.id===id);
+                return obj&&((obj.rotation%360)+360)%360!==0;})?'Untap':'Tap'}
+            onChoose={action=>{
+              const targets=selectedIds.length?selectedIds:(selected?[selected]:[]);
+              if(targets.length)callbacks.current.onRadialAction(targets,action);
+            }}
+            onCancel={()=>{}}
+            onExpandedChange={expanded=>interfaceAction.current(
+              expanded?'Expand':'Collapse','Action radial',
+              expanded?'Show actions':'Hide actions')}/>
+        </div>
+      </div>}
     {state.kind==='tcg'&&!readonly&&!handPlayMode&&seat>=0&&seat<12&&wheelMode!=='docked'&&(wheelMode!=='hold'||radialWheel)&&<div className="sennet-radial-overlay">
       <div className={'sennet-radial-free-anchor'}
         ref={undefined}>
