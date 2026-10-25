@@ -201,14 +201,20 @@ export function createStaticDice3D(
       (diameter/2-8)/(radiusFor(target.entry.sides)+4));
     const {renderer:topRenderer,camera:topCamera,mesh}=stage;
     if(!mesh)return;
+    // The overlay is a fixed-position CSS canvas. setSize(..., false)
+    // changes only its GPU framebuffer: the original CSS 128px box was
+    // still being positioned as though it had the NEW diameter, shifting
+    // the zoom away from the die (especially after a reroll/camera zoom).
     topRenderer.setSize(diameter,diameter,false);
+    const element=topRenderer.domElement;
+    element.style.width=diameter+'px';
+    element.style.height=diameter+'px';
     topCamera.left=-diameter/2;topCamera.right=diameter/2;
     topCamera.top=diameter/2;topCamera.bottom=-diameter/2;
     topCamera.updateProjectionMatrix();
     mesh.quaternion.copy(target.visual.group.quaternion);
     mesh.position.set(0,0,(target.entry.altitude??radiusFor(target.entry.sides))*fittedScale);
     mesh.scale.setScalar(fittedScale);
-    const element=topRenderer.domElement;
     // Source geometry is rendered on THIS Three.js canvas. Use its own
     // viewport rect rather than assuming the Pixi canvas shares identical
     // CSS containment/letterboxing at deep play-area camera zoom.
