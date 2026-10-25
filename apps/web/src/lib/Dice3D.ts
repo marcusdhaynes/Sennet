@@ -206,11 +206,18 @@ export function roll3DDice(opts:Dice3DOptions):()=>void{
       const launch=spawnOutsideTray(startX,startY,r,opts.trays,opts.aimX,opts.aimY);
       startX=launch.x;startY=launch.y;
     }
-    const scatter=(i-(opts.sources.length-1)/2)*.18;
-    const theta=Math.atan2(vy,vx)+scatter;
+    // A held die released INSIDE a raised wooden tray otherwise launches
+    // at z=48 while the tray rim extends to z=110. Cannon immediately
+    // strikes the wall and may fling the die sideways/opposite its flick.
+    // For a real throw, the hand lifts it over that lip before the launch;
+    // for a gentle drop it stays over the exact release point.
+    const insideTray=opts.trays.some(t=>
+      startX>=Math.min(t.left,t.right)-r&&startX<=Math.max(t.left,t.right)+r&&
+      startY>=Math.min(t.top,t.bottom)-r&&startY<=Math.max(t.top,t.bottom)+r);
+    const handLaunchHeight=opts.heldRelease&&!gentleDrop&&insideTray?126+r:0;
     body.position.set(THREE.MathUtils.clamp(startX,r+2,w-r-2),h-
       THREE.MathUtils.clamp(startY,r+2,h-r-2),
-      Math.max(r+6,(gentleDrop?65:48)*(source.scale??1))+i*7);
+      Math.max(r+6,(gentleDrop?65:48)*(source.scale??1),handLaunchHeight)+i*7);
     body.quaternion.setFromEuler(Math.random()*Math.PI*2,
       Math.random()*Math.PI*2,Math.random()*Math.PI*2,'XYZ');
     // True drop: gravity and contact alone. Zero planar velocity means
