@@ -1801,6 +1801,18 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
     // selected die while the combined quantity is 20 or fewer.
     const physicalSources=expandDiceSources(sources).map(source=>
       release&&source.sides===pressed?{...source,x:release.x,y:release.y}:source);
+    // The dedicated ROLL button has no pointer vector. Aim those rolls
+    // inward from the source towards the middle of the mat rather than
+    // launching with zero planar velocity and letting random contact
+    // spin send the die in an arbitrary direction.
+    const matCenter=duelLayers.current?.get(seatRef.current)?.toGlobal(
+      new Point(BOARD_CENTER,BOARD_CENTER))??board.toGlobal(new Point(BOARD_CENTER,BOARD_CENTER));
+    const originDie=physicalSources.find(source=>source.sides===pressed)??physicalSources[0];
+    const defaultX=originDie?matCenter.x*sx-originDie.x:0;
+    const defaultY=originDie?matCenter.y*sy-originDie.y:0;
+    const automaticAim=!gentleDrop&&Math.hypot(dx,dy)<1&&Math.hypot(defaultX,defaultY)>1;
+    const aimX=automaticAim?defaultX:dx;
+    const aimY=automaticAim?defaultY:dy;
     const obstacles=[...visuals.current.entries()].filter(([id])=>{
       const obj=currentState.current.objects.find(o=>o.id===id);
       return !!obj&&(obj.tokenCoin||obj.throwDice||obj.kind==='die');
@@ -1834,7 +1846,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
       // WebGL may be disabled, context-lost or a die geometry may fail.
       // Still record the actual sampled faces in one authoritative command.
       console.warn('3D dice renderer unavailable; using safe roll:',error);
-      try{commitResults(fallbackDiceResults(physicalSources,rect.width,rect.height,dx,dy));}
+      try{commitResults(fallbackDiceResults(physicalSources,rect.width,rect.height,aimX,aimY));}
       catch(fallbackError){
         dice3DActive.current=false;dice3DStop.current=null;
         setDice3DError('Dice throw failed: '+String(fallbackError));
@@ -1849,7 +1861,7 @@ export default function TableCanvas({autoDeselect,deselectMs,cardViewHoldMs,hand
         const beforePaint=staticDice3D.current?.getRenderedRevision()??0;
         const d=roll3DDice({host,width:rect.width,height:rect.height,
           canHandoff:()=> (staticDice3D.current?.getRenderedRevision()??0)>beforePaint,
-          sources:physicalSources,aimX:dx,aimY:dy,durationMs:elapsed,trays,obstacles,
+          sources:physicalSources,aimX,aimY,durationMs:elapsed,trays,obstacles,
           gentleDrop,heldRelease:!!release,
           done:commitResults,onError:recoverThrow});
         dice3DStop.current=d;
