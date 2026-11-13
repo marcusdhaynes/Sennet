@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useRef,useState,type ChangeEvent} from 'react';
 import {createPortal} from 'react-dom';
+import {UpdateBanner,UpdatesSection} from './updates';
 import {ArrowLeft,BookOpen,Check,ChevronRight,Code2,Copy,Dices,Download,FlipHorizontal,Globe2,Layers,Link2,Minus,Package,Play,Plus,RotateCw,Save,Search,Settings2,ShieldCheck,Shuffle,SkipForward,Trash2,Upload,Users,Wifi,WifiOff,X,Zap} from 'lucide-react';
 import {applyCommand,createGame,createId,gameFromPack,parseGamePack,replay,expireThrownDice,thrownDieDeadlines,THROWN_DIE_LIFETIME_MS,type Command,type EventRecord,type GameKind,type GamePack,type GameState,type PlayMode,type TableObject,BOARD_CENTER,tcgMatCells,tcgMatLocal,TCG_MAT,TCG_MAT_WIDTH,TCG_MAT_HEIGHT,isTcgRemoveDrop,cardStackMembers,defaultPlaymatAppearance,normalizePlaymatAppearance,type PlaymatAppearance,type SharedAppearance} from '@sennet/core';
 import {runLua,SAMPLE_LUA} from '@sennet/lua';
@@ -680,7 +681,7 @@ export default function App(){
       setScriptOutput('Lua completed · '+actions.length+' action(s) submitted.');
     }catch(e){setScriptOutput('Lua error: '+String(e));}
   }
-  return <div className="sennet-home">
+  return <div className="sennet-home"><UpdateBanner/>
     <div className="sennet-multiplayer-dock" role="group" aria-label="Multiplayer quick access">
       <button type="button" className="sennet-multiplayer-open" onClick={()=>{
         setSettingsPage('multiplayer');setBook('settings');
@@ -1181,6 +1182,7 @@ export default function App(){
               <div className="reader-block"><label>Lua script<textarea rows={12} className="code-edit" spellCheck={false} value={script} onChange={e=>setScript(e.target.value)}/></label><button className="reader-secondary" onClick={executeLua}><Play size={16}/> Run script</button><p>{scriptOutput||'Ready to execute.'}</p></div>
               <p className="reader-footnote"><ShieldCheck size={15}/> Untrusted public scripts need stricter per-game limits before production multiplayer.</p>
             </>}
+            <UpdatesSection/>
           </>}
             </div>
             <footer className="reader-footer"><span>✧ &nbsp; SENNET LIBRARY &nbsp; ✧</span><span>— {book==='sennet'?'2':book==='games'?'4':'6'} —</span></footer>
